@@ -22,7 +22,8 @@ export default async function CuotasFamiliaPage({
     .eq("ID_Familia", Number(id))
     .order("Apellidos", { ascending: true });
 
-  const numsFamilia = miembros?.map((s) => s.NUMCENS) || [];
+    const miembrosAny = (miembros as any[]) || [];
+    const numsFamilia = miembrosAny.map((s) => s.NUMCENS);
 
   const { data: cuotas } =
     numsFamilia.length > 0
