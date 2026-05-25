@@ -18,7 +18,7 @@ export default function EditarFamiliaPage() {
 
   useEffect(() => {
     async function cargarFamilia() {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("FAMILIAS")
         .select("*")
         .eq("ID_Familia", Number(id))
@@ -26,7 +26,7 @@ export default function EditarFamiliaPage() {
 
       if (data) {
         setFamilia(data);
-        setNombre(data.Nombre_Familia || "");
+        setNombre((data as any).Nombre_Familia || "");
       }
     }
 
@@ -40,17 +40,20 @@ export default function EditarFamiliaPage() {
 
     setGuardando(true);
 
-    await supabase
+    await (supabase as any)
       .from("FAMILIAS")
       .update({
         Nombre_Familia: nombre,
       })
-      .eq("ID_Familia", Number(id))
+      .eq("ID_Familia", Number(id));
 
-      await supabase.rpc("generar_actualizar_cuotas_completo", {
+    await (supabase as any).rpc(
+      "generar_actualizar_cuotas_completo",
+      {
         p_ejercicio: 2027,
-      });
-      
+      }
+    );
+
     router.push(`/familias/${id}`);
   }
 
