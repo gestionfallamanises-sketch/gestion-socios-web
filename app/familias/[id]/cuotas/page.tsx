@@ -87,6 +87,8 @@ export default async function CuotasFamiliaPage({
       : "-";
   }
 
+  const familiaAny = familia as any;
+  
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
