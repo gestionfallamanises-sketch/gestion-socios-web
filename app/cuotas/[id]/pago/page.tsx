@@ -89,8 +89,8 @@ const { data: pagosAplicados } =
               </h1>
 
               <p className="mt-2 text-sm text-zinc-600">
-                {cuotaAny.Apellidos}, {cuota.Nombre} · NUMCENS {cuota.NUMCENS} ·
-                Ejercicio {cuota.Ejercicio}
+              {cuotaAny.Apellidos}, {cuotaAny.Nombre} · NUMCENS {cuotaAny.NUMCENS} ·
+              Ejercicio {cuotaAny.Ejercicio}
               </p>
             </div>
           </section>
