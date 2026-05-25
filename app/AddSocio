@@ -1,0 +1,153 @@
+"use client";  // Directiva para marcar este archivo como un Client Component
+
+import { useState } from "react";
+import { supabase } from "../lib/supabase";  // Asegúrate de que la ruta sea correcta
+
+export default function AddSocio() {
+  // Estado para almacenar los datos del formulario
+  const [nombre, setNombre] = useState("");
+  const [apellidos, setApellidos] = useState("");
+  const [numcens, setNumcens] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [ciudad, setCiudad] = useState("");
+  const [codigoPostal, setCodigoPostal] = useState("");
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  // Función para manejar el envío del formulario
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Insertar datos en Supabase
+    const { data, error } = await supabase
+      .from("SOCIOS")
+      .insert([
+        {
+          Nombre: nombre,
+          Apellidos: apellidos,
+          NUMCENS: numcens,
+          "Teléfono 1": telefono,
+          Dirección: direccion,
+          Ciudad: ciudad,
+          "Código Postal": codigoPostal,
+        },
+      ]);
+
+    // Manejar el error o éxito
+    if (error) {
+      setError(error.message); // Mostrar el error si ocurre
+      setSuccess(false);
+    } else {
+      setSuccess(true); // Mostrar éxito si se agrega el socio correctamente
+      setNombre("");
+      setApellidos("");
+      setNumcens("");
+      setTelefono("");
+      setDireccion("");
+      setCiudad("");
+      setCodigoPostal("");
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto mt-10">
+      <h2 className="text-2xl font-semibold mb-4">Agregar Nuevo Socio</h2>
+      {success && <p className="text-green-500 mb-2">¡Socio agregado correctamente!</p>}
+      {error && <p className="text-red-500 mb-2">{error}</p>}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="nombre" className="block text-sm font-medium">Nombre</label>
+          <input
+            id="nombre"
+            type="text"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="apellidos" className="block text-sm font-medium">Apellidos</label>
+          <input
+            id="apellidos"
+            type="text"
+            value={apellidos}
+            onChange={(e) => setApellidos(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="numcens" className="block text-sm font-medium">Número de Censo</label>
+          <input
+            id="numcens"
+            type="number"
+            value={numcens}
+            onChange={(e) => setNumcens(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="telefono" className="block text-sm font-medium">Teléfono</label>
+          <input
+            id="telefono"
+            type="text"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="direccion" className="block text-sm font-medium">Dirección</label>
+          <input
+            id="direccion"
+            type="text"
+            value={direccion}
+            onChange={(e) => setDireccion(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="ciudad" className="block text-sm font-medium">Ciudad</label>
+          <input
+            id="ciudad"
+            type="text"
+            value={ciudad}
+            onChange={(e) => setCiudad(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="codigoPostal" className="block text-sm font-medium">Código Postal</label>
+          <input
+            id="codigoPostal"
+            type="text"
+            value={codigoPostal}
+            onChange={(e) => setCodigoPostal(e.target.value)}
+            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            required
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="w-full mt-4 py-2 bg-blue-500 text-white rounded-md"
+        >
+          Agregar Socio
+        </button>
+      </form>
+    </div>
+  );
+}
