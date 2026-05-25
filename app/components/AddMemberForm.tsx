@@ -83,7 +83,7 @@ const socioElegido = socios.find((socio) => {
         })
         .eq("ID_Familia", idFamilia);
     }
-    await supabase.rpc("generar_actualizar_cuotas_completo", {
+    await (supabase as any).rpc("generar_actualizar_cuotas_completo", {
       p_ejercicio: 2027,
     });
     
