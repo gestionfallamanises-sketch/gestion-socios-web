@@ -35,7 +35,7 @@ export default function EditarImporteRemesaInput({
       return;
     }
 
-    await supabase.rpc("recalcular_total_remesa", {
+    await (supabase as any).rpc("recalcular_total_remesa", {
       p_id_remesa: idRemesa,
     });
 
