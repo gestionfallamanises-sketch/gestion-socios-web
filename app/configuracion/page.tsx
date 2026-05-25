@@ -28,10 +28,10 @@ export default function ConfiguracionPage() {
     setEjercicios(data || []);
 
     if (data && data.length > 0) {
-      const activo = data.find((e) => e.Activo);
+      const activo = (data as any[]).find((e) => e.Activo);
 
       setEjercicioSeleccionado(
-        activo?.Ejercicio || data[0].Ejercicio
+        activo?.Ejercicio || (data as any[])[0].Ejercicio
       );
     }
   }
