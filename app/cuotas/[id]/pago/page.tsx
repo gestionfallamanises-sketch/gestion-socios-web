@@ -66,6 +66,8 @@ const { data: pagosAplicados } =
 
   const totalPendientePlazos =
     plazosAny.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
+    
+    const cuotaAny = cuota as any;
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -74,7 +76,7 @@ const { data: pagosAplicados } =
       <main className="min-w-0 flex-1 p-8">
         <div className="mx-auto max-w-7xl">
           <Link
-            href={`/socios/${cuota.NUMCENS}/cuotas`}
+            href={`/socios/${cuotaAny.NUMCENS}/cuotas`}
             className="mb-6 inline-block text-sm font-medium text-red-900 hover:text-red-950"
           >
             ← Volver a cuotas del socio
@@ -87,7 +89,7 @@ const { data: pagosAplicados } =
               </h1>
 
               <p className="mt-2 text-sm text-zinc-600">
-                {cuota.Apellidos}, {cuota.Nombre} · NUMCENS {cuota.NUMCENS} ·
+                {cuotaAny.Apellidos}, {cuota.Nombre} · NUMCENS {cuota.NUMCENS} ·
                 Ejercicio {cuota.Ejercicio}
               </p>
             </div>
