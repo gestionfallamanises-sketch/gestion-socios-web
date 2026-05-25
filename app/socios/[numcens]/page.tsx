@@ -38,13 +38,13 @@ export default async function SocioPage({
   const { data: familia } = await supabase
     .from("FAMILIAS")
     .select("*")
-    .eq("ID_Familia", socio.ID_Familia)
+    .eq("ID_Familia", (socio as any).ID_Familia)
     .maybeSingle();
 
   const { data: miembrosFamilia } = await supabase
     .from("SOCIOS")
     .select("*")
-    .eq("ID_Familia", socio.ID_Familia)
+    .eq("ID_Familia", (socio as any).ID_Familia)
     .order("Apellidos", { ascending: true });
 
   const numsFamilia = miembrosFamilia?.map((m) => m.NUMCENS) || [];
