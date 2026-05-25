@@ -30,7 +30,7 @@ export default function PagadoresPage() {
   async function crearPagador(e: React.FormEvent) {
     e.preventDefault();
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("PAGADORES_EXTERNOS")
       .insert({
         Nombre: form.Nombre,
