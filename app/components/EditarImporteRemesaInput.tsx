@@ -22,7 +22,7 @@ export default function EditarImporteRemesaInput({
   async function guardar() {
     setGuardando(true);
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("REMESAS_DETALLE")
       .update({
         Importe: Number(importe),
