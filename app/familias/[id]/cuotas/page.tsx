@@ -46,7 +46,8 @@ export default async function CuotasFamiliaPage({
           .order("NumeroPlazo", { ascending: true })
       : { data: [] };
 
-  const idsPlazos = plazos?.map((p) => p.IDPlazo) || [];
+      const plazosAny = (plazos as any[]) || [];
+      const idsPlazos = plazosAny.map((p) => p.IDPlazo);
 
   const { data: pagos } =
     idsPlazos.length > 0
@@ -160,7 +161,7 @@ export default async function CuotasFamiliaPage({
                       </td>
                     </tr>
                   ) : (
-                    plazos.map((plazo) => (
+                    plazosAny.map((plazo) => (
                       <tr key={plazo.IDPlazo} className="border-t border-zinc-200 hover:bg-red-50">
                         <td className="px-4 py-3 font-medium">
                           {socioDeCuota(plazo.IDCuotaSocio)}
