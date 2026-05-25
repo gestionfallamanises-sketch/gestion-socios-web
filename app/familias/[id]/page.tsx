@@ -177,15 +177,22 @@ const totalPendiente =
           </div>
 
           <div className="grid grid-cols-1 text-sm md:grid-cols-5">
-            <Bloque
-              label="Titular"
-              value={titular ? `${titular.Nombre} ${titular.Apellidos}` : "-"}
-            />
-            <Bloque label="Teléfono" value={titular?.["Teléfono 1"] || "-"} />
-            <Bloque label="Dirección" value={titular?.Dirección || "-"} />
-            <Bloque label="Población" value={titular?.Poblacion || titular?.Ciudad || "-"} />
-            <Bloque label="Código postal" value={titular?.["Código Postal"] || "-"} />
-          </div>
+  <Bloque
+    label="Titular"
+    value={titular ? `${titular.Nombre} ${titular.Apellidos}` : "-"}
+  />
+  <Bloque label="Teléfono" value={titular?.["Teléfono 1"] || "-"} />
+  <Bloque label="Dirección" value={titular?.Dirección || "-"} />
+  <Bloque label="Población" value={titular?.Poblacion || titular?.Ciudad || "-"} />
+  <Bloque
+    label="Cuenta"
+    value={
+      formasPagoFamilia?.find(
+        (fp) => Number(fp.NUMCENS) === Number(titular?.NUMCENS)
+      )?.IBAN || "-"
+    }
+  />
+</div>
         </section>
 
         <section className="mb-8 border border-zinc-200 bg-white">
