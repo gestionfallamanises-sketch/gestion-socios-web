@@ -3,39 +3,36 @@ import ExportarFamiliasMiembrosExcelButton from "@/app/components/ExportarFamili
 import PrintButton from "@/app/components/PrintButton";
 
 export default async function ImprimirFamiliasMiembrosPage() {
-  const { data: familias } = await supabase
+  const { data: familias } = await (supabase as any)
     .from("FAMILIAS")
     .select("*")
     .order("Nombre_Familia", { ascending: true });
 
-  const { data: socios } = await supabase
+  const { data: socios } = await (supabase as any)
     .from("SOCIOS")
     .select("*")
     .order("Apellidos", { ascending: true });
 
-  const filasExcel =
-    familias?.flatMap((familia) => {
-      const sociosAny = (socios as any[]) || [];
+  const familiasAny = (familias as any[]) || [];
+  const sociosAny = (socios as any[]) || [];
 
-const miembros =
-  sociosAny.filter(
-    (s) => Number(s.ID_Familia) === Number((familia as any).ID_Familia)
-  ) || [];
+  const filasExcel = familiasAny.flatMap((familia) => {
+    const miembros = sociosAny.filter(
+      (s) => Number(s.ID_Familia) === Number(familia.ID_Familia)
+    );
 
-  const familiaAny = familia as any;
-
-  return miembros.map((miembro) => ({
-    Familia: familiaAny.Nombre_Familia || `Familia ${familiaAny.ID_Familia}`,
-        NUMCENS: miembro.NUMCENS,
-        Miembro: `${miembro.Apellidos}, ${miembro.Nombre}`,
-        Comision: miembro.Comision || "-",
-        Loteria: miembro.ConLoteria ? "Sí" : "No",
-        Pagador:
-          Number(miembro.NUMCENS) === Number(familia.Titular_NUMCENS)
-            ? "Titular"
-            : familia.Titular_NUMCENS || "-",
-      }));
-    }) || [];
+    return miembros.map((miembro) => ({
+      Familia: familia.Nombre_Familia || `Familia ${familia.ID_Familia}`,
+      NUMCENS: miembro.NUMCENS,
+      Miembro: `${miembro.Apellidos}, ${miembro.Nombre}`,
+      Comision: miembro.Comision || "-",
+      Loteria: miembro.ConLoteria ? "Sí" : "No",
+      Pagador:
+        Number(miembro.NUMCENS) === Number(familia.Titular_NUMCENS)
+          ? "Titular"
+          : familia.Titular_NUMCENS || "-",
+    }));
+  });
 
   return (
     <div className="p-8">
@@ -44,7 +41,6 @@ const miembros =
 
         <div className="no-print flex items-center gap-3">
           <PrintButton />
-
           <ExportarFamiliasMiembrosExcelButton filas={filasExcel} />
         </div>
       </div>
@@ -62,11 +58,10 @@ const miembros =
         </thead>
 
         <tbody>
-          {familias?.map((familia) => {
-            const miembros =
-              socios?.filter(
-                (s) => Number(s.ID_Familia) === Number(familia.ID_Familia)
-              ) || [];
+          {familiasAny.map((familia) => {
+            const miembros = sociosAny.filter(
+              (s) => Number(s.ID_Familia) === Number(familia.ID_Familia)
+            );
 
             return miembros.map((miembro, index) => (
               <tr
@@ -78,14 +73,19 @@ const miembros =
                     ? familia.Nombre_Familia || `Familia ${familia.ID_Familia}`
                     : ""}
                 </td>
+
                 <td className="border px-3 py-2">{miembro.NUMCENS}</td>
+
                 <td className="border px-3 py-2">
                   {miembro.Apellidos}, {miembro.Nombre}
                 </td>
+
                 <td className="border px-3 py-2">{miembro.Comision || "-"}</td>
+
                 <td className="border px-3 py-2">
                   {miembro.ConLoteria ? "Sí" : "No"}
                 </td>
+
                 <td className="border px-3 py-2">
                   {Number(miembro.NUMCENS) === Number(familia.Titular_NUMCENS)
                     ? "Titular"
