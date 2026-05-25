@@ -58,9 +58,7 @@ const socioElegido = socios.find((socio) => {
 
     const { error } = await supabase
       .from("SOCIOS")
-      .update({
-        ID_Familia: idFamilia,
-      })
+      .update({ ID_Familia: idFamilia } as any)
       .eq("NUMCENS", socioElegido.NUMCENS);
 
     if (error) {
