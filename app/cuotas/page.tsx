@@ -30,7 +30,7 @@ export default function CuotasPage() {
       setEjercicios(data);
 
       if (data.length > 0) {
-        setEjercicioSeleccionado(data[0].Ejercicio);
+        setEjercicioSeleccionado((data as any[])[0].Ejercicio);
       }
     }
   }
