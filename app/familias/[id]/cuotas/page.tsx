@@ -227,8 +227,8 @@ export default async function CuotasFamiliaPage({
                       </td>
                     </tr>
                   ) : (
-                    pagos.map((pago) => {
-                      const plazo = plazos?.find(
+                    pagosAny.map((pago) => {
+                      const plazo = plazosAny.find(
                         (p) => Number(p.IDPlazo) === Number(pago.IDPlazo)
                       );
 
