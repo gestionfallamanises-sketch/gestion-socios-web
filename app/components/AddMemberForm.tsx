@@ -56,10 +56,12 @@ const socioElegido = socios.find((socio) => {
 
     setLoading(true);
 
-    const { error } = await supabase
-      .from("SOCIOS")
-      .update({ ID_Familia: idFamilia } as any)
-      .eq("NUMCENS", socioElegido.NUMCENS);
+    const { error } = await (supabase as any)
+  .from("SOCIOS")
+  .update({
+    ID_Familia: idFamilia,
+  })
+  .eq("NUMCENS", socioElegido.NUMCENS);
 
     if (error) {
       setLoading(false);
