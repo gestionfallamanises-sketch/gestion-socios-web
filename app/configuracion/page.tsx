@@ -20,9 +20,10 @@ export default function ConfiguracionPage() {
   }, [ejercicioSeleccionado]);
 
   async function cargarEjercicios() {
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("EJERCICIOS")
-      .select("*")
+      .select("*");
+  }
       .order("Ejercicio", { ascending: false });
 
     setEjercicios(data || []);
@@ -50,7 +51,7 @@ export default function ConfiguracionPage() {
     idCuota: string,
     importe: number
   ) {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("TIPOS_CUOTA")
       .update({
         Importe: importe,
@@ -71,7 +72,7 @@ export default function ConfiguracionPage() {
       .update({ Activo: false })
       .neq("Ejercicio", ejercicio);
 
-    const { error } = await supabase
+      const { error } = await (supabase as any)
       .from("EJERCICIOS")
       .update({ Activo: true })
       .eq("Ejercicio", ejercicio);
@@ -96,18 +97,18 @@ export default function ConfiguracionPage() {
 
     const ejercicioAnterior = ejercicio - 1;
 
-    await supabase
-      .from("EJERCICIOS")
-      .update({ Activo: false })
-      .neq("Ejercicio", ejercicio);
+    await (supabase as any)
+  .from("EJERCICIOS")
+  .update({ Activo: false })
+  .neq("Ejercicio", ejercicio);
 
-    const { error } = await supabase
-      .from("EJERCICIOS")
-      .insert({
-        Ejercicio: ejercicio,
-        FechaInicio: `${ejercicio - 1}-04-01`,
-        FechaFin: `${ejercicio}-03-31`,
-        Activo: true,
+const { error } = await (supabase as any)
+  .from("EJERCICIOS")
+  .insert({
+    Ejercicio: ejercicio,
+    FechaInicio: `${ejercicio - 1}-04-01`,
+    FechaFin: `${ejercicio}-03-31`,
+    Activo: true,
         Observaciones:
           "Ejercicio creado desde configuración",
       });
@@ -117,7 +118,7 @@ export default function ConfiguracionPage() {
       return;
     }
 
-    await supabase.rpc(
+    await (supabase as any).rpc(
       "copiar_tarifas_ejercicio",
       {
         p_origen: ejercicioAnterior,
