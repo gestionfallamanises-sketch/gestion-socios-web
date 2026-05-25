@@ -47,7 +47,8 @@ export default async function SocioPage({
     .eq("ID_Familia", (socio as any).ID_Familia)
     .order("Apellidos", { ascending: true });
 
-  const numsFamilia = miembrosFamilia?.map((m) => m.NUMCENS) || [];
+    const miembrosFamiliaAny = (miembrosFamilia as any[]) || [];
+    const numsFamilia = miembrosFamiliaAny.map((m) => m.NUMCENS);
 
   const { data: cuotasFamilia } =
     numsFamilia.length > 0
@@ -57,6 +58,8 @@ export default async function SocioPage({
           .in("NUMCENS", numsFamilia)
           .order("Ejercicio", { ascending: false })
       : { data: [] };
+
+      const cuotasFamiliaAny = (cuotasFamilia as any[]) || [];
 
   const { data: cuotaActual } = await supabase
     .from("vista_cuotas_socios")
@@ -417,7 +420,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
                   </thead>
 
                   <tbody>
-                    {miembrosFamilia?.map((miembro) => {
+                  {miembrosFamiliaAny.map((miembro) => {
                       const cuota = cuotaMiembro(miembro.NUMCENS);
 
                       return (
