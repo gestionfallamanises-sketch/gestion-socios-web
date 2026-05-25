@@ -59,12 +59,13 @@ const { data: pagosAplicados } =
     );
   }
 
+  const plazosAny = (plazos as any[]) || [];
+
   const totalPagadoPlazos =
-    plazos?.reduce((acc, plazo) => acc + Number(plazo.ImportePagado || 0), 0) ||
-    0;
+    plazosAny.reduce((acc, plazo) => acc + Number(plazo.ImportePagado || 0), 0)
 
   const totalPendientePlazos =
-    plazos?.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
+    plazosAny.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
