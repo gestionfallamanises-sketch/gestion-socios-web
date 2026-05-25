@@ -166,9 +166,9 @@ const { data: pagosAplicados } =
                   </thead>
 
                   <tbody>
-                    {plazos.map((plazo) => (
-                      <tr
-                        key={plazo.IDPlazo}
+                  {plazosAny.map((plazo) => (
+  <tr
+    key={plazo.IDPlazo}
                         className="border-t border-zinc-200 hover:bg-red-50"
                       >
                         <td className="px-4 py-3 font-medium">
