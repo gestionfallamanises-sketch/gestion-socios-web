@@ -24,7 +24,7 @@ export default function RegistrarPagoForm({
 
     setLoading(true);
 
-    const { data, error } = await supabase.rpc(
+    const { data, error } = await (supabase as any).rpc(
       "registrar_pago_manual_cuota",
       {
         p_id_cuota_socio: idCuotaSocio,
