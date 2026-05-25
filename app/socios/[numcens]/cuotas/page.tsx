@@ -32,6 +32,8 @@ export default async function CuotasSocioPage({
   .eq("Activo", true)
   .maybeSingle();
 
+  const formaPagoAny = formaPago as any;
+
   const cuotasAny = (cuotas as any[]) || [];
   
 const idsCuotas = cuotasAny.map((c) => c.IDCuotaSocio);
@@ -132,9 +134,9 @@ const { data: pagosManuales } =
               />
               <Resumen
   label="Método/plazos"
-  value={`${formaPago?.Metodo || "-"} · ${
-    formaPago?.NumeroPlazos || "-"
-  } plazo${Number(formaPago?.NumeroPlazos || 0) === 1 ? "" : "s"}`}
+  value={`${formaPagoAny?.Metodo || "-"} · ${
+    formaPagoAny?.NumeroPlazos || "-"
+  } plazo${Number(formaPagoAny?.NumeroPlazos || 0) === 1 ? "" : "s"}`}
 />
             </div>
           </section>
