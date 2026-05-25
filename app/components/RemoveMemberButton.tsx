@@ -14,7 +14,7 @@ export default function RemoveMemberButton({
 
     if (!confirmar) return;
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("SOCIOS")
       .update({
         ID_Familia: null,
