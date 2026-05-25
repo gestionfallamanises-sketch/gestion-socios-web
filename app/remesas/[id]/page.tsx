@@ -40,10 +40,12 @@ export default async function RemesaDetallePage({
     .order("NUMCENS_Pagador", { ascending: true })
 .order("NUMCENS", { ascending: true });
 
-  const total =
-    lineas?.reduce((acc, l) => acc + Number(l.Importe || 0), 0) || 0;
-    
-    const numsSocios = lineas?.map((l) => l.NUMCENS) || [];
+const lineasAny = (lineas as any[]) || [];
+
+const total =
+  lineasAny.reduce((acc, l) => acc + Number(l.Importe || 0), 0) || 0;
+
+const numsSocios = lineasAny.map((l) => l.NUMCENS);
 
 const { data: sociosRemesa } =
   numsSocios.length > 0
@@ -156,7 +158,7 @@ const { data: sociosRemesa } =
       </td>
     </tr>
   ) : (
-    lineas.map((linea) => {
+    lineasAny.map((linea) => {
         const socioCuota = sociosRemesa?.find(
             (s) => Number(s.NUMCENS) === Number(linea.NUMCENS)
           );
