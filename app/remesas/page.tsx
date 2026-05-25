@@ -29,8 +29,9 @@ export default function RemesasPage() {
     setEjercicios(data || []);
 
     if (data && data.length > 0) {
-      const activo = data.find((e) => e.Activo);
-      setEjercicio(activo?.Ejercicio || data[0].Ejercicio);
+      const dataAny = (data as any[]) || [];
+const activo = dataAny.find((e) => e.Activo);
+setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
     }
   }
 
@@ -51,8 +52,8 @@ export default function RemesasPage() {
   async function generarRemesa() {
     setLoading(true);
   
-    const { data, error } = await supabase.rpc(
-      "generar_remesa_banco",
+    const { data, error } = await (supabase as any).rpc(
+      "nombre_funcion",
       {
         p_ejercicio: ejercicio,
         p_numero_plazo: numeroPlazo,
@@ -84,7 +85,7 @@ export default function RemesasPage() {
   
     setLoading(true);
   
-    await supabase
+    await (supabase as any)
       .from("CUOTAS_PLAZOS")
       .update({
         IDRemesa: null,
@@ -92,12 +93,12 @@ export default function RemesasPage() {
       })
       .eq("IDRemesa", remesa.IDRemesa);
   
-    await supabase
+      await (supabase as any)
       .from("REMESAS_DETALLE")
       .delete()
       .eq("IDRemesa", remesa.IDRemesa);
   
-    await supabase
+      await (supabase as any)
       .from("REMESAS")
       .delete()
       .eq("IDRemesa", remesa.IDRemesa);
@@ -114,7 +115,7 @@ export default function RemesasPage() {
 
     if (!confirmar) return;
 
-    const { error } = await supabase.rpc(
+    const { error } = await (supabase as any).rpc(
       "confirmar_remesa_cobrada_real",
       {
         p_id_remesa: idRemesa,
