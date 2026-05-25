@@ -16,7 +16,7 @@ export default function GenerarCuotasButton({
 
     if (!confirmar) return;
 
-    const { error } = await supabase.rpc(
+    const { error } = await (supabase as any).rpc(
       "generar_actualizar_cuotas_completo",
       {
         p_ejercicio: ejercicio,
