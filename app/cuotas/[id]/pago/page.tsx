@@ -24,7 +24,7 @@ export default async function PagoPage({ params }: Props) {
     .eq("IDCuotaSocio", Number(id))
     .order("NumeroPlazo", { ascending: true });
 
-    const idsPlazos = plazos?.map((p) => p.IDPlazo) || [];
+    const idsPlazos = (plazos as any[])?.map((p) => p.IDPlazo) || [];
 
 const { data: pagosAplicados } =
   idsPlazos.length > 0
