@@ -250,7 +250,7 @@ const { data: pagosAplicados } =
 
                         <td className="px-4 py-3">
                         {(() => {
-  const plazo = plazos?.find(
+  const plazo = plazosAny.find(
     (p) => Number(p.IDPlazo) === Number(pago.IDPlazo)
   );
 
