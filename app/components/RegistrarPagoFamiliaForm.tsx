@@ -22,7 +22,7 @@ export default function RegistrarPagoFamiliaForm({
 
     setLoading(true);
 
-    const { data, error } = await supabase.rpc(
+    const { data, error } = await (supabase as any).rpc(
       "registrar_pago_manual_familia",
       {
         p_id_familia: idFamilia,
