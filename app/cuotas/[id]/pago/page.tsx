@@ -237,7 +237,7 @@ const { data: pagosAplicados } =
                   </thead>
 
                   <tbody>
-                    {pagosAplicados.map((pago) => (
+                  {pagosAplicadosAny.map((pago) => (
                       <tr
                         key={pago.ID}
                         className="border-t border-zinc-200 hover:bg-red-50"
@@ -289,6 +289,9 @@ function Resumen({
   value: any;
   color?: "green" | "red";
 }) {
+
+  const pagosAplicadosAny = (pagosAplicados as any[]) || [];
+
   return (
     <div className="border-r border-b border-zinc-200">
       <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
