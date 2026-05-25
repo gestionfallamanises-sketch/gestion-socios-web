@@ -68,14 +68,14 @@ export default async function CuotasFamiliaPage({
           .order("ID", { ascending: false })
       : { data: [] };
 
-  const totalCuotas =
-    cuotas?.reduce((t, c) => t + Number(c.Importe || 0), 0) || 0;
-
-  const totalPagado =
-    plazos?.reduce((t, p) => t + Number(p.ImportePagado || 0), 0) || 0;
-
-  const totalPendiente =
-    plazos?.reduce((t, p) => t + Number(p.Pendiente || 0), 0) || 0;
+      const totalCuotas =
+      cuotasAny.reduce((t, c) => t + Number(c.Importe || 0), 0) || 0;
+    
+    const totalPagado =
+      plazosAny.reduce((t, p) => t + Number(p.ImportePagado || 0), 0) || 0;
+    
+    const totalPendiente =
+      plazosAny.reduce((t, p) => t + Number(p.Pendiente || 0), 0) || 0;
 
   function socioDeCuota(idCuotaSocio: number) {
     const cuota = cuotas?.find(
