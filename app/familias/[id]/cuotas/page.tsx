@@ -88,7 +88,7 @@ export default async function CuotasFamiliaPage({
   }
 
   const familiaAny = familia as any;
-  
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -109,7 +109,7 @@ export default async function CuotasFamiliaPage({
               </h1>
 
               <p className="mt-2 text-sm text-zinc-600">
-                {familia?.Nombre_Familia || "Familia"} · {miembros?.length || 0} miembros
+                {familiaAny?.Nombre_Familia || "Familia"} · {miembrosAny.length || 0} miembros
               </p>
             </div>
           </section>
