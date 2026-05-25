@@ -69,6 +69,8 @@ const { data: pagosAplicados } =
     
     const cuotaAny = cuota as any;
 
+    const pagosAplicadosAny = (pagosAplicados as any[]) || [];
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -289,8 +291,6 @@ function Resumen({
   value: any;
   color?: "green" | "red";
 }) {
-
-  const pagosAplicadosAny = (pagosAplicados as any[]) || [];
 
   return (
     <div className="border-r border-b border-zinc-200">
