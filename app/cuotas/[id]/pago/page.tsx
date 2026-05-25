@@ -12,7 +12,7 @@ type Props = {
 export default async function PagoPage({ params }: Props) {
   const { id } = await params;
 
-  const { data: cuota, error } = await supabase
+  const { data: cuota, error } = await (supabase as any)
     .from("vista_cuotas_socios")
     .select("*")
     .eq("IDCuotaSocio", id)
@@ -99,7 +99,7 @@ const { data: pagosAplicados } =
             <div className="grid grid-cols-2 lg:grid-cols-4">
               <Resumen
                 label="Importe cuota"
-                value={`${Number(cuota.Importe || 0).toFixed(2)} €`}
+                value={`${Number(cuotaAny.Importe || 0).toFixed(2)} €`}
               />
 
               <Resumen
@@ -114,7 +114,7 @@ const { data: pagosAplicados } =
                 color="red"
               />
 
-              <Resumen label="Método" value={cuota.Metodo || "-"} />
+              <Resumen label="Método" value={cuotaAny.Metodo || "-"} />
             </div>
           </section>
 
@@ -127,8 +127,8 @@ const { data: pagosAplicados } =
 
             <div className="p-4">
               <RegistrarPagoForm
-                idCuotaSocio={Number(cuota.IDCuotaSocio)}
-                numcens={Number(cuota.NUMCENS)}
+                idCuotaSocio={Number(cuotaAny.IDCuotaSocio)}
+                numcens={Number(cuotaAny.NUMCENS)}
               />
             </div>
           </section>
