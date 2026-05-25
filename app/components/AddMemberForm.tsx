@@ -75,10 +75,10 @@ const socioElegido = socios.find((socio) => {
       .eq("ID_Familia", idFamilia)
       .single();
 
-    if (!familia?.Titular_NUMCENS) {
-      await supabase
-        .from("FAMILIAS")
-        .update({
+      if (!(familia as any)?.Titular_NUMCENS) {
+      await (supabase as any)
+  .from("FAMILIAS")
+  .update({
           Titular_NUMCENS: socioElegido.NUMCENS,
         })
         .eq("ID_Familia", idFamilia);
