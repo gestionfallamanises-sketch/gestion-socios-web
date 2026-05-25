@@ -22,15 +22,14 @@ export default function ConfiguracionPage() {
   async function cargarEjercicios() {
     const { data } = await (supabase as any)
       .from("EJERCICIOS")
-      .select("*");
-  }
+      .select("*")
       .order("Ejercicio", { ascending: false });
-
+  
     setEjercicios(data || []);
-
+  
     if (data && data.length > 0) {
       const activo = (data as any[]).find((e) => e.Activo);
-
+  
       setEjercicioSeleccionado(
         activo?.Ejercicio || (data as any[])[0].Ejercicio
       );
