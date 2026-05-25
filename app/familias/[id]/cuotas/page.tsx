@@ -34,7 +34,8 @@ export default async function CuotasFamiliaPage({
           .order("Ejercicio", { ascending: false })
       : { data: [] };
 
-  const idsCuotas = cuotas?.map((c) => c.IDCuotaSocio) || [];
+      const cuotasAny = (cuotas as any[]) || [];
+      const idsCuotas = cuotasAny.map((c) => c.IDCuotaSocio);
 
   const { data: plazos } =
     idsCuotas.length > 0
