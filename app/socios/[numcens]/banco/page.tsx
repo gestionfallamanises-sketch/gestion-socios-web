@@ -9,7 +9,7 @@ export default async function CuotasSocioPage({
 }) {
   const { numcens } = await params;
 
-  const { data: socio } = await supabase
+  const { data: socio } = await (supabase as any)
     .from("SOCIOS")
     .select("*")
     .eq("NUMCENS", Number(numcens))
@@ -21,14 +21,17 @@ export default async function CuotasSocioPage({
     .eq("NUMCENS", Number(numcens))
     .order("Ejercicio", { ascending: false });
 
-  const totalImporte =
-    cuotas?.reduce((acc, cuota) => acc + Number(cuota.Importe || 0), 0) || 0;
+    const cuotasAny = (cuotas as any[]) || [];
+    const socioAny = socio as any;
 
-  const totalPagado =
-    cuotas?.reduce((acc, cuota) => acc + Number(cuota.TotalPagado || 0), 0) || 0;
+    const totalImporte =
+      cuotasAny.reduce((acc, cuota) => acc + Number(cuota.Importe || 0), 0) || 0;
+    
+    const totalPagado =
+      cuotasAny.reduce((acc, cuota) => acc + Number(cuota.TotalPagado || 0), 0) || 0;
 
   const totalPendiente =
-    cuotas?.reduce((acc, cuota) => acc + Number(cuota.Pendiente || 0), 0) || 0;
+    cuotasAny.reduce((acc, cuota) => acc + Number(cuota.Pendiente || 0), 0) || 0;
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -50,14 +53,14 @@ export default async function CuotasSocioPage({
               </h1>
 
               <p className="mt-2 text-sm text-zinc-600">
-                {socio?.Apellidos}, {socio?.Nombre} · NUMCENS {numcens}
+              {socioAny?.Apellidos}, {socioAny?.Nombre} · NUMCENS {numcens}
               </p>
             </div>
           </section>
 
           <section className="mb-8 border border-zinc-200 bg-white">
             <div className="grid grid-cols-2 lg:grid-cols-4">
-              <Resumen label="Cuotas" value={cuotas?.length || 0} />
+              <Resumen label="Cuotas" value={cuotasAny.length || 0} />
               <Resumen
                 label="Total cuotas"
                 value={`${totalImporte.toFixed(2)} €`}
@@ -88,7 +91,7 @@ export default async function CuotasSocioPage({
               </div>
             </div>
 
-            {!cuotas || cuotas.length === 0 ? (
+            {!cuotas || cuotasAny.length === 0 ? (
               <div className="p-6 text-sm text-zinc-500">
                 Este socio no tiene cuotas registradas.
               </div>
@@ -108,7 +111,7 @@ export default async function CuotasSocioPage({
                   </thead>
 
                   <tbody>
-                    {cuotas.map((cuota) => {
+                    {cuotasAny.map((cuota) => {
                       const estado = cuota.EstadoPago;
 
                       return (
