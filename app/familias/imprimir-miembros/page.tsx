@@ -15,10 +15,12 @@ export default async function ImprimirFamiliasMiembrosPage() {
 
   const filasExcel =
     familias?.flatMap((familia) => {
-      const miembros =
-        socios?.filter(
-          (s) => Number(s.ID_Familia) === Number(familia.ID_Familia)
-        ) || [];
+      const sociosAny = (socios as any[]) || [];
+
+const miembros =
+  sociosAny.filter(
+    (s) => Number(s.ID_Familia) === Number((familia as any).ID_Familia)
+  ) || [];
 
       return miembros.map((miembro) => ({
         Familia: familia.Nombre_Familia || `Familia ${familia.ID_Familia}`,
