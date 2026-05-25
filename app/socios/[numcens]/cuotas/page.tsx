@@ -10,41 +10,48 @@ export default async function CuotasSocioPage({
 }) {
   const { numcens } = await params;
 
-  const { data: socio } = await supabase
+  const { data: socio } = await (supabase as any)
+
     .from("SOCIOS")
     .select("*")
     .eq("NUMCENS", Number(numcens))
     .single();
 
-  const { data: cuotas } = await supabase
+    const socioAny = socio as any;
+
+  const { data: cuotas } = await (supabase as any)
     .from("vista_cuotas_socios")
     .select("*")
     .eq("NUMCENS", Number(numcens))
     .order("Ejercicio", { ascending: false });
 
-    const { data: formaPago } = await supabase
+    const { data: formaPago } = await (supabase as any)
   .from("FORMAS_PAGO_SOCIOS")
   .select("*")
   .eq("NUMCENS", Number(numcens))
   .eq("Activo", true)
   .maybeSingle();
 
-  const idsCuotas = cuotas?.map((c) => c.IDCuotaSocio) || [];
+  const cuotasAny = (cuotas as any[]) || [];
+  
+const idsCuotas = cuotasAny.map((c) => c.IDCuotaSocio);
 
   const { data: plazos } =
     idsCuotas.length > 0
-      ? await supabase
+    ? await (supabase as any)
           .from("CUOTAS_PLAZOS")
           .select("*")
           .in("IDCuotaSocio", idsCuotas)
           .order("NumeroPlazo", { ascending: true })
       : { data: [] };
 
-      const idsPlazos = plazos?.map((p) => p.IDPlazo) || [];
+      const plazosAny = (plazos as any[]) || [];
+
+      const idsPlazos = plazosAny.map((p) => p.IDPlazo);
 
 const { data: pagosManuales } =
   idsPlazos.length > 0
-    ? await supabase
+  ? await (supabase as any)
         .from("PAGOS_MANUALES_PLAZOS")
         .select(`
           ID,
@@ -61,23 +68,25 @@ const { data: pagosManuales } =
         .order("ID", { ascending: false })
     : { data: [] };
 
+    const pagosManualesAny = (pagosManuales as any[]) || [];
+
   function plazosDeCuota(idCuotaSocio: number) {
     return (
-      plazos?.filter(
+      plazosAny.filter(
         (p) => Number(p.IDCuotaSocio) === Number(idCuotaSocio)
       ) || []
     );
   }
 
   const totalImporte =
-    cuotas?.reduce((acc, cuota) => acc + Number(cuota.Importe || 0), 0) || 0;
+    cuotasAny.reduce((acc, cuota) => acc + Number(cuota.Importe || 0), 0) || 0;
 
   const totalPagado =
-    plazos?.reduce((acc, plazo) => acc + Number(plazo.ImportePagado || 0), 0) ||
+    plazosAny.reduce((acc, plazo) => acc + Number(plazo.ImportePagado || 0), 0) ||
     0;
 
   const totalPendiente =
-    plazos?.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
+    plazosAny.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -99,7 +108,7 @@ const { data: pagosManuales } =
               </h1>
 
               <p className="mt-2 text-sm text-zinc-600">
-                {socio?.Apellidos}, {socio?.Nombre} · NUMCENS {numcens}
+                {socioAny?.Apellidos}, {socioAny?.Nombre} · NUMCENS {numcens}
               </p>
             </div>
           </section>
@@ -164,7 +173,7 @@ const { data: pagosManuales } =
                   </thead>
 
                   <tbody>
-                    {cuotas.map((cuota) => {
+                    {cuotasAny.map((cuota) => {
                       const plazosCuota = plazosDeCuota(cuota.IDCuotaSocio);
                       const pagadoCuota = plazosCuota.reduce(
                         (acc, p) => acc + Number(p.ImportePagado || 0),
@@ -329,8 +338,8 @@ const { data: pagosManuales } =
         </thead>
 
         <tbody>
-          {pagosManuales.map((pago) => {
-            const plazo = plazos?.find(
+          {pagosManualesAny.map((pago) => {
+            const plazo = plazosAny.find(
               (p) => Number(p.IDPlazo) === Number(pago.IDPlazo)
             );
 
