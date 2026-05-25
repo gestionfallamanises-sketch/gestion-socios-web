@@ -22,8 +22,10 @@ const miembros =
     (s) => Number(s.ID_Familia) === Number((familia as any).ID_Familia)
   ) || [];
 
-      return miembros.map((miembro) => ({
-        Familia: familia.Nombre_Familia || `Familia ${familia.ID_Familia}`,
+  const familiaAny = familia as any;
+
+  return miembros.map((miembro) => ({
+    Familia: familiaAny.Nombre_Familia || `Familia ${familiaAny.ID_Familia}`,
         NUMCENS: miembro.NUMCENS,
         Miembro: `${miembro.Apellidos}, ${miembro.Nombre}`,
         Comision: miembro.Comision || "-",
