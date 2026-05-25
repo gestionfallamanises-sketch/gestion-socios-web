@@ -66,10 +66,10 @@ export default function ConfiguracionPage() {
   }
 
   async function marcarActivo(ejercicio: number) {
-    await supabase
-      .from("EJERCICIOS")
-      .update({ Activo: false })
-      .neq("Ejercicio", ejercicio);
+    await (supabase as any)
+  .from("EJERCICIOS")
+  .update({ Activo: false })
+  .neq("Ejercicio", ejercicio);
 
       const { error } = await (supabase as any)
       .from("EJERCICIOS")
