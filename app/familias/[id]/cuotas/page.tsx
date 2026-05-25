@@ -77,12 +77,12 @@ export default async function CuotasFamiliaPage({
     const totalPendiente =
       plazosAny.reduce((t, p) => t + Number(p.Pendiente || 0), 0) || 0;
 
-  function socioDeCuota(idCuotaSocio: number) {
-    const cuota = cuotas?.find(
-      (c) => Number(c.IDCuotaSocio) === Number(idCuotaSocio)
-    );
-
-    return cuota
+      function socioDeCuota(idCuotaSocio: number) {
+        const cuota = cuotasAny.find(
+          (c) => Number(c.IDCuotaSocio) === Number(idCuotaSocio)
+        );
+      
+        return cuota
       ? `${cuota.Apellidos}, ${cuota.Nombre}`
       : "-";
   }
