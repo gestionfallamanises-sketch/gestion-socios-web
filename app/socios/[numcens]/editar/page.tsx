@@ -15,6 +15,15 @@ export default function EditarSocioPage() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [iban, setIban] = useState("");
+const [titularCuenta, setTitularCuenta] = useState("");
+const [nifTitularCuenta, setNifTitularCuenta] = useState("");
+const [metodo, setMetodo] = useState("Efectivo");
+const [numeroPlazos, setNumeroPlazos] = useState(1);
+const [observacionesPago, setObservacionesPago] = useState("");
+const [pagador, setPagador] = useState("");
+const [busquedaPagador, setBusquedaPagador] = useState("");
+const [socios, setSocios] = useState<any[]>([]);
 
   useEffect(() => {
     async function cargarSocio() {
@@ -29,6 +38,39 @@ export default function EditarSocioPage() {
       } else {
         setSocio(data);
       }
+
+      const { data: listaSocios } = await supabase
+  .from("SOCIOS")
+  .select("NUMCENS, Nombre, Apellidos")
+  .order("Apellidos", { ascending: true });
+
+setSocios(listaSocios || []);
+
+      const { data: banco } = await supabase
+      .from("DATOS_BANCARIOS")
+      .select("*")
+      .eq("NUMCENS", Number(numcens))
+      .maybeSingle();
+    
+    if (banco) {
+      setIban(banco.IBAN || "");
+      setTitularCuenta(banco.TitularCuenta || "");
+      setNifTitularCuenta(banco.NIF_TitularCuenta || "");
+    }
+    
+    const { data: formaPago } = await supabase
+      .from("FORMAS_PAGO_SOCIOS")
+      .select("*")
+      .eq("NUMCENS", Number(numcens))
+      .eq("Activo", true)
+      .maybeSingle();
+    
+    if (formaPago) {
+      setMetodo(formaPago.Metodo || "Efectivo");
+      setNumeroPlazos(formaPago.NumeroPlazos || 1);
+      setObservacionesPago(formaPago.Observaciones || "");
+      setPagador(String(formaPago.NUMCENS_Pagador || ""));
+    }
 
       setLoading(false);
     }
@@ -77,6 +119,73 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
       setGuardando(false);
       return;
     }
+
+    const { data: bancoExistente, error: errorBancoBuscar } = await supabase
+    .from("DATOS_BANCARIOS")
+    .select("*")
+    .eq("NUMCENS", Number(numcens))
+    .maybeSingle();
+  
+  if (errorBancoBuscar) {
+    setGuardando(false);
+    setError(errorBancoBuscar.message);
+    return;
+  }
+  
+  if (bancoExistente) {
+    const { error: errorBanco } = await supabase
+      .from("DATOS_BANCARIOS")
+      .update({
+        IBAN: iban,
+        TitularCuenta: titularCuenta || null,
+        NIF_TitularCuenta: nifTitularCuenta || null,
+      })
+      .eq("NUMCENS", Number(numcens));
+  
+    if (errorBanco) {
+      setGuardando(false);
+      setError(errorBanco.message);
+      return;
+    }
+  } else {
+    const { error: errorBanco } = await supabase
+      .from("DATOS_BANCARIOS")
+      .insert({
+        NUMCENS: Number(numcens),
+        IBAN: iban,
+        TitularCuenta: titularCuenta || null,
+        NIF_TitularCuenta: nifTitularCuenta || null,
+      });
+  
+    if (errorBanco) {
+      setGuardando(false);
+      setError(errorBanco.message);
+      return;
+    }
+  }
+  
+  await supabase
+    .from("FORMAS_PAGO_SOCIOS")
+    .update({ Activo: false })
+    .eq("NUMCENS", Number(numcens));
+  
+  const { error: errorFormaPago } = await supabase
+    .from("FORMAS_PAGO_SOCIOS")
+    .insert({
+      NUMCENS: Number(numcens),
+      Metodo: metodo,
+      NumeroPlazos: numeroPlazos,
+      Fraccionado: numeroPlazos > 1,
+      Activo: true,
+      NUMCENS_Pagador: Number(pagador || numcens),
+      Observaciones: observacionesPago || null,
+    });
+  
+  if (errorFormaPago) {
+    setGuardando(false);
+    setError(errorFormaPago.message);
+    return;
+  }
 
     const { error: errorRecalculo } = await supabase.rpc(
       "generar_actualizar_cuotas_completo",
@@ -316,6 +425,160 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
 />
               </div>
             </section>
+
+            <section className="border border-zinc-200 bg-white">
+            <div className="bg-zinc-100 px-4 py-3">
+  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+    Datos de pago
+  </h2>
+</div>
+
+<div className="grid gap-4 p-4 md:grid-cols-3">
+
+  <div>
+    <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+      Método de pago
+    </label>
+
+    <select
+      value={metodo}
+      onChange={(e) => setMetodo(e.target.value)}
+      className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+    >
+      <option value="Efectivo">Efectivo</option>
+      <option value="Banco">Banco</option>
+    </select>
+  </div>
+
+  <CampoTexto
+    label="IBAN"
+    value={iban}
+    onChange={(valor) => setIban(valor)}
+  />
+
+  <div>
+    <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+      Número de plazos
+    </label>
+
+    <select
+      value={numeroPlazos}
+      onChange={(e) => setNumeroPlazos(Number(e.target.value))}
+      className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+    >
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+        <option key={n} value={n}>
+          {n} plazo{n > 1 ? "s" : ""}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <CampoTexto
+    label="Titular cuenta"
+    value={titularCuenta}
+    onChange={(valor) => setTitularCuenta(valor)}
+  />
+
+  <CampoTexto
+    label="NIF titular"
+    value={nifTitularCuenta}
+    onChange={(valor) => setNifTitularCuenta(valor)}
+  />
+
+<div>
+  <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+    Pagador cuota
+  </label>
+
+  <div className="relative">
+    <input
+      value={busquedaPagador}
+      onChange={(e) => setBusquedaPagador(e.target.value)}
+      placeholder="Buscar pagador..."
+      className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+    />
+
+    {busquedaPagador && (
+      <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto border border-zinc-200 bg-white shadow-lg">
+
+        {socios
+          .filter((s) =>
+            `${s.NUMCENS} ${s.Apellidos || ""} ${s.Nombre || ""}`
+              .toLowerCase()
+              .includes(busquedaPagador.toLowerCase())
+          )
+          .slice(0, 10)
+          .map((s) => (
+            <button
+              key={s.NUMCENS}
+              type="button"
+              onClick={() => {
+                setPagador(String(s.NUMCENS));
+                setBusquedaPagador(
+                  `${s.Apellidos}, ${s.Nombre} · ${s.NUMCENS}`
+                );
+              }}
+              className="block w-full border-b border-zinc-100 px-3 py-2 text-left text-sm hover:bg-red-50"
+            >
+              {s.Apellidos}, {s.Nombre} · {s.NUMCENS}
+            </button>
+          ))}
+
+      </div>
+    )}
+  </div>
+</div>
+
+  <CampoTexto
+    label="Observaciones pago"
+    value={observacionesPago}
+    onChange={(valor) => setObservacionesPago(valor)}
+  />
+
+</div>
+
+<div className="grid gap-4 border-t border-zinc-200 p-4 md:grid-cols-3">
+
+  <div>
+    <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+      Tipo adeudo
+    </label>
+
+    <input
+      value="RCUR"
+      disabled
+      className="w-full border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-600"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+      Fecha mandato
+    </label>
+
+    <input
+      value={socio?.FechaPrimerAlta || "-"}
+      disabled
+      className="w-full border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-600"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+      Referencia mandato
+    </label>
+
+    <input
+      value={`${pagador || socio?.NUMCENS}-2027`}
+      disabled
+      className="w-full border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-600"
+    />
+  </div>
+
+</div>
+
+</section>
 
             <div className="flex justify-end gap-3">
               <Link

@@ -10,9 +10,13 @@ export default function ConfiguracionPage() {
   const [nuevoEjercicio, setNuevoEjercicio] = useState("");
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState(2027);
   const [editandoTarifas, setEditandoTarifas] = useState(false);
+  const [numcensEspecial, setNumcensEspecial] = useState("");
+  const [socios, setSocios] = useState<any[]>([]);
+const [busquedaSocio, setBusquedaSocio] = useState("");
 
   useEffect(() => {
     cargarEjercicios();
+    cargarSocios();
   }, []);
 
   useEffect(() => {
@@ -84,6 +88,42 @@ export default function ConfiguracionPage() {
     setEjercicioSeleccionado(ejercicio);
 
     cargarEjercicios();
+  }
+
+  async function cargarSocios() {
+    const { data } = await (supabase as any)
+      .from("SOCIOS")
+      .select("NUMCENS, Nombre, Apellidos")
+      .order("Apellidos", { ascending: true });
+  
+    setSocios((data as any[]) || []);
+  }
+
+  async function aplicarTarifaEspecial() {
+    if (!numcensEspecial) {
+      alert("Selecciona un socio");
+      return;
+    }
+  
+    const { error } = await (supabase as any)
+      .from("SOCIOS")
+      .update({
+        IDCuotaManual: "ESPECIAL",
+      })
+      .eq("NUMCENS", Number(numcensEspecial));
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    await (supabase as any).rpc("generar_actualizar_cuotas_completo", {
+      p_ejercicio: ejercicioSeleccionado,
+    });
+  
+    alert("Tarifa especial aplicada y cuotas actualizadas");
+    setNumcensEspecial("");
+    setBusquedaSocio("");
   }
 
   async function crearEjercicio() {
@@ -414,6 +454,71 @@ const { error } = await (supabase as any)
             </div>
 
           </section>
+
+          <section className="mt-8 border border-zinc-200 bg-white">
+
+<div className="bg-zinc-100 px-4 py-3">
+  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+    Tarifa especial
+  </h2>
+
+  <p className="text-xs text-zinc-500">
+    Solo para casos excepcionales
+  </p>
+</div>
+
+<div className="flex flex-wrap items-end gap-4 p-4">
+
+<div className="min-w-[320px]">
+  <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+    Buscar socio
+  </label>
+
+  <input
+    value={busquedaSocio}
+    onChange={(e) => setBusquedaSocio(e.target.value)}
+    placeholder="Nombre, apellidos o NUMCENS"
+    className="w-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
+  />
+
+  {busquedaSocio && (
+    <div className="mt-2 max-h-48 overflow-y-auto border border-zinc-200 bg-white">
+      {socios
+        .filter((socio) =>
+          `${socio.NUMCENS} ${socio.Nombre || ""} ${socio.Apellidos || ""}`
+            .toLowerCase()
+            .includes(busquedaSocio.toLowerCase())
+        )
+        .slice(0, 10)
+        .map((socio) => (
+          <button
+            key={socio.NUMCENS}
+            type="button"
+            onClick={() => {
+              setNumcensEspecial(String(socio.NUMCENS));
+              setBusquedaSocio(
+                `${socio.Apellidos}, ${socio.Nombre} · ${socio.NUMCENS}`
+              );
+            }}
+            className="block w-full px-3 py-2 text-left text-sm hover:bg-red-50"
+          >
+            {socio.Apellidos}, {socio.Nombre} · NUMCENS {socio.NUMCENS}
+          </button>
+        ))}
+    </div>
+  )}
+</div>
+
+  <button
+    onClick={aplicarTarifaEspecial}
+    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+  >
+    Aplicar ESPECIAL
+  </button>
+
+</div>
+</section>
+
         </div>
       </main>
     </div>

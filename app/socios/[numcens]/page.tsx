@@ -314,7 +314,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
             </section>
 
             <section className="border border-zinc-200 bg-white">
-            <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
+            <div className="bg-zinc-100 px-4 py-3">
   <div>
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
       Datos de pago
@@ -324,13 +324,6 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
       Banco, forma de pago y cuota actual
     </p>
   </div>
-
-  <Link
-    href={"/socios/" + socio.NUMCENS + "/pago"}
-    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-  >
-    Editar
-  </Link>
 </div>
 
               <div className="p-4 text-sm">
