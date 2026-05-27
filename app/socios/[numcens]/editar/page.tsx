@@ -78,6 +78,8 @@ setSocios(listaSocios || []);
     cargarSocio();
   }, [numcens]);
 
+  const isBaja = socio?.Estado?.toLowerCase() === "baja";
+
   function cambiarCampo(campo: string, valor: any) {
     setSocio((actual: any) => ({
       ...actual,
@@ -87,6 +89,11 @@ setSocios(listaSocios || []);
 
   async function guardarCambios(e: React.FormEvent) {
     e.preventDefault();
+
+    if (isBaja) {
+      setError("Este socio está dado de baja. No se pueden editar sus datos.");
+      return;
+    }
 
     setGuardando(true);
     setError(null);
@@ -216,13 +223,18 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
       <Sidebar />
 
       <main className="min-w-0 flex-1 p-8">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href={`/socios/${numcens}`}
-            className="mb-6 inline-block text-sm font-medium text-red-900 hover:text-red-950"
-          >
-            ← Volver a ficha
-          </Link>
+  <div className="mx-auto max-w-6xl">
+
+    <div className="mb-4 bg-yellow-100 p-3 text-sm text-yellow-900">
+      Estado actual: {socio?.Estado || "sin estado"} · isBaja: {String(isBaja)}
+    </div>
+
+    <Link
+      href={`/socios/${numcens}`}
+      className="mb-6 inline-block text-sm font-medium text-red-900 hover:text-red-950"
+    >
+      ← Volver a ficha
+    </Link>
 
           <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
             <div className="border-l-4 border-red-900 px-6 py-5">
@@ -238,13 +250,20 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
                 </div>
 
                 <button
-                  type="submit"
-                  form="form-editar-socio"
-                  disabled={guardando}
-                  className="bg-red-900 px-5 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50"
-                >
-                  {guardando ? "Guardando..." : "Guardar cambios"}
-                </button>
+  type="submit"
+  disabled={guardando || isBaja}
+  className={`px-5 py-2 text-sm font-medium text-white ${
+    isBaja
+      ? "cursor-not-allowed bg-zinc-400"
+      : "bg-red-900 hover:bg-red-950"
+  } disabled:opacity-50`}
+>
+  {isBaja
+    ? "Socio dado de baja"
+    : guardando
+    ? "Guardando..."
+    : "Guardar cambios"}
+</button>
               </div>
             </div>
           </section>
@@ -255,11 +274,18 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
             </div>
           )}
 
-          <form
-            id="form-editar-socio"
-            onSubmit={guardarCambios}
-            className="space-y-8"
-          >
+<form
+  id="form-editar-socio"
+  onSubmit={guardarCambios}
+  className="space-y-8"
+>
+  <fieldset
+    disabled={isBaja}
+    className={isBaja ? "opacity-50 grayscale" : ""}
+  >
+            <fieldset disabled={isBaja} className={isBaja ? "opacity-50 grayscale" : ""}>
+
+            </fieldset>
             <section className="border border-zinc-200 bg-white">
               <div className="bg-zinc-100 px-4 py-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
@@ -492,11 +518,17 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
   </label>
 
   <div className="relative">
-    <input
+  
+      <input
       value={busquedaPagador}
       onChange={(e) => setBusquedaPagador(e.target.value)}
+      disabled={isBaja}
       placeholder="Buscar pagador..."
-      className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+      className={`w-full border px-3 py-2 text-sm outline-none ${
+        isBaja
+          ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-500"
+          : "border-zinc-300 bg-white focus:border-red-900"
+      }`}
     />
 
     {busquedaPagador && (
@@ -511,16 +543,18 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
           .slice(0, 10)
           .map((s) => (
             <button
-              key={s.NUMCENS}
-              type="button"
-              onClick={() => {
-                setPagador(String(s.NUMCENS));
-                setBusquedaPagador(
-                  `${s.Apellidos}, ${s.Nombre} · ${s.NUMCENS}`
-                );
-              }}
-              className="block w-full border-b border-zinc-100 px-3 py-2 text-left text-sm hover:bg-red-50"
-            >
+  key={s.NUMCENS}
+  type="button"
+  disabled={isBaja}
+  onClick={() => {
+    if (isBaja) return;
+    setPagador(String(s.NUMCENS));
+    setBusquedaPagador(
+      `${s.Apellidos}, ${s.Nombre} · ${s.NUMCENS}`
+    );
+  }}
+  className="block w-full border-b border-zinc-100 px-3 py-2 text-left text-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+>
               {s.Apellidos}, {s.Nombre} · {s.NUMCENS}
             </button>
           ))}
@@ -530,11 +564,12 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
   </div>
 </div>
 
-  <CampoTexto
-    label="Observaciones pago"
-    value={observacionesPago}
-    onChange={(valor) => setObservacionesPago(valor)}
-  />
+<CampoTexto
+  label="Observaciones pago"
+  value={observacionesPago}
+  onChange={(valor) => setObservacionesPago(valor)}
+  disabled={isBaja}
+/>
 
 </div>
 
@@ -580,21 +615,27 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
 
 </section>
 
+</fieldset>
+
             <div className="flex justify-end gap-3">
               <Link
                 href={`/socios/${numcens}`}
                 className="border border-zinc-300 bg-white px-5 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
               >
                 Cancelar
-              </Link>
+                </Link>
 
               <button
-                type="submit"
-                disabled={guardando}
-                className="bg-red-900 px-5 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50"
-              >
-                {guardando ? "Guardando..." : "Guardar cambios"}
-              </button>
+  type="submit"
+  disabled={guardando || isBaja}
+  className={`px-5 py-2 text-sm font-medium text-white ${
+    isBaja
+      ? "cursor-not-allowed bg-zinc-400"
+      : "bg-red-900 hover:bg-red-950"
+  } disabled:opacity-50`}
+>
+  {isBaja ? "Socio dado de baja" : guardando ? "Guardando..." : "Guardar cambios"}
+</button>
             </div>
           </form>
         </div>
@@ -607,10 +648,12 @@ function CampoTexto({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (valor: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -621,6 +664,7 @@ function CampoTexto({
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
         className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
       />
     </div>

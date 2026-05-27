@@ -13,15 +13,46 @@ export default function ListadosPage() {
   const [loteria, setLoteria] = useState<string[]>([]);
   const [banda, setBanda] = useState<string[]>([]);
   const [orden, setOrden] = useState("ANTIGUEDAD_DESC");
+  const [ordenColumna, setOrdenColumna] = useState<{
+    campo: string;
+    direccion: "ASC" | "DESC";
+  }>({
+    campo: "antiguedad",
+    direccion: "DESC",
+  });
+  
+  function cambiarOrden(campo: string) {
+    setOrdenColumna((actual) => ({
+      campo,
+      direccion:
+        actual.campo === campo && actual.direccion === "ASC"
+          ? "DESC"
+          : "ASC",
+    }));
+  }
+  const [columnas, setColumnas] = useState<string[]>([
+    "numcens",
+    "comision",
+    "estado",
+    "antiguedad",
+  ]);
+  
+  function toggleColumna(columna: string) {
+    setColumnas((actual) =>
+      actual.includes(columna)
+        ? actual.filter((c) => c !== columna)
+        : [...actual, columna]
+    );
+  }
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSocios() {
       const { data, error } = await supabase
-        .from("SOCIOS")
-        .select(
-          "NUMCENS, Nombre, Apellidos, Estado, Comision, SEXE, Antiguedad, Antiguedad_Dias, ConLoteria, NumPapeletas, EsBanda"
-        );
+      .from("SOCIOS_ANTIGUEDAD_CALCULADA")
+      .select(
+        "NUMCENS, Nombre, Apellidos, Estado, Comision, SEXE, Antiguedad_Calculada, Antiguedad_Meses_Total, ConLoteria, NumPapeletas, EsBanda"
+      );
 
       if (error) {
         setError(error.message);
@@ -41,16 +72,15 @@ export default function ListadosPage() {
     }
   }
 
-  function abreviarAntiguedad(texto: string | null) {
+  function abreviarAntiguedad_Calculada(texto: string | null) {
     if (!texto) return "-";
-
+  
     return texto
+      .replace(/,\s*\d+\s*días?/i, "")
       .replace(" años", " A")
       .replace(" año", " A")
       .replace(" meses", " M")
-      .replace(" mes", " M")
-      .replace(" días", " D")
-      .replace(" día", " D");
+      .replace(" mes", " M");
   }
 
   const sociosFiltrados = socios
@@ -82,15 +112,24 @@ export default function ListadosPage() {
       );
     })
     .sort((a, b) => {
-      if (orden === "ANTIGUEDAD_DESC") {
-        return Number(b.Antiguedad_Dias || 0) - Number(a.Antiguedad_Dias || 0);
+      if (ordenColumna.campo === "socio") {
+        const nombreA = `${a.Apellidos || ""}, ${a.Nombre || ""}`.toLowerCase();
+        const nombreB = `${b.Apellidos || ""}, ${b.Nombre || ""}`.toLowerCase();
+    
+        return ordenColumna.direccion === "ASC"
+          ? nombreA.localeCompare(nombreB)
+          : nombreB.localeCompare(nombreA);
       }
-
-      if (orden === "ANTIGUEDAD_ASC") {
-        return Number(a.Antiguedad_Dias || 0) - Number(b.Antiguedad_Dias || 0);
+    
+      if (ordenColumna.campo === "numcens") {
+        return ordenColumna.direccion === "ASC"
+          ? Number(a.NUMCENS || 0) - Number(b.NUMCENS || 0)
+          : Number(b.NUMCENS || 0) - Number(a.NUMCENS || 0);
       }
-
-      return 0;
+    
+      return ordenColumna.direccion === "ASC"
+        ? Number(a.Antiguedad_Meses_Total || 0) - Number(b.Antiguedad_Meses_Total || 0)
+        : Number(b.Antiguedad_Meses_Total || 0) - Number(a.Antiguedad_Meses_Total || 0);
     });
 
   return (
@@ -239,7 +278,7 @@ export default function ListadosPage() {
                 </FiltroButton>
               </GrupoFiltro>
 
-              <GrupoFiltro titulo="Antiguedad">
+              <GrupoFiltro titulo="Antigüedad">
                 <FiltroButton
                   active={orden === "ANTIGUEDAD_DESC"}
                   onClick={() =>
@@ -266,6 +305,7 @@ export default function ListadosPage() {
                   -
                 </FiltroButton>
               </GrupoFiltro>
+
             </div>
           </section>
 
@@ -292,8 +332,22 @@ export default function ListadosPage() {
               <table className="w-full text-sm">
                 <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600 print:bg-white">
                   <tr>
-                    <th className="px-4 py-3 print:px-1 print:py-1">Socio</th>
-                    <th className="px-4 py-3 print:px-1 print:py-1">NUMCENS</th>
+                  <th
+  onClick={() => cambiarOrden("socio")}
+  className="cursor-pointer px-4 py-3 print:px-1 print:py-1"
+>
+Socio {ordenColumna.campo === "socio"
+  ? (ordenColumna.direccion === "ASC" ? "↑" : "↓")
+  : "↕"}
+</th>
+                    <th
+  onClick={() => cambiarOrden("numcens")}
+  className="cursor-pointer px-4 py-3 print:px-1 print:py-1"
+>
+  NUMCENS {ordenColumna.campo === "socio"
+  ? (ordenColumna.direccion === "ASC" ? "↑" : "↓")
+  : "↕"}
+</th>
                     <th className="px-4 py-3 print:px-1 print:py-1">Com/Sx</th>
                     <th className="px-4 py-3 print:px-1 print:py-1">Estado</th>
                     <th className="px-4 py-3 print:px-1 print:py-1">Lotería</th>
@@ -301,9 +355,14 @@ export default function ListadosPage() {
                     <th className="px-4 py-3 print:px-1 print:py-1">
                       Papeletas
                     </th>
-                    <th className="px-4 py-3 text-right print:px-1 print:py-1">
-                      Antigüedad
-                    </th>
+                    <th
+  onClick={() => cambiarOrden("antiguedad_calculada")}
+  className="cursor-pointer px-4 py-3 text-right print:px-1 print:py-1"
+>
+  Antigüedad {ordenColumna.campo === "socio"
+  ? (ordenColumna.direccion === "ASC" ? "↑" : "↓")
+  : "↕"}
+</th>
                   </tr>
                 </thead>
 
@@ -344,7 +403,7 @@ export default function ListadosPage() {
                       </td>
 
                       <td className="px-4 py-3 text-zinc-600 print:px-1 print:py-1">
-                        {socio.Banda ? "Sí" : "No"}
+                        {socio.EsBanda ? "Sí" : "No"}
                       </td>
 
                       <td className="px-4 py-3 text-zinc-600 print:px-1 print:py-1">
@@ -352,7 +411,7 @@ export default function ListadosPage() {
                       </td>
 
                       <td className="px-4 py-3 text-right font-medium print:px-1 print:py-1">
-                        {abreviarAntiguedad(socio.Antiguedad)}
+                        {abreviarAntiguedad_Calculada(socio.Antiguedad_Calculada)}
                       </td>
                     </tr>
                   ))}

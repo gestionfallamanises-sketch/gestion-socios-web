@@ -35,11 +35,15 @@ export default async function SocioPage({
     );
   }
 
+  const socioAny = socio as any;
+
   const { data: familia } = await supabase
     .from("FAMILIAS")
     .select("*")
     .eq("ID_Familia", (socio as any).ID_Familia)
     .maybeSingle();
+
+    const familiaAny = familia as any;
 
   const { data: miembrosFamilia } = await supabase
     .from("SOCIOS")
@@ -64,26 +68,26 @@ export default async function SocioPage({
   const { data: cuotaActual } = await supabase
     .from("vista_cuotas_socios")
     .select("*")
-    .eq("NUMCENS", socio.NUMCENS)
+    .eq("NUMCENS", (socio as any).NUMCENS)
     .order("Ejercicio", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-    const { data: plazosCuotaActual } = cuotaActual?.IDCuotaSocio
+    const { data: plazosCuotaActual } = (cuotaActual as any)?.IDCuotaSocio
   ? await supabase
       .from("CUOTAS_PLAZOS")
       .select("*")
-      .eq("IDCuotaSocio", cuotaActual.IDCuotaSocio)
+      .eq("IDCuotaSocio", (cuotaActual as any)?.IDCuotaSocio)
   : { data: [] };
 
-const totalPagadoReal =
-  plazosCuotaActual?.reduce(
+  const totalPagadoReal =
+  (plazosCuotaActual as any[])?.reduce(
     (total, plazo) => total + Number(plazo.ImportePagado || 0),
     0
   ) || 0;
 
 const totalPendienteReal =
-  plazosCuotaActual?.reduce(
+  (plazosCuotaActual as any[])?.reduce(
     (total, plazo) => total + Number(plazo.Pendiente || 0),
     0
   ) || 0;
@@ -91,29 +95,25 @@ const totalPendienteReal =
   const { data: datosBanco } = await supabase
     .from("DATOS_BANCARIOS")
     .select("*")
-    .eq("NUMCENS", socio.NUMCENS)
+    .eq("NUMCENS", (socio as any).NUMCENS)
     .maybeSingle();
+
+    const datosBancoAny = datosBanco as any;
 
     const { data: formaPago } = await supabase
   .from("FORMAS_PAGO_SOCIOS")
   .select("*")
-  .eq("NUMCENS", socio.NUMCENS)
+  .eq("NUMCENS", (socio as any).NUMCENS)
   .eq("Activo", true)
   .maybeSingle();
 
-const { data: pagadorExterno } = formaPago?.IDPagadorExterno
-  ? await supabase
-      .from("PAGADORES_EXTERNOS")
-      .select("*")
-      .eq("IDPagadorExterno", formaPago.IDPagadorExterno)
-      .maybeSingle()
-  : { data: null };
+  const formaPagoAny = formaPago as any;
 
   function cuotaMiembro(numcensMiembro: number) {
-    return cuotasFamilia?.find(
+    return (cuotasFamilia as any[])?.find(
       (c) =>
         Number(c.NUMCENS) === Number(numcensMiembro) &&
-        Number(c.Ejercicio) === Number(cuotaActual?.Ejercicio)
+        Number(c.Ejercicio) === Number((cuotaActual as any)?.Ejercicio)
     );
   }
 
@@ -133,37 +133,44 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">
-          {socio.Apellidos}, {socio.Nombre}
+          {socioAny.Apellidos}, {socioAny.Nombre}
         </h1>
 
         <p className="mt-2 text-sm text-zinc-600">
-  NUMCENS {socio.NUMCENS}
+  NUMCENS {socioAny.NUMCENS}
   {" · "}
-  {socio.CARREG || "Sin cargo"}
+  {socioAny.CARREG || "Sin cargo"}
   {" · Antigüedad: "}
-  {socio.Antiguedad || "-"}
+  {socioAny.Antiguedad || "-"}
 </p>
       </div>
 
       <div className="flex items-center gap-3">
         <span
           className={
-            socio.Estado === "Activo"
+            socioAny.Estado === "Activo"
               ? "bg-green-100 px-4 py-2 text-sm font-semibold text-green-700"
               : "bg-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700"
           }
         >
-          {socio.Estado || "Sin estado"}
+          {socioAny.Estado || "Sin estado"}
         </span>
 
-        {socio.Estado === "Activo" && (
-          <Link
-            href={"/socios/" + socio.NUMCENS + "/baja"}
-            className="bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200"
-          >
-            Dar de baja
-          </Link>
-        )}
+        {socioAny.Estado === "Activo" ? (
+  <Link
+    href={"/socios/" + socioAny.NUMCENS + "/baja"}
+    className="bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-200"
+  >
+    Dar de baja
+  </Link>
+) : (
+  <Link
+    href={"/socios/" + socioAny.NUMCENS + "/alta"}
+    className="bg-green-100 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-200"
+  >
+    Dar de alta
+  </Link>
+)}
       </div>
     </div>
   </div>
@@ -183,7 +190,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
       </div>
 
       <div className="bg-white px-4 py-3 text-sm">
-        {socio.Comision || "-"}
+        {socioAny.Comision || "-"}
       </div>
     </div>
 
@@ -193,7 +200,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
       </div>
 
       <div className="bg-white px-4 py-3 text-sm">
-        {socio.SEXE || "-"}
+        {socioAny.SEXE || "-"}
       </div>
     </div>
 
@@ -203,7 +210,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
       </div>
 
       <div className="bg-white px-4 py-3 text-sm">
-        {socio.EsBanda ? "Sí" : "No"}
+        {socioAny.EsBanda ? "Sí" : "No"}
       </div>
     </div>
 
@@ -213,7 +220,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
       </div>
 
       <div className="bg-white px-4 py-3 text-sm">
-        {socio.CARREG || "-"}
+        {socioAny.CARREG || "-"}
       </div>
     </div>
     
@@ -223,7 +230,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
       </div>
 
       <div className="bg-white px-4 py-3 text-sm">
-        {socio.ConLoteria ? "Sí" : "No"}
+        {socioAny.ConLoteria ? "Sí" : "No"}
       </div>
     </div>
 
@@ -233,7 +240,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
   </div>
 
   <div className="bg-white px-4 py-3 text-sm">
-    {socio.PapeletasFalla || 0}
+    {socioAny.PapeletasFalla || 0}
   </div>
 </div>
 
@@ -243,7 +250,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
   </div>
 
   <div className="bg-white px-4 py-3 text-sm">
-    {socio.PapeletasVirgen || 0}
+    {socioAny.PapeletasVirgen || 0}
   </div>
 </div>
 
@@ -253,7 +260,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
   </div>
 
   <div className="bg-white px-4 py-3 text-sm">
-    {socio.PapeletasNavidad || 0}
+    {socioAny.PapeletasNavidad || 0}
   </div>
 </div>
 
@@ -263,7 +270,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
   </div>
 
   <div className="bg-white px-4 py-3 text-sm">
-    {socio.PapeletasNino || 0}
+    {socioAny.PapeletasNino || 0}
   </div>
 </div>
   </div>
@@ -271,23 +278,29 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
 
           <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <section className="border border-zinc-200 bg-white">
-          <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
+          <div className="flex items-center justify-between">
   <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
     Datos personales
   </h2>
 
-  <Link
-    href={"/socios/" + socio.NUMCENS + "/editar"}
-    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-  >
-    Editar
-  </Link>
+  {socioAny.Estado?.toLowerCase() !== "baja" ? (
+    <Link
+      href={"/socios/" + socioAny.NUMCENS + "/editar"}
+      className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+    >
+      Editar
+    </Link>
+  ) : (
+    <div className="cursor-not-allowed bg-zinc-400 px-4 py-2 text-sm font-medium text-white">
+      Socio dado de baja
+    </div>
+  )}
 </div>
 
 <div className="p-4 text-sm">
 
                 <div className="grid grid-cols-2 gap-4 border-b border-zinc-100 py-3">
-                  <Campo label="Sexo" value={socio.SEXE} />
+                  <Campo label="Sexo" value={socioAny.SEXE} />
                   <Campo
                     label="Fecha nacimiento"
                     value={socio["FECHA de NACIMIENTO"]}
@@ -296,11 +309,11 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
 
                 <div className="grid grid-cols-2 gap-4 border-b border-zinc-100 py-3">
                   <Campo label="Teléfono" value={socio["Teléfono 1"]} />
-                  <Campo label="NIF" value={socio.NIF} />
+                  <Campo label="NIF" value={socioAny.NIF} />
                 </div>
 
                 <div className="border-b border-zinc-100 py-3">
-                  <Campo label="Dirección" value={socio.Dirección} />
+                  <Campo label="Dirección" value={socioAny.Dirección} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -308,7 +321,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
                     label="Código Postal"
                     value={socio["Código Postal"]}
                   />
-                  <Campo label="Ciudad" value={socio.Ciudad} />
+                  <Campo label="Ciudad" value={socioAny.Ciudad} />
                 </div>
               </div>
             </section>
@@ -328,29 +341,27 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
 
               <div className="p-4 text-sm">
                 <div className="border-b border-zinc-100 py-3">
-                  <Campo label="IBAN" value={datosBanco?.IBAN} />
+                  <Campo label="IBAN" value={datosBancoAny?.IBAN} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 border-b border-zinc-100 py-3">
                 <Campo
   label="Forma de pago"
-  value={formaPago?.Metodo || cuotaActual?.Metodo}
+  value={formaPagoAny?.Metodo || ((cuotaActual as any)?.Metodo)}
 />
 
 <Campo
   label="Pagador"
   value={
-    pagadorExterno
-      ? `Externo · ${pagadorExterno.Apellidos || ""}, ${pagadorExterno.Nombre || ""} · ${pagadorExterno.NIF || "Sin NIF"}`
-      : formaPago?.NUMCENS_Pagador
-      ? formaPago.NUMCENS_Pagador
+    formaPagoAny?.NUMCENS_Pagador
+      ? formaPagoAny.NUMCENS_Pagador
       : "-"
   }
 />
 
 <Campo
   label="Nº plazos"
-  value={formaPago?.NumeroPlazos || "-"}
+  value={formaPagoAny?.NumeroPlazos || "-"}
 />
                 </div>
 
@@ -358,17 +369,17 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
                   <Campo
                     label="Cuota actual"
                     value={
-                      cuotaActual?.Importe
-                        ? Number(cuotaActual.Importe).toFixed(2) + " €"
+                      (cuotaActual as any)?.Importe
+                        ? Number((cuotaActual as any).Importe).toFixed(2) + " €"
                         : "-"
                     }
                   />
                   <Campo
                     label="Tipo cuota"
                     value={
-                      cuotaActual?.Descripcion ||
-                      cuotaActual?.TipoCuota ||
-                      cuotaActual?.IDCuota
+                      (cuotaActual as any)?.Descripcion ||
+                      (cuotaActual as any)?.TipoCuota ||
+                      (cuotaActual as any)?.IDCuota
                     }
                   />
                 </div>
@@ -390,10 +401,10 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
 
   {familia && (
   <Link
-    href={"/familias/" + familia.ID_Familia}
+    href={"/familias/" + familiaAny.ID_Familia}
     className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
   >
-    {familia.Nombre_Familia || "Familia " + familia.ID_Familia}
+    {familiaAny.Nombre_Familia || "Familia " + familiaAny.ID_Familia}
   </Link>
 )}
 </div>
@@ -421,7 +432,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
   key={miembro.NUMCENS}
   className={
     "border-t border-zinc-200 " +
-    (Number(miembro.NUMCENS) === Number(socio.NUMCENS)
+    (Number(miembro.NUMCENS) === Number(socioAny.NUMCENS)
       ? "bg-red-50"
       : "bg-white")
   }
@@ -484,7 +495,11 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
             </div>
           </section>
 
-          <section className="mb-10 border border-zinc-200 bg-white">
+          <section
+  className={`mb-10 border border-zinc-200 bg-white ${
+    socioAny.Estado?.toLowerCase() === "baja" ? "opacity-60 grayscale" : ""
+  }`}
+>
   <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
     <div>
   <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
@@ -497,12 +512,14 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
 </div>
 
 <div className="flex items-center gap-3">
+{socioAny.Estado?.toLowerCase() !== "baja" && (
   <GenerarCuotasButton
-    ejercicio={cuotaActual?.Ejercicio || 2027}
+    ejercicio={(cuotaActual as any)?.Ejercicio || 2027}
   />
+)}
 
   <Link
-    href={"/socios/" + socio.NUMCENS + "/cuotas"}
+    href={"/socios/" + socioAny.NUMCENS + "/cuotas"}
     className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
   >
     Ver cuotas y pagos
@@ -516,7 +533,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
         Ejercicio
       </div>
       <div className="bg-white px-4 py-3 text-sm">
-        {cuotaActual?.Ejercicio || "-"}
+      {(cuotaActual as any)?.Ejercicio || "-"}
       </div>
     </div>
 
@@ -525,7 +542,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
         Importe
       </div>
       <div className="bg-white px-4 py-3 text-sm">
-        {Number(cuotaActual?.Importe || 0).toFixed(2)} €
+      {Number((cuotaActual as any)?.Importe || 0).toFixed(2)} €
       </div>
     </div>
 
@@ -562,7 +579,7 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
     </div>
 
     <Link
-      href={"/socios/" + socio.NUMCENS + "/historial"}
+      href={"/socios/" + socioAny.NUMCENS + "/historial"}
       className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
     >
       Ver historial completo
@@ -574,28 +591,28 @@ const { data: pagadorExterno } = formaPago?.IDPagadorExterno
       <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
         Antigüedad actual
       </div>
-      <div className="bg-white px-4 py-3">{socio.Antiguedad || "-"}</div>
+      <div className="bg-white px-4 py-3">{socioAny.Antiguedad || "-"}</div>
     </div>
 
     <div>
       <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
         Fecha primer alta
       </div>
-      <div className="bg-white px-4 py-3">{socio.FechaPrimerAlta || "-"}</div>
+      <div className="bg-white px-4 py-3">{socioAny.FechaPrimerAlta || "-"}</div>
     </div>
 
     <div>
       <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
         Días antigüedad
       </div>
-      <div className="bg-white px-4 py-3">{socio.Antiguedad_Dias || "-"}</div>
+      <div className="bg-white px-4 py-3">{socioAny.Antiguedad_Dias || "-"}</div>
     </div>
 
     <div>
       <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
         Estado actual
       </div>
-      <div className="bg-white px-4 py-3">{socio.Estado || "-"}</div>
+      <div className="bg-white px-4 py-3">{socioAny.Estado || "-"}</div>
     </div>
   </div>
 </section>
