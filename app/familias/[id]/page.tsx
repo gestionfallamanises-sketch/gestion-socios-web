@@ -31,6 +31,14 @@ const { data: miembros } = await supabase
     .eq("NUMCENS", familia?.Titular_NUMCENS)
     .single();
 
+    const { data: datosBancoTitular } = titular
+  ? await supabase
+      .from("DATOS_BANCARIOS")
+      .select("IBAN")
+      .eq("NUMCENS", titular.NUMCENS)
+      .maybeSingle()
+  : { data: null };
+
   const numsFamilia = miembros?.map((s) => s.NUMCENS) || [];
 
   const { data: formasPagoFamilia } =
@@ -185,13 +193,9 @@ const totalPendiente =
   <Bloque label="Dirección" value={titular?.Dirección || "-"} />
   <Bloque label="Población" value={titular?.Poblacion || titular?.Ciudad || "-"} />
   <Bloque
-    label="Cuenta"
-    value={
-      formasPagoFamilia?.find(
-        (fp) => Number(fp.NUMCENS) === Number(titular?.NUMCENS)
-      )?.IBAN || "-"
-    }
-  />
+  label="Cuenta"
+  value={datosBancoTitular?.IBAN || "-"}
+/>
 </div>
         </section>
 
