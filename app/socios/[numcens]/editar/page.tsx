@@ -121,6 +121,8 @@ setSocios(listaSocios || []);
         Dirección: socio.Dirección,
         Ciudad: socio.Ciudad,
         "Código Postal": socio["Código Postal"],
+        NIF: socio.NIF || null,
+"FECHA de NACIMIENTO": socio["FECHA de NACIMIENTO"] || null,
         Comision: socio.Comision,
         SEXE: socio.SEXE,
         ConLoteria: socio.ConLoteria,
@@ -314,7 +316,7 @@ const { error: errorRecalculo } = await (supabase as any).rpc(
                 </h2>
               </div>
 
-              <div className="grid gap-4 p-4 md:grid-cols-6">
+              <div className="grid gap-4 px-6 py-5 md:grid-cols-4">
                 <CampoTexto
                   label="Nombre"
                   value={socio.Nombre || ""}
@@ -326,6 +328,19 @@ const { error: errorRecalculo } = await (supabase as any).rpc(
                   value={socio.Apellidos || ""}
                   onChange={(valor) => cambiarCampo("Apellidos", valor)}
                 />
+
+<CampoTexto
+  label="NIF"
+  value={socio.NIF || ""}
+  onChange={(valor) => cambiarCampo("NIF", valor)}
+/>
+
+<CampoTexto
+  label="Fecha nacimiento"
+  value={socio["FECHA de NACIMIENTO"] || ""}
+  onChange={(valor) => cambiarCampo("FECHA de NACIMIENTO", valor)}
+  type="date"
+/>
 
                 <CampoTexto
                   label="Teléfono"
@@ -670,11 +685,13 @@ function CampoTexto({
   value,
   onChange,
   disabled = false,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (valor: string) => void;
   disabled?: boolean;
+  type?: string;
 }) {
   return (
     <div>
@@ -683,6 +700,7 @@ function CampoTexto({
       </label>
 
       <input
+      type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
