@@ -5,15 +5,16 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
-const [fechaAlta, setFechaAlta] = useState(
-  new Date().toISOString().slice(0, 10)
-);
+
 
 export default function AltaSocioPage() {
   const params = useParams();
   const router = useRouter();
   const numcens = params.numcens as string;
   const [guardando, setGuardando] = useState(false);
+  const [fechaAlta, setFechaAlta] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
 
   async function confirmarAlta() {
     const confirmar = confirm("¿Seguro que quieres dar de alta este socio?");

@@ -10,78 +10,75 @@ export default function BajaSocioPage() {
   const params = useParams();
   const router = useRouter();
   const numcens = params.numcens as string;
+
   const [guardando, setGuardando] = useState(false);
+  const [fechaBaja, setFechaBaja] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
 
   async function confirmarBaja() {
     const confirmar = confirm("¿Seguro que quieres dar de baja este socio?");
     if (!confirmar) return;
-
+  
     setGuardando(true);
-
+  
+    const fecha = fechaBaja || new Date().toISOString().slice(0, 10);
+    const fechaObj = new Date(fecha);
+  
+    const ejercicioActual =
+      fechaObj.getMonth() >= 3
+        ? fechaObj.getFullYear() + 1
+        : fechaObj.getFullYear();
+  
     const { error } = await (supabase as any)
       .from("SOCIOS")
       .update({
         Estado: "Baja",
       })
       .eq("NUMCENS", Number(numcens));
-
-    setGuardando(false);
-
+  
     if (error) {
       alert(error.message);
+      setGuardando(false);
       return;
     }
-
-    const hoy = new Date();
-
-const ejercicioActual =
-  hoy.getMonth() >= 3
-    ? hoy.getFullYear() + 1
-    : hoy.getFullYear();
-
-    const fechaHoy = hoy.toISOString().slice(0, 10);
-
-    const { data: historialExistente } = await (supabase as any)
+  
+    const { data: historialActualizado, error: errorHistorial } = await (
+      supabase as any
+    )
       .from("HISTORIAL_SOCIOS")
-      .select("ID")
+      .update({
+        Fecha_Alta_Baja: fecha,
+        Estado: "Baja",
+      })
       .eq("NUMCENS", Number(numcens))
       .eq("Ejercicio", ejercicioActual)
-      .maybeSingle();
-
-    
-    if (historialExistente) {
-      const { error: errorHistorial } = await (supabase as any)
-  .from("HISTORIAL_SOCIOS")
-  .update({
-    Fecha_Alta_Baja: fechaHoy,
-    Estado: "Baja",
-  })
-  .eq("NUMCENS", Number(numcens))
-  .eq("Ejercicio", ejercicioActual);
-
-    
-      if (errorHistorial) {
-        alert(errorHistorial.message);
-        setGuardando(false);
-        return;
-      }
-    } else {
-      const { error: errorHistorial } = await (supabase as any)
+      .select();
+  
+    if (errorHistorial) {
+      alert(errorHistorial.message);
+      setGuardando(false);
+      return;
+    }
+  
+    if (!historialActualizado || historialActualizado.length === 0) {
+      const { error: errorInsertHistorial } = await (supabase as any)
         .from("HISTORIAL_SOCIOS")
         .insert({
           NUMCENS: Number(numcens),
           Ejercicio: ejercicioActual,
-          Fecha_Alta_Baja: fechaHoy,
+          Fecha_Alta_Baja: fecha,
           Estado: "Baja",
         });
-    
-      if (errorHistorial) {
-        alert(errorHistorial.message);
+  
+      if (errorInsertHistorial) {
+        alert(errorInsertHistorial.message);
         setGuardando(false);
         return;
       }
     }
-
+  
+    setGuardando(false);
     router.push(`/socios/${numcens}`);
     router.refresh();
   }
@@ -105,13 +102,28 @@ const ejercicioActual =
                 Dar de baja socio
               </h1>
 
-              <p className="mt-2 text-sm text-zinc-600">
-                NUMCENS {numcens}
-              </p>
+              <p className="mt-2 text-sm text-zinc-600">NUMCENS {numcens}</p>
             </div>
 
             <div className="p-6 text-sm text-zinc-700">
               Esta acción cambiará el estado del socio a <strong>Baja</strong>.
+            </div>
+
+            <div className="border-t border-zinc-200 p-6">
+              <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+                Fecha de baja
+              </label>
+
+              <input
+                type="date"
+                value={fechaBaja}
+                onChange={(e) => setFechaBaja(e.target.value)}
+                className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+              />
+
+              <p className="mt-2 text-xs text-zinc-500">
+                Por defecto se usa la fecha de hoy, pero puedes cambiarla si la baja corresponde a otro día.
+              </p>
             </div>
 
             <div className="flex justify-end gap-3 border-t border-zinc-200 p-4">
