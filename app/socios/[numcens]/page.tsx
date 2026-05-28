@@ -14,7 +14,7 @@ export default async function SocioPage({
   const { fromFamilia } = await searchParams;
 
   const { data: socio, error } = await supabase
-    .from("SOCIOS")
+  .from("SOCIOS_ANTIGUEDAD_CALCULADA")
     .select("*")
     .eq("NUMCENS", Number(numcens))
     .single();
@@ -141,7 +141,7 @@ const totalPendienteReal =
   {" · "}
   {socioAny.CARREG || "Sin cargo"}
   {" · Antigüedad: "}
-  {socioAny.Antiguedad || "-"}
+  {socioAny.Antiguedad_Calculada || "-"}
 </p>
       </div>
 
@@ -587,31 +587,30 @@ const totalPendienteReal =
   </div>
 
   <div className="grid grid-cols-2 text-sm lg:grid-cols-4">
-    <div>
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Antigüedad actual
-      </div>
-      <div className="bg-white px-4 py-3">{socioAny.Antiguedad || "-"}</div>
-    </div>
+  <div>
+  <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
+    Antigüedad actual
+  </div>
+  <div className="bg-white px-4 py-3">
+    {socioAny.Antiguedad_Calculada || "-"}
+  </div>
+</div>
 
-    <div>
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Fecha primer alta
-      </div>
-      <div className="bg-white px-4 py-3">{socioAny.FechaPrimerAlta || "-"}</div>
-    </div>
+<div>
+  <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
+    Primer ejercicio
+  </div>
+  <div className="bg-white px-4 py-3">
+    {socioAny.FechaPrimerAlta
+      ? new Date(socioAny.FechaPrimerAlta).getFullYear() + 1
+      : "-"}
+  </div>
+</div>
 
-    <div>
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Días antigüedad
-      </div>
-      <div className="bg-white px-4 py-3">{socioAny.Antiguedad_Dias || "-"}</div>
-    </div>
-
-    <div>
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Estado actual
-      </div>
+<div>
+  <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
+    Estado actual
+  </div>
       <div className="bg-white px-4 py-3">{socioAny.Estado || "-"}</div>
     </div>
   </div>

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
+const [fechaAlta, setFechaAlta] = useState(
+  new Date().toISOString().slice(0, 10)
+);
 
 export default function AltaSocioPage() {
   const params = useParams();
@@ -22,6 +25,7 @@ export default function AltaSocioPage() {
       .from("SOCIOS")
       .update({
         Estado: "Activo",
+        FechaPrimerAlta: fechaAlta,
       })
       .eq("NUMCENS", Number(numcens));
 
@@ -68,6 +72,22 @@ export default function AltaSocioPage() {
               Esta acción cambiará el estado del socio a <strong>Activo</strong>.
             </div>
 
+            <div className="p-6 text-sm text-zinc-700">
+  <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+    Fecha de alta
+  </label>
+
+  <input
+    type="date"
+    value={fechaAlta}
+    onChange={(e) => setFechaAlta(e.target.value)}
+    className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+  />
+
+  <p className="mt-2 text-xs text-zinc-500">
+    Por defecto se usa la fecha de hoy, pero puedes cambiarla si el alta corresponde a otro día.
+  </p>
+</div>
             <div className="flex justify-end gap-3 border-t border-zinc-200 p-4">
               <Link
                 href={`/socios/${numcens}`}

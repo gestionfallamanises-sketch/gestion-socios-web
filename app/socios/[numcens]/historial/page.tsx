@@ -10,7 +10,7 @@ export default async function HistorialSocioPage({
   const { numcens } = await params;
 
   const { data: socio } = await supabase
-    .from("SOCIOS")
+  .from("SOCIOS_ANTIGUEDAD_CALCULADA")
     .select("*")
     .eq("NUMCENS", Number(numcens))
     .single();
@@ -66,7 +66,7 @@ export default async function HistorialSocioPage({
                 {socio.Apellidos}, {socio.Nombre}
               </span>{" "}
               · NUMCENS {socio.NUMCENS} · Antigüedad:{" "}
-              {socio.Antiguedad || "-"}
+              {socio.Antiguedad_Calculada || "-"}
             </p>
           </div>
         </section>

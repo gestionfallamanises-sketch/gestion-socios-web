@@ -28,16 +28,25 @@ const [socios, setSocios] = useState<any[]>([]);
   useEffect(() => {
     async function cargarSocio() {
       const { data, error } = await supabase
-        .from("SOCIOS")
-        .select("*")
-        .eq("NUMCENS", Number(numcens))
-        .single();
+  .from("SOCIOS")
+  .select(`
+    *,
+    FAMILIAS (
+      Titular_NUMCENS
+    )
+  `)
+  .eq("NUMCENS", Number(numcens))
+  .single();
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setSocio(data);
-      }
+if (error) {
+  setError(error.message);
+} else {
+  setSocio({
+    ...data,
+    titularNumcens:
+      (data as any)?.FAMILIAS?.Titular_NUMCENS || null,
+  });
+}
 
       const { data: listaSocios } = await supabase
   .from("SOCIOS")
@@ -69,7 +78,12 @@ setSocios(listaSocios || []);
       setMetodo(formaPago.Metodo || "Efectivo");
       setNumeroPlazos(formaPago.NumeroPlazos || 1);
       setObservacionesPago(formaPago.Observaciones || "");
-      setPagador(String(formaPago.NUMCENS_Pagador || ""));
+      setPagador(
+        formaPago.NUMCENS_Pagador &&
+        Number(formaPago.NUMCENS_Pagador) !== Number(numcens)
+          ? String(formaPago.NUMCENS_Pagador)
+          : ""
+      );
     }
 
       setLoading(false);
@@ -184,29 +198,40 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
       NumeroPlazos: numeroPlazos,
       Fraccionado: numeroPlazos > 1,
       Activo: true,
-      NUMCENS_Pagador: Number(pagador || numcens),
+      NUMCENS_Pagador: Number(
+        pagador ||
+          socio?.titularNumcens ||
+          numcens
+      ),
       Observaciones: observacionesPago || null,
     });
   
-  if (errorFormaPago) {
-    setGuardando(false);
-    setError(errorFormaPago.message);
-    return;
-  }
+    if (errorFormaPago) {
+      setGuardando(false);
+      setError(errorFormaPago.message);
+      return;
+    }
+    
+    const hoy = new Date();
 
-    const { error: errorRecalculo } = await supabase.rpc(
-      "generar_actualizar_cuotas_completo",
-      {
-        p_ejercicio: 2027,
-      }
-    );
+const ejercicioActual =
+  hoy.getMonth() >= 3
+    ? hoy.getFullYear() + 1
+    : hoy.getFullYear();
+
+const { error: errorRecalculo } = await (supabase as any).rpc(
+  "generar_actualizar_cuotas_completo",
+  {
+    p_ejercicio: ejercicioActual,
+  }
+);
     
     if (errorRecalculo) {
       setGuardando(false);
       setError(errorRecalculo.message);
       return;
     }
-
+    
     router.push(`/socios/${numcens}`);
   }
 
@@ -224,10 +249,6 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
 
       <main className="min-w-0 flex-1 p-8">
   <div className="mx-auto max-w-6xl">
-
-    <div className="mb-4 bg-yellow-100 p-3 text-sm text-yellow-900">
-      Estado actual: {socio?.Estado || "sin estado"} · isBaja: {String(isBaja)}
-    </div>
 
     <Link
       href={`/socios/${numcens}`}
