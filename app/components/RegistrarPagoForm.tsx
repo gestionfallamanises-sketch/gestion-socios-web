@@ -21,9 +21,9 @@ export default function RegistrarPagoForm({
       alert("Introduce un importe válido");
       return;
     }
-
+  
     setLoading(true);
-
+  
     const { data, error } = await (supabase as any).rpc(
       "registrar_pago_manual_cuota",
       {
@@ -32,18 +32,15 @@ export default function RegistrarPagoForm({
         p_observaciones: observaciones || null,
       }
     );
-    
-    alert("Pago creado con ID: " + data);
-
+  
     setLoading(false);
-
+  
     if (error) {
       alert(error.message);
       return;
     }
-
-    alert("Pago registrado correctamente");
-
+  
+    alert("Pago registrado correctamente. ID: " + data);
     window.location.reload();
   }
 

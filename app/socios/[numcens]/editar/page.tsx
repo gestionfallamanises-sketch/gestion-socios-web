@@ -15,6 +15,7 @@ export default function EditarSocioPage() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hayCambios, setHayCambios] = useState(false);
   const [iban, setIban] = useState("");
 const [titularCuenta, setTitularCuenta] = useState("");
 const [nifTitularCuenta, setNifTitularCuenta] = useState("");
@@ -25,7 +26,22 @@ const [pagador, setPagador] = useState("");
 const [busquedaPagador, setBusquedaPagador] = useState("");
 const [socios, setSocios] = useState<any[]>([]);
 
-  useEffect(() => {
+useEffect(() => {
+  const avisarAntesDeSalir = (e: BeforeUnloadEvent) => {
+    if (!hayCambios) return;
+
+    e.preventDefault();
+    e.returnValue = "";
+  };
+
+  window.addEventListener("beforeunload", avisarAntesDeSalir);
+
+  return () => {
+    window.removeEventListener("beforeunload", avisarAntesDeSalir);
+  };
+}, [hayCambios]);
+ 
+useEffect(() => {
     async function cargarSocio() {
       const { data, error } = await supabase
   .from("SOCIOS")
@@ -95,6 +111,9 @@ setSocios(listaSocios || []);
   const isBaja = socio?.Estado?.toLowerCase() === "baja";
 
   function cambiarCampo(campo: string, valor: any) {
+  
+    setHayCambios(true);
+  
     setSocio((actual: any) => ({
       ...actual,
       [campo]: valor,
@@ -234,7 +253,10 @@ const { error: errorRecalculo } = await (supabase as any).rpc(
       return;
     }
     
-    router.push(`/socios/${numcens}`);
+    setHayCambios(false);
+setGuardando(false);
+
+router.push(`/socios/${numcens}`);
   }
 
   if (loading) {
@@ -700,12 +722,14 @@ function CampoTexto({
       </label>
 
       <input
-      type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
-      />
+  type={type}
+  value={value}
+  onChange={(e) => {
+    onChange(e.target.value);
+  }}
+  disabled={disabled}
+  className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+/>
     </div>
   );
 }

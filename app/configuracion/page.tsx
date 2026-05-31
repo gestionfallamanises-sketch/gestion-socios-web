@@ -13,6 +13,8 @@ export default function ConfiguracionPage() {
   const [numcensEspecial, setNumcensEspecial] = useState("");
   const [socios, setSocios] = useState<any[]>([]);
 const [busquedaSocio, setBusquedaSocio] = useState("");
+const [numcensCargo, setNumcensCargo] = useState("");
+const [busquedaSocioCargo, setBusquedaSocioCargo] = useState("");
 
   useEffect(() => {
     cargarEjercicios();
@@ -105,12 +107,41 @@ const [busquedaSocio, setBusquedaSocio] = useState("");
       return;
     }
   
+    const idCuotaEspecial = `${ejercicioSeleccionado}_ESPECIAL`;
+
+const { error } = await (supabase as any)
+  .from("SOCIOS")
+  .update({
+    IDCuotaManual: idCuotaEspecial,
+  })
+  .eq("NUMCENS", Number(numcensEspecial));
+
+if (error) {
+  alert(error.message);
+  return;
+}
+  
+    await (supabase as any).rpc("generar_actualizar_cuotas_completo", {
+      p_ejercicio: ejercicioSeleccionado,
+    });
+  
+    alert("Tarifa especial aplicada y cuotas actualizadas");
+    setNumcensEspecial("");
+    setBusquedaSocio("");
+  }
+
+  async function quitarTarifaManual(numcens: string) {
+    if (!numcens) {
+      alert("Selecciona un socio");
+      return;
+    }
+  
     const { error } = await (supabase as any)
       .from("SOCIOS")
       .update({
-        IDCuotaManual: "ESPECIAL",
+        IDCuotaManual: null,
       })
-      .eq("NUMCENS", Number(numcensEspecial));
+      .eq("NUMCENS", Number(numcens));
   
     if (error) {
       alert(error.message);
@@ -121,9 +152,46 @@ const [busquedaSocio, setBusquedaSocio] = useState("");
       p_ejercicio: ejercicioSeleccionado,
     });
   
-    alert("Tarifa especial aplicada y cuotas actualizadas");
+    alert("Tarifa manual quitada y cuotas actualizadas");
+  
     setNumcensEspecial("");
     setBusquedaSocio("");
+    setNumcensCargo("");
+    setBusquedaSocioCargo("");
+  }
+  
+  async function aplicarTarifaCargo() {
+    if (!numcensCargo) {
+      alert("Selecciona un socio");
+      return;
+    }
+  
+    const idCuotaCargo = `${ejercicioSeleccionado}_CARGO`;
+  
+    const { error } = await (supabase as any)
+      .from("SOCIOS")
+      .update({
+        IDCuotaManual: idCuotaCargo,
+      })
+      .eq("NUMCENS", Number(numcensCargo));
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    await (supabase as any).rpc("generar_actualizar_cuotas_completo", {
+      p_ejercicio: ejercicioSeleccionado,
+    });
+  
+    alert("Tarifa por cargo aplicada y cuotas actualizadas");
+  
+    setNumcensCargo("");
+    setBusquedaSocioCargo("");
+  }
+  
+  async function quitarTarifaCargo() {
+    await quitarTarifaManual(numcensCargo);
   }
 
   async function crearEjercicio() {
@@ -189,109 +257,6 @@ const { error } = await (supabase as any)
                 Gestión de ejercicios,
                 tarifas y parámetros generales
               </p>
-            </div>
-          </section>
-
-          <section className="mb-8 border border-zinc-200 bg-white">
-
-            <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                  Ejercicios
-                </h2>
-
-                <p className="text-xs text-zinc-500">
-                  Gestión de ejercicios activos
-                </p>
-              </div>
-            </div>
-
-            <div className="border-b border-zinc-200 p-4">
-              <div className="flex flex-wrap gap-3">
-
-                <input
-                  type="number"
-                  placeholder="Nuevo ejercicio"
-                  value={nuevoEjercicio}
-                  onChange={(e) =>
-                    setNuevoEjercicio(e.target.value)
-                  }
-                  className="border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
-                />
-
-                <button
-                  onClick={crearEjercicio}
-                  className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-                >
-                  + Nuevo ejercicio
-                </button>
-
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-
-                <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                  <tr>
-                    <th className="px-4 py-3">Ejercicio</th>
-                    <th className="px-4 py-3">Inicio</th>
-                    <th className="px-4 py-3">Fin</th>
-                    <th className="px-4 py-3">Activo</th>
-                    <th className="px-4 py-3">
-                      Observaciones
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {ejercicios.map((ejercicio) => (
-                    <tr
-                      key={ejercicio.Ejercicio}
-                      className="border-t border-zinc-200 hover:bg-red-50"
-                    >
-                      <td className="px-4 py-3 font-medium">
-                        {ejercicio.Ejercicio}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {ejercicio.FechaInicio}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {ejercicio.FechaFin}
-                      </td>
-
-                      <td className="px-4 py-3">
-
-                        {ejercicio.Activo ? (
-                          <span className="bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                            Activo
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              marcarActivo(
-                                ejercicio.Ejercicio
-                              )
-                            }
-                            className="bg-zinc-200 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-300"
-                          >
-                            Marcar activo
-                          </button>
-                        )}
-
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {ejercicio.Observaciones || "-"}
-                      </td>
-
-                    </tr>
-                  ))}
-                </tbody>
-
-              </table>
             </div>
           </section>
 
@@ -457,66 +422,135 @@ const { error } = await (supabase as any)
 
           <section className="mt-8 border border-zinc-200 bg-white">
 
-<div className="bg-zinc-100 px-4 py-3">
-  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-    Tarifa especial
-  </h2>
+  <div className="bg-zinc-100 px-4 py-3">
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+      Tarifas especiales
+    </h2>
 
-  <p className="text-xs text-zinc-500">
-    Solo para casos excepcionales
-  </p>
-</div>
+    <p className="text-xs text-zinc-500">
+      Solo para casos excepcionales
+    </p>
+  </div>
 
-<div className="flex flex-wrap items-end gap-4 p-4">
+  <div className="grid gap-6 p-4 md:grid-cols-2">
 
-<div className="min-w-[320px]">
-  <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
-    Buscar socio
-  </label>
+    {/* ESPECIAL */}
 
-  <input
-    value={busquedaSocio}
-    onChange={(e) => setBusquedaSocio(e.target.value)}
-    placeholder="Nombre, apellidos o NUMCENS"
-    className="w-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
-  />
+    <div className="border border-zinc-200 p-4">
+      <h3 className="mb-3 text-sm font-semibold text-zinc-700">
+        Tarifa especial
+      </h3>
 
-  {busquedaSocio && (
-    <div className="mt-2 max-h-48 overflow-y-auto border border-zinc-200 bg-white">
-      {socios
-        .filter((socio) =>
-          `${socio.NUMCENS} ${socio.Nombre || ""} ${socio.Apellidos || ""}`
-            .toLowerCase()
-            .includes(busquedaSocio.toLowerCase())
-        )
-        .slice(0, 10)
-        .map((socio) => (
-          <button
-            key={socio.NUMCENS}
-            type="button"
-            onClick={() => {
-              setNumcensEspecial(String(socio.NUMCENS));
-              setBusquedaSocio(
-                `${socio.Apellidos}, ${socio.Nombre} · ${socio.NUMCENS}`
-              );
-            }}
-            className="block w-full px-3 py-2 text-left text-sm hover:bg-red-50"
-          >
-            {socio.Apellidos}, {socio.Nombre} · NUMCENS {socio.NUMCENS}
-          </button>
-        ))}
+      <input
+        value={busquedaSocio}
+        onChange={(e) => setBusquedaSocio(e.target.value)}
+        placeholder="Nombre, apellidos o NUMCENS"
+        className="w-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
+      />
+
+      {busquedaSocio && (
+        <div className="mt-2 max-h-48 overflow-y-auto border border-zinc-200 bg-white">
+          {socios
+            .filter((socio) =>
+              `${socio.NUMCENS} ${socio.Nombre || ""} ${socio.Apellidos || ""}`
+                .toLowerCase()
+                .includes(busquedaSocio.toLowerCase())
+            )
+            .slice(0, 10)
+            .map((socio) => (
+              <button
+                key={socio.NUMCENS}
+                type="button"
+                onClick={() => {
+                  setNumcensEspecial(String(socio.NUMCENS));
+                  setBusquedaSocio(
+                    `${socio.Apellidos}, ${socio.Nombre} · ${socio.NUMCENS}`
+                  );
+                }}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-red-50"
+              >
+                {socio.Apellidos}, {socio.Nombre} · NUMCENS {socio.NUMCENS}
+              </button>
+            ))}
+        </div>
+      )}
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={aplicarTarifaEspecial}
+          className="bg-red-900 px-3 py-2 text-xs font-medium text-white hover:bg-red-950"
+        >
+          Aplicar especial
+        </button>
+
+        <button
+          onClick={() => quitarTarifaManual(numcensEspecial)}
+          className="bg-zinc-300 px-3 py-2 text-xs font-medium text-zinc-800 hover:bg-zinc-400"
+        >
+          Quitar especial
+        </button>
+      </div>
     </div>
-  )}
-</div>
 
-  <button
-    onClick={aplicarTarifaEspecial}
-    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-  >
-    Aplicar ESPECIAL
-  </button>
+    {/* CARGO */}
 
-</div>
+    <div className="border border-zinc-200 p-4">
+      <h3 className="mb-3 text-sm font-semibold text-zinc-700">
+        Tarifa cargo (0 €)
+      </h3>
+
+      <input
+        value={busquedaSocioCargo}
+        onChange={(e) => setBusquedaSocioCargo(e.target.value)}
+        placeholder="Nombre, apellidos o NUMCENS"
+        className="w-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
+      />
+
+      {busquedaSocioCargo && (
+        <div className="mt-2 max-h-48 overflow-y-auto border border-zinc-200 bg-white">
+          {socios
+            .filter((socio) =>
+              `${socio.NUMCENS} ${socio.Nombre || ""} ${socio.Apellidos || ""}`
+                .toLowerCase()
+                .includes(busquedaSocioCargo.toLowerCase())
+            )
+            .slice(0, 10)
+            .map((socio) => (
+              <button
+                key={socio.NUMCENS}
+                type="button"
+                onClick={() => {
+                  setNumcensCargo(String(socio.NUMCENS));
+                  setBusquedaSocioCargo(
+                    `${socio.Apellidos}, ${socio.Nombre} · ${socio.NUMCENS}`
+                  );
+                }}
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-red-50"
+              >
+                {socio.Apellidos}, {socio.Nombre} · NUMCENS {socio.NUMCENS}
+              </button>
+            ))}
+        </div>
+      )}
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={aplicarTarifaCargo}
+          className="bg-red-900 px-3 py-2 text-xs font-medium text-white hover:bg-red-950"
+        >
+          Aplicar cargo
+        </button>
+
+        <button
+          onClick={quitarTarifaCargo}
+          className="bg-zinc-300 px-3 py-2 text-xs font-medium text-zinc-800 hover:bg-zinc-400"
+        >
+          Quitar cargo
+        </button>
+      </div>
+    </div>
+
+  </div>
 </section>
 
         </div>

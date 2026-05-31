@@ -43,40 +43,25 @@ export default function BajaSocioPage() {
       return;
     }
   
-    const { data: historialActualizado, error: errorHistorial } = await (
-      supabase as any
-    )
-      .from("HISTORIAL_SOCIOS")
-      .update({
+    const { error: errorHistorial } = await (supabase as any)
+    .from("HISTORIAL_SOCIOS")
+    .upsert(
+      {
+        NUMCENS: Number(numcens),
+        Ejercicio: ejercicioActual,
         Fecha_Alta_Baja: fecha,
         Estado: "Baja",
-      })
-      .eq("NUMCENS", Number(numcens))
-      .eq("Ejercicio", ejercicioActual)
-      .select();
-  
-    if (errorHistorial) {
-      alert(errorHistorial.message);
-      setGuardando(false);
-      return;
-    }
-  
-    if (!historialActualizado || historialActualizado.length === 0) {
-      const { error: errorInsertHistorial } = await (supabase as any)
-        .from("HISTORIAL_SOCIOS")
-        .insert({
-          NUMCENS: Number(numcens),
-          Ejercicio: ejercicioActual,
-          Fecha_Alta_Baja: fecha,
-          Estado: "Baja",
-        });
-  
-      if (errorInsertHistorial) {
-        alert(errorInsertHistorial.message);
-        setGuardando(false);
-        return;
+      },
+      {
+        onConflict: "NUMCENS,Ejercicio",
       }
-    }
+    );
+  
+  if (errorHistorial) {
+    alert(errorHistorial.message);
+    setGuardando(false);
+    return;
+  }
   
     setGuardando(false);
     router.push(`/socios/${numcens}`);

@@ -4,13 +4,22 @@ import { supabase } from "@/lib/supabaseClient";
 import ExportarRemesaExcelButton from "@/app/components/ExportarRemesaExcelButton";
 import PrintButton from "@/app/components/PrintButton";
 import EditarImporteRemesaInput from "@/app/components/EditarImporteRemesaInput";
+import QuitarLineaRemesaButton from "@/app/components/QuitarLineaRemesaButton";
+import EditarFechaVencimientoInput from "@/app/components/EditarFechaVencimientoInput";
+import MarcarReciboAgrupadoDevueltoButton from "@/app/components/MarcarReciboAgrupadoDevueltoButton";
+import AnularReciboAgrupadoDevueltoButton from "@/app/components/AnularReciboAgrupadoDevueltoButton";
 
 export default async function RemesaDetallePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ buscar?: string }>;
 }) {
   const { id } = await params;
+  
+  const { buscar = "" } = await searchParams;
+  const textoBusqueda = buscar.trim().toLowerCase();
 
   const { data: remesa } = await (supabase as any)
     .from("REMESAS")
@@ -44,10 +53,23 @@ export default async function RemesaDetallePage({
 
   const lineasAny = (lineas as any[]) || [];
 
-  const total =
-    lineasAny.reduce((acc, l) => acc + Number(l.Importe || 0), 0) || 0;
+  const lineasParaBanco = lineasAny.filter(
+    (linea) =>
+      String(linea.Estado || "").trim().toLowerCase() !== "cobrado"
+  );
 
-  const numsSocios = lineasAny.map((l) => l.NUMCENS);
+  const total =
+  lineasAny
+    .filter(
+      (l) =>
+        String(l.Estado || "").trim().toLowerCase() !== "cobrado"
+    )
+    .reduce((acc, l) => acc + Number(l.Importe || 0), 0) || 0;
+
+    const numsSocios = lineasAny.map((l) => l.NUMCENS);
+    const numsPagadores = lineasAny
+      .map((l) => l.NUMCENS_Pagador)
+      .filter(Boolean);
 
   const { data: sociosRemesa } =
     numsSocios.length > 0
@@ -57,29 +79,86 @@ export default async function RemesaDetallePage({
           .in("NUMCENS", numsSocios)
       : { data: [] };
 
-  const sociosRemesaAny = (sociosRemesa as any[]) || [];
+      const sociosRemesaAny = (sociosRemesa as any[]) || [];
 
-  const remesaAgrupada = Object.values(
-    lineasAny.reduce((acc: any, linea: any) => {
+lineasAny.sort((a, b) => {
+  const socioA = sociosRemesaAny.find(
+    (s) => Number(s.NUMCENS) === Number(a.NUMCENS)
+  );
+
+  const socioB = sociosRemesaAny.find(
+    (s) => Number(s.NUMCENS) === Number(b.NUMCENS)
+  );
+
+  const textoA = `${socioA?.Apellidos || ""} ${socioA?.Nombre || ""}`;
+  const textoB = `${socioB?.Apellidos || ""} ${socioB?.Nombre || ""}`;
+
+  return textoA.localeCompare(textoB, "es");
+});
+
+const lineasFiltradas = textoBusqueda
+  ? lineasAny.filter((linea) => {
+      const socio = sociosRemesaAny.find(
+        (s) => Number(s.NUMCENS) === Number(linea.NUMCENS)
+      );
+
+      const texto = [
+        linea.NUMCENS,
+        linea.NUMCENS_Pagador,
+        socio?.Nombre,
+        socio?.Apellidos,
+        linea.IBAN,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return texto.includes(textoBusqueda);
+    })
+  : lineasAny;
+
+const { data: sociosPagadores } =
+  numsPagadores.length > 0
+    ? await (supabase as any)
+        .from("SOCIOS")
+        .select("NUMCENS, Nombre, Apellidos")
+        .in("NUMCENS", numsPagadores)
+    : { data: [] };
+
+const sociosPagadoresAny = (sociosPagadores as any[]) || [];
+
+const remesaAgrupada = Object.values(
+  lineasAny.reduce((acc: any, linea: any) => {
       const clave = `${linea.NUMCENS_Pagador}-${linea.IBAN}`;
 
       if (!acc[clave]) {
         acc[clave] = {
           NUMCENS_Pagador: linea.NUMCENS_Pagador,
+          EstadoAgrupado: linea.Estado,
           NombreDeudor:
-            linea.TitularCuenta ||
-            linea.NUMCENS_Pagador ||
-            "",
+  linea.TitularCuenta ||
+  (() => {
+    const pagador = sociosPagadoresAny.find(
+      (s) => Number(s.NUMCENS) === Number(linea.NUMCENS_Pagador)
+    );
+
+    return pagador
+      ? `${pagador.Apellidos || ""}, ${pagador.Nombre || ""}`
+      : linea.NUMCENS_Pagador || "";
+  })(),
           IBAN: linea.IBAN,
           Importe: 0,
           Concepto: [],
-          ReferenciaMandato: `${linea.NUMCENS || "?"}-${
+          ReferenciaMandato: `${linea.NUMCENS_Pagador || linea.NUMCENS || "?"}-${
             linea.CUOTAS_SOCIOS?.Ejercicio || remesaAny?.Ejercicio || "?"
           }-${linea.CUOTAS_PLAZOS?.NumeroPlazo || "?"}`,
           FechaMandato:
             sociosRemesaAny.find(
               (s) => Number(s.NUMCENS) === Number(linea.NUMCENS)
             )?.FechaPrimerAlta || "-",
+
+            IDPlazo: linea.IDPlazo,
+
           ReferenciaAdeudo: `R${linea.IDRemesa}-P${linea.IDPlazo}`,
           FechaVencimiento:
             linea.CUOTAS_PLAZOS?.FechaVencimiento || "-",
@@ -93,8 +172,21 @@ export default async function RemesaDetallePage({
         }-${linea.CUOTAS_PLAZOS?.NumeroPlazo || ""}`
       );
 
+      if (
+        String(linea.Estado || "").trim().toLowerCase() === "devuelto"
+      ) {
+        acc[clave].EstadoAgrupado = "Devuelto";
+      }
+
       return acc;
     }, {})
+  );
+
+  (remesaAgrupada as any[]).sort((a: any, b: any) =>
+    (a.NombreDeudor || "").localeCompare(
+      b.NombreDeudor || "",
+      "es"
+    )
   );
 
   return (
@@ -133,6 +225,32 @@ export default async function RemesaDetallePage({
                 <p className="text-xs text-zinc-500">
                   Detalle interno para comprobar cuotas, pagadores e importes
                 </p>
+
+                <form className="mt-3 flex gap-2" method="get">
+  <input
+    type="text"
+    name="buscar"
+    defaultValue={buscar}
+    placeholder="Buscar socio, apellido, NUMCENS, pagador..."
+    className="w-80 border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
+  />
+
+  <button
+    type="submit"
+    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+  >
+    Buscar
+  </button>
+
+  {buscar && (
+    <a
+      href={`/remesas/${id}`}
+      className="bg-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-300"
+    >
+      Limpiar
+    </a>
+  )}
+</form>
               </div>
 
               <div className="flex items-center gap-3">
@@ -153,7 +271,9 @@ export default async function RemesaDetallePage({
                     <th className="px-4 py-3">Pagador</th>
                     <th className="px-4 py-3">Referencia mandato</th>
                     <th className="px-4 py-3">Cuota / plazo</th>
+                    <th className="px-4 py-3">Estado</th>
                     <th className="px-4 py-3 text-right">Importe</th>
+                    <th className="px-4 py-3 text-center">Quitar</th>
                   </tr>
                 </thead>
 
@@ -165,7 +285,7 @@ export default async function RemesaDetallePage({
                       </td>
                     </tr>
                   ) : (
-                    lineasAny.map((linea) => {
+                    lineasFiltradas.map((linea) => {
                       const socioCuota = sociosRemesaAny.find(
                         (s) => Number(s.NUMCENS) === Number(linea.NUMCENS)
                       );
@@ -203,13 +323,48 @@ export default async function RemesaDetallePage({
                             Cuota {ejercicio} · Plazo {plazo}
                           </td>
 
-                          <td className="px-4 py-3 text-right">
-                            <EditarImporteRemesaInput
-                              idDetalleRemesa={linea.IDDetalleRemesa}
-                              idRemesa={Number(id)}
-                              importeInicial={Number(linea.Importe || 0)}
-                            />
-                          </td>
+                          <td className="px-4 py-3">
+  <span
+    className={
+      linea.Estado === "Cobrado"
+        ? "bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
+        : linea.Estado === "Parcial"
+        ? "bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700"
+        : "bg-red-100 px-3 py-1 text-xs font-semibold text-red-700"
+    }
+  >
+    {linea.Estado || "-"}
+  </span>
+</td>
+
+<td className="px-4 py-3 text-right">
+  {linea.Estado === "Cobrado" ? (
+    <span className="text-sm font-medium text-green-700">
+      {Number(linea.Importe || 0).toFixed(2)} €
+    </span>
+  ) : (
+    <EditarImporteRemesaInput
+      idDetalleRemesa={linea.IDDetalleRemesa}
+      idRemesa={Number(id)}
+      importeInicial={Number(linea.Importe || 0)}
+    />
+  )}
+</td>
+
+<td className="px-4 py-3 text-center">
+  {String(linea.Estado || "")
+    .trim()
+    .toLowerCase()
+    .startsWith("cobrad") ? (
+    <span className="text-xs text-zinc-400">
+      No editable
+    </span>
+  ) : (
+    <QuitarLineaRemesaButton
+      idDetalleRemesa={linea.IDDetalleRemesa}
+    />
+  )}
+</td>
                         </tr>
                       );
                     })
@@ -244,6 +399,7 @@ export default async function RemesaDetallePage({
                     <th className="px-4 py-3">Fecha vencimiento</th>
                     <th className="px-4 py-3 text-right">Importe</th>
                     <th className="px-4 py-3">Tipo adeudo</th>
+                    <th className="px-4 py-3 text-center">Acción</th>
                   </tr>
                 </thead>
 
@@ -256,11 +412,33 @@ export default async function RemesaDetallePage({
                       <td className="px-4 py-3">{fila.Concepto.join(", ")}</td>
                       <td className="px-4 py-3">{fila.FechaMandato || "-"}</td>
                       <td className="px-4 py-3">{fila.ReferenciaAdeudo}</td>
-                      <td className="px-4 py-3">{fila.FechaVencimiento || "-"}</td>
-                      <td className="px-4 py-3 text-right">
-                        {fila.Importe.toFixed(2)} €
-                      </td>
-                      <td className="px-4 py-3">RCUR</td>
+                      <td className="px-4 py-3">
+  <EditarFechaVencimientoInput
+    idPlazo={fila.IDPlazo}
+    fechaInicial={fila.FechaVencimiento || ""}
+  />
+</td>
+<td className="px-4 py-3 text-right">
+  {fila.Importe.toFixed(2)} €
+</td>
+
+<td className="px-4 py-3">RCUR</td>
+
+<td className="px-4 py-3 text-center">
+  {fila.EstadoAgrupado === "Devuelto" ? (
+    <AnularReciboAgrupadoDevueltoButton
+      idRemesa={Number(id)}
+      numcensPagador={Number(fila.NUMCENS_Pagador)}
+      iban={fila.IBAN}
+    />
+  ) : (
+    <MarcarReciboAgrupadoDevueltoButton
+      idRemesa={Number(id)}
+      numcensPagador={Number(fila.NUMCENS_Pagador)}
+      iban={fila.IBAN}
+    />
+  )}
+</td>
                     </tr>
                   ))}
                 </tbody>

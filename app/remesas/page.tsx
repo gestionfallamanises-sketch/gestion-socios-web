@@ -53,7 +53,7 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
     setLoading(true);
   
     const { data, error } = await (supabase as any).rpc(
-      "nombre_funcion",
+      "generar_remesa",
       {
         p_ejercicio: ejercicio,
         p_numero_plazo: numeroPlazo,

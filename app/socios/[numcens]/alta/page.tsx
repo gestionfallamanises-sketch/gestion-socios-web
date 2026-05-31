@@ -19,28 +19,57 @@ export default function AltaSocioPage() {
   async function confirmarAlta() {
     const confirmar = confirm("¿Seguro que quieres dar de alta este socio?");
     if (!confirmar) return;
-
+  
     setGuardando(true);
-
+  
+    const fecha = fechaAlta || new Date().toISOString().slice(0, 10);
+    const fechaObj = new Date(fecha);
+  
+    const ejercicioActual =
+      fechaObj.getMonth() >= 3
+        ? fechaObj.getFullYear() + 1
+        : fechaObj.getFullYear();
+  
     const { error } = await (supabase as any)
       .from("SOCIOS")
       .update({
         Estado: "Activo",
-        FechaPrimerAlta: fechaAlta,
+        FechaPrimerAlta: fecha,
       })
       .eq("NUMCENS", Number(numcens));
-
-    setGuardando(false);
-
+  
     if (error) {
       alert(error.message);
+      setGuardando(false);
       return;
     }
-
+  
+    const { error: errorHistorial } = await (supabase as any)
+      .from("HISTORIAL_SOCIOS")
+      .upsert(
+        {
+          NUMCENS: Number(numcens),
+          Ejercicio: ejercicioActual,
+          Fecha_Alta_Baja: fecha,
+          Estado: "Alta",
+        },
+        {
+          onConflict: "NUMCENS,Ejercicio",
+        }
+      );
+  
+    if (errorHistorial) {
+      alert(errorHistorial.message);
+      setGuardando(false);
+      return;
+    }
+  
     await (supabase as any).rpc("generar_actualizar_cuotas_completo", {
-      p_ejercicio: 2027,
+      p_ejercicio: ejercicioActual,
     });
-
+  
+    setGuardando(false);
+  
     router.push(`/socios/${numcens}`);
     router.refresh();
   }

@@ -21,25 +21,23 @@ export default function EditarImporteRemesaInput({
 
   async function guardar() {
     setGuardando(true);
-
-    const { error } = await (supabase as any)
-      .from("REMESAS_DETALLE")
-      .update({
-        Importe: Number(importe),
-      })
-      .eq("IDDetalleRemesa", idDetalleRemesa);
-
+  
+    const { error } = await (supabase as any).rpc(
+      "actualizar_importe_linea_remesa",
+      {
+        p_id_detalle_remesa: idDetalleRemesa,
+        p_importe: Number(importe),
+      }
+    );
+  
     if (error) {
       alert(error.message);
       setGuardando(false);
       return;
     }
-
-    await (supabase as any).rpc("recalcular_total_remesa", {
-      p_id_remesa: idRemesa,
-    });
-
+  
     setGuardando(false);
+    window.location.reload();
   }
 
   return (
