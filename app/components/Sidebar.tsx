@@ -25,9 +25,9 @@ export default function Sidebar() {
         </Link>
 
         <Link
-          href="/antiguedad"
-          className="block rounded-lg px-4 py-2 hover:bg-zinc-600"
-        >
+  href="/listados"
+  className="block rounded-lg px-4 py-2 hover:bg-zinc-600"
+>
           Listados
         </Link>
 
