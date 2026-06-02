@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Sidebar from "../components/Sidebar";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,31 @@ export default function NuevoSocioPage() {
     FechaPrimerAlta: new Date().toISOString().slice(0, 10),
     NIF: "",
   });
+
+  useEffect(() => {
+    async function cargarSiguienteNumcens() {
+      const { data, error } = await supabase
+        .from("SOCIOS")
+        .select("NUMCENS")
+        .order("NUMCENS", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+  
+      if (error) {
+        setError(error.message);
+        return;
+      }
+  
+      if (data?.NUMCENS) {
+        setForm((actual) => ({
+          ...actual,
+          NUMCENS: String(Number(data.NUMCENS) + 1),
+        }));
+      }
+    }
+  
+    cargarSiguienteNumcens();
+  }, []);
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);

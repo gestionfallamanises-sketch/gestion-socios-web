@@ -443,12 +443,18 @@ router.push(`/socios/${numcens}`);
 
   <select
     value={socio.EsBanda ? "true" : "false"}
-    onChange={(e) =>
+    onChange={(e) => {
+      const confirmado = window.confirm(
+        "⚠️ ATENCIÓN\n\nEste cambio afecta al cálculo de la cuota anual del socio.\n\nCompruebe que el cambio es correcto antes de continuar.\n\n¿Está seguro de que desea realizar el cambio?"
+      );
+    
+      if (!confirmado) return;
+    
       cambiarCampo(
         "EsBanda",
         e.target.value === "true"
-      )
-    }
+      );
+    }}
     className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
   >
     <option value="false">No</option>
@@ -463,12 +469,18 @@ router.push(`/socios/${numcens}`);
 
                   <select
                     value={socio.ConLoteria ? "true" : "false"}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const confirmado = window.confirm(
+                        "⚠️ ATENCIÓN\n\nEste cambio afecta al cálculo de la cuota anual del socio.\n\nCompruebe que el cambio es correcto antes de continuar.\n\n¿Está seguro de que desea realizar el cambio?"
+                      );
+                    
+                      if (!confirmado) return;
+                    
                       cambiarCampo(
                         "ConLoteria",
                         e.target.value === "true"
-                      )
-                    }
+                      );
+                    }}
                     className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
                   >
                     <option value="false">No</option>
