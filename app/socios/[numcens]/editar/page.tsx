@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Sidebar from "../../../components/Sidebar";
 import { supabase } from "../../../../lib/supabase";
+import ConfirmModal from "@/app/components/ConfirmModal";
 
 export default function EditarSocioPage() {
   const params = useParams();
@@ -25,6 +26,11 @@ const [observacionesPago, setObservacionesPago] = useState("");
 const [pagador, setPagador] = useState("");
 const [busquedaPagador, setBusquedaPagador] = useState("");
 const [socios, setSocios] = useState<any[]>([]);
+
+const [modalCambioCuota, setModalCambioCuota] = useState<{
+  campo: "EsBanda" | "ConLoteria";
+  valor: boolean;
+} | null>(null);
 
 useEffect(() => {
   const avisarAntesDeSalir = (e: BeforeUnloadEvent) => {
@@ -442,21 +448,15 @@ router.push(`/socios/${numcens}`);
   </label>
 
   <select
-    value={socio.EsBanda ? "true" : "false"}
-    onChange={(e) => {
-      const confirmado = window.confirm(
-        "⚠️ ATENCIÓN\n\nEste cambio afecta al cálculo de la cuota anual del socio.\n\nCompruebe que el cambio es correcto antes de continuar.\n\n¿Está seguro de que desea realizar el cambio?"
-      );
-    
-      if (!confirmado) return;
-    
-      cambiarCampo(
-        "EsBanda",
-        e.target.value === "true"
-      );
-    }}
-    className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
-  >
+  value={socio.EsBanda ? "true" : "false"}
+  onChange={(e) =>
+    setModalCambioCuota({
+      campo: "EsBanda",
+      valor: e.target.value === "true",
+    })
+  }
+  className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+>
     <option value="false">No</option>
     <option value="true">Sí</option>
   </select>
@@ -468,24 +468,18 @@ router.push(`/socios/${numcens}`);
                   </label>
 
                   <select
-                    value={socio.ConLoteria ? "true" : "false"}
-                    onChange={(e) => {
-                      const confirmado = window.confirm(
-                        "⚠️ ATENCIÓN\n\nEste cambio afecta al cálculo de la cuota anual del socio.\n\nCompruebe que el cambio es correcto antes de continuar.\n\n¿Está seguro de que desea realizar el cambio?"
-                      );
-                    
-                      if (!confirmado) return;
-                    
-                      cambiarCampo(
-                        "ConLoteria",
-                        e.target.value === "true"
-                      );
-                    }}
-                    className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
-                  >
-                    <option value="false">No</option>
-                    <option value="true">Sí</option>
-                  </select>
+  value={socio.ConLoteria ? "true" : "false"}
+  onChange={(e) =>
+    setModalCambioCuota({
+      campo: "ConLoteria",
+      valor: e.target.value === "true",
+    })
+  }
+  className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+>
+  <option value="false">No</option>
+  <option value="true">Sí</option>
+</select>
                 </div>
 
                 <CampoTexto
@@ -709,6 +703,25 @@ router.push(`/socios/${numcens}`);
             </div>
           </form>
         </div>
+
+        <ConfirmModal
+  open={modalCambioCuota !== null}
+  title="ATENCIÓN"
+  message="Este cambio afecta al cálculo de la cuota anual del socio. Compruebe que el cambio es correcto antes de continuar."
+  confirmText="Sí, cambiar"
+  cancelText="Cancelar"
+  onCancel={() => setModalCambioCuota(null)}
+  onConfirm={() => {
+    if (!modalCambioCuota) return;
+
+    cambiarCampo(
+      modalCambioCuota.campo,
+      modalCambioCuota.valor
+    );
+
+    setModalCambioCuota(null);
+  }}
+/>
       </main>
     </div>
   );

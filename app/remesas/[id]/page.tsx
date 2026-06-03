@@ -311,9 +311,13 @@ const remesaAgrupada = Object.values(
 
                       return (
                         <tr
-                          key={linea.IDDetalleRemesa}
-                          className="border-t border-zinc-200 hover:bg-red-50"
-                        >
+  key={linea.IDDetalleRemesa}
+  className={
+    linea.Estado === "Añadida"
+      ? "border-t border-zinc-200 bg-blue-50 hover:bg-blue-100"
+      : "border-t border-zinc-200 hover:bg-red-50"
+  }
+>
                           <td className="px-4 py-3 font-medium">
                             {linea.NUMCENS} · {socioCuota?.Apellidos || ""},{" "}
                             {socioCuota?.Nombre || ""}
@@ -340,6 +344,10 @@ const remesaAgrupada = Object.values(
         ? "bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
         : linea.Estado === "Parcial"
         ? "bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700"
+        : linea.Estado === "Añadida"
+        ? "bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700"
+        : linea.Estado === "Devuelto"
+        ? "bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700"
         : "bg-red-100 px-3 py-1 text-xs font-semibold text-red-700"
     }
   >
