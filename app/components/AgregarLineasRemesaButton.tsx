@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import ConfirmModal from "@/app/components/ConfirmModal";
 
 export default function AgregarLineasRemesaButton({
   idRemesa,
@@ -15,6 +16,7 @@ export default function AgregarLineasRemesaButton({
   const [seleccionadas, setSeleccionadas] = useState<number[]>([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [modalConfirmar, setModalConfirmar] = useState(false);
 
   async function buscarLineas() {
     setCargando(true);
@@ -58,36 +60,41 @@ export default function AgregarLineasRemesaButton({
       alert("Selecciona al menos una línea.");
       return;
     }
-
-    const confirmado = window.confirm(
-      `Se van a añadir ${seleccionadas.length} línea(s) a la remesa.\n\n¿Deseas continuar?`
-    );
-
-    if (!confirmado) return;
-
+  
+    setModalConfirmar(true);
+  }
+  
+  async function confirmarAgregarSeleccionadas() {
+    setModalConfirmar(false);
+  
+    if (seleccionadas.length === 0) {
+      alert("Selecciona al menos una línea.");
+      return;
+    }
+  
     setGuardando(true);
-
+  
     const { error } = await (supabase as any).rpc(
-        "agregar_lineas_seleccionadas_remesa",
-        {
-          p_id_remesa: idRemesa,
-          p_idplazos: seleccionadas,
-        }
-      );
-
+      "agregar_lineas_seleccionadas_remesa",
+      {
+        p_id_remesa: idRemesa,
+        p_idplazos: seleccionadas,
+      }
+    );
+  
     if (error) {
       alert(error.message);
       setGuardando(false);
       return;
     }
-
+  
     setGuardando(false);
     setLineas([]);
     setSeleccionadas([]);
-
+  
     router.refresh();
   }
-
+  
   return (
     <div className="relative">
       <button
@@ -194,6 +201,16 @@ export default function AgregarLineasRemesaButton({
           </div>
         </div>
       )}
+
+<ConfirmModal
+  open={modalConfirmar}
+  title="ATENCIÓN"
+  message={`Se van a añadir ${seleccionadas.length} línea(s) a la remesa. Revise que son correctas antes de continuar.`}
+  confirmText="Sí, añadir"
+  cancelText="Cancelar"
+  onCancel={() => setModalConfirmar(false)}
+  onConfirm={confirmarAgregarSeleccionadas}
+/>
     </div>
   );
 }
