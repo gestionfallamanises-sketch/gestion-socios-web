@@ -8,6 +8,7 @@ import QuitarLineaRemesaButton from "@/app/components/QuitarLineaRemesaButton";
 import EditarFechaVencimientoInput from "@/app/components/EditarFechaVencimientoInput";
 import MarcarReciboAgrupadoDevueltoButton from "@/app/components/MarcarReciboAgrupadoDevueltoButton";
 import AnularReciboAgrupadoDevueltoButton from "@/app/components/AnularReciboAgrupadoDevueltoButton";
+import AgregarLineasRemesaButton from "@/app/components/AgregarLineasRemesaButton";
 
 export default async function RemesaDetallePage({
   params,
@@ -217,49 +218,58 @@ const remesaAgrupada = Object.values(
 
           <section className="border border-zinc-200 bg-white">
             <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-              <div>
+            <div className="w-full">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
                   Líneas de remesa
                 </h2>
 
                 <p className="text-xs text-zinc-500">
-                  Detalle interno para comprobar cuotas, pagadores e importes
-                </p>
+  Detalle interno para comprobar cuotas, pagadores e importes
+</p>
 
-                <form className="mt-3 flex gap-2" method="get">
-  <input
-    type="text"
-    name="buscar"
-    defaultValue={buscar}
-    placeholder="Buscar socio, apellido, NUMCENS, pagador..."
-    className="w-80 border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
-  />
-
-  <button
-    type="submit"
-    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+<div className="mt-3 flex items-center justify-between">
+  <form
+    className="flex items-center gap-2"
+    method="get"
   >
-    Buscar
-  </button>
+    <input
+      type="text"
+      name="buscar"
+      defaultValue={buscar}
+      placeholder="Buscar socio, apellido, NUMCENS, pagador..."
+      className="h-9 w-80 border border-zinc-300 px-3 text-sm outline-none focus:border-red-900"
+    />
 
-  {buscar && (
-    <a
-      href={`/remesas/${id}`}
-      className="bg-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-300"
+    <button
+      type="submit"
+      className="h-9 bg-red-900 px-4 text-sm font-medium text-white hover:bg-red-950"
     >
-      Limpiar
-    </a>
-  )}
-</form>
-              </div>
+      Buscar
+    </button>
 
-              <div className="flex items-center gap-3">
-                <PrintButton />
+    <AgregarLineasRemesaButton
+      idRemesa={Number(id)}
+    />
 
-                <ExportarRemesaExcelButton
-                  filas={lineasAny}
-                  idRemesa={remesaAny?.IDRemesa}
-                />
+    {buscar && (
+      <a
+        href={`/remesas/${id}`}
+        className="flex h-9 items-center bg-zinc-200 px-4 text-sm font-medium hover:bg-zinc-300"
+      >
+        Limpiar
+      </a>
+    )}
+  </form>
+
+  <div className="flex items-center gap-2">
+    <PrintButton />
+
+    <ExportarRemesaExcelButton
+      filas={lineasAny}
+      idRemesa={remesaAny?.IDRemesa}
+    />
+  </div>
+</div>
               </div>
             </div>
 
