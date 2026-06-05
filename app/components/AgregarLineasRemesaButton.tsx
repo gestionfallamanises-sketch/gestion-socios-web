@@ -168,7 +168,7 @@ export default function AgregarLineasRemesaButton({
 
               return (
                 <label
-                  key={linea.IDPlazo}
+                key={`${linea.IDPlazo}-${linea.IBAN}`}
                   className={
                     seleccionada
                       ? "flex cursor-pointer items-center gap-3 border-t border-zinc-200 bg-red-50 px-4 py-2 text-sm"

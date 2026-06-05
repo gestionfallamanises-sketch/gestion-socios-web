@@ -18,6 +18,8 @@ const [filtroTipoCuota, setFiltroTipoCuota] = useState("TODOS");
 const [filtroPendiente, setFiltroPendiente] = useState("TODOS");
 const [filtroFormaPago, setFiltroFormaPago] = useState("TODAS");
 const [filtroEstadoCuota, setFiltroEstadoCuota] = useState("TODOS");
+const [pagadores, setPagadores] = useState<any[]>([]);
+const [filtroMetodoPagador, setFiltroMetodoPagador] = useState("TODOS");
 
 useEffect(() => {
   async function fetchSocios() {
@@ -79,6 +81,23 @@ useEffect(() => {
   
     fetchCuotas();
   }, [ejercicioSeleccionado]);
+
+  useEffect(() => {
+    async function fetchPagadores() {
+      const { data, error } = await supabase
+        .from("v_pagadores")
+        .select("*")
+        .order("NombrePagador", { ascending: true });
+  
+      if (error) {
+        setError(error.message);
+      } else {
+        setPagadores(data || []);
+      }
+    }
+  
+    fetchPagadores();
+  }, []);
 
 function abreviarAntiguedad(texto: string | null) {
     if (!texto) return "-";
@@ -192,6 +211,13 @@ const sociosBaja = socios
       const estadosCuota = Array.from(
         new Set(cuotas.map((cuota) => cuota.EstadoPago).filter(Boolean))
       ).sort();
+
+      const pagadoresFiltrados = pagadores.filter((pagador) => {
+        return (
+          filtroMetodoPagador === "TODOS" ||
+          pagador.Metodo === filtroMetodoPagador
+        );
+      });
 
 const sociosMostrados = sociosBase
   .filter((socio) => {
@@ -382,6 +408,18 @@ const sociosMostrados = sociosBase
   activo={listado === "BANDA"}
   onClick={() => setListado("BANDA")}
 />
+
+<BotonListado
+  titulo="Pagadores"
+  activo={listado === "PAGADORES"}
+  onClick={() => setListado("PAGADORES")}
+/>
+
+<BotonListado
+  titulo="Pagador/Socios"
+  activo={listado === "PAGADOR_SOCIOS"}
+  onClick={() => setListado("PAGADOR_SOCIOS")}
+/>
           </section>
 
           {listado && (
@@ -497,130 +535,114 @@ const sociosMostrados = sociosBase
 )}
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-        <tr>
-  {listado === "LOTERIA" ? (
-    <>
-      <th className="px-4 py-3">NUMCENS</th>
-      <th className="px-4 py-3">Socio</th>
-      <th className="px-4 py-3 text-right">Falla</th>
-      <th className="px-4 py-3 text-right">Virgen</th>
-      <th className="px-4 py-3 text-right">Navidad</th>
-      <th className="px-4 py-3 text-right">Niño</th>
-    </>
-  ) : listado === "BANDA" ? (
-    <>
-      <th className="px-4 py-3">NUMCENS</th>
-      <th className="px-4 py-3">Socio</th>
-      <th className="px-4 py-3">Comisión</th>
-      <th className="px-4 py-3">Sexo</th>
-    </>
-  ) : listado === "CUOTAS" ? (
-    <>
-      <th className="px-4 py-3">NUMCENS</th>
-      <th className="px-4 py-3">Socio</th>
-      <th className="px-4 py-3">Tipo</th>
-      <th className="px-4 py-3 text-right">Importe</th>
-      <th className="px-4 py-3 text-right">Pagado</th>
-      <th className="px-4 py-3 text-right">Pendiente</th>
-      <th className="px-4 py-3">Forma pago</th>
-      <th className="px-4 py-3">Estado</th>
-    </>
+      <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
+  <tr>
+    {listado === "LOTERIA" ? (
+      <>
+        <th className="px-4 py-3">NUMCENS</th>
+        <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3 text-right">Falla</th>
+        <th className="px-4 py-3 text-right">Virgen</th>
+        <th className="px-4 py-3 text-right">Navidad</th>
+        <th className="px-4 py-3 text-right">Niño</th>
+      </>
+    ) : listado === "BANDA" ? (
+      <>
+        <th className="px-4 py-3">NUMCENS</th>
+        <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3">Comisión</th>
+        <th className="px-4 py-3">Sexo</th>
+      </>
+    ) : listado === "CUOTAS" ? (
+      <>
+        <th className="px-4 py-3">NUMCENS</th>
+        <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3">Tipo</th>
+        <th className="px-4 py-3 text-right">Importe</th>
+        <th className="px-4 py-3 text-right">Pagado</th>
+        <th className="px-4 py-3 text-right">Pendiente</th>
+        <th className="px-4 py-3">Forma pago</th>
+        <th className="px-4 py-3">Estado</th>
+      </>
+    ) : listado === "PAGADORES" ? (
+      <>
+        <th className="px-4 py-3">Pagador</th>
+        <th className="px-4 py-3">Nombre</th>
+        <th className="px-4 py-3">Método</th>
+        <th className="px-4 py-3">Titular</th>
+        <th className="px-4 py-3">IBAN</th>
+        <th className="px-4 py-3 text-right">Socios</th>
+      </>
+    ) : (
+      <>
+        <th className="px-4 py-3">NUMCENS</th>
+        <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3">Com/Sx</th>
+        <th className="px-4 py-3 text-right">Antigüedad</th>
+      </>
+    )}
+  </tr>
+</thead>
+
+<tbody>
+  {listado === "CUOTAS" ? (
+    cuotasFiltradas.map((cuota) => (
+      <tr key={cuota.IDCuotaSocio} className="border-t border-zinc-200 hover:bg-red-50">
+        <td className="px-4 py-3 text-zinc-600">{cuota.NUMCENS}</td>
+        <td className="px-4 py-3 font-medium text-zinc-900">
+          {cuota.Apellidos}, {cuota.Nombre}
+        </td>
+        <td className="px-4 py-3 text-zinc-600">{cuota.IDCuota}</td>
+        <td className="px-4 py-3 text-right">{Number(cuota.Importe || 0).toFixed(2)} €</td>
+        <td className="px-4 py-3 text-right text-green-700">{Number(cuota.TotalPagado || 0).toFixed(2)} €</td>
+        <td className="px-4 py-3 text-right font-medium text-red-700">{Number(cuota.Pendiente || 0).toFixed(2)} €</td>
+        <td className="px-4 py-3 text-zinc-600">{cuota.Metodo || "-"}</td>
+        <td className="px-4 py-3 text-zinc-600">{cuota.EstadoPago || "-"}</td>
+      </tr>
+    ))
+  ) : listado === "PAGADORES" ? (
+    pagadoresFiltrados.map((pagador) => (
+      <tr key={`${pagador.Pagador}-${pagador.Metodo}`} className="border-t border-zinc-200 hover:bg-red-50">
+        <td className="px-4 py-3 text-zinc-600">{pagador.Pagador}</td>
+        <td className="px-4 py-3 font-medium text-zinc-900">{pagador.NombrePagador || "-"}</td>
+        <td className="px-4 py-3 text-zinc-600">{pagador.Metodo || "-"}</td>
+        <td className="px-4 py-3 text-zinc-600">{pagador.TitularCuenta || "-"}</td>
+        <td className="px-4 py-3 text-zinc-600">{pagador.IBAN || "-"}</td>
+        <td className="px-4 py-3 text-right font-medium">{pagador.NumeroSocios || 0}</td>
+      </tr>
+    ))
   ) : (
-    <>
-      <th className="px-4 py-3">NUMCENS</th>
-      <th className="px-4 py-3">Socio</th>
-      <th className="px-4 py-3">Com/Sx</th>
-      <th className="px-4 py-3 text-right">Antigüedad</th>
-    </>
+    sociosMostrados.map((socio) => (
+      <tr key={socio.NUMCENS} className="border-t border-zinc-200 hover:bg-red-50">
+        {listado === "LOTERIA" ? (
+          <>
+            <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
+            <td className="px-4 py-3 font-medium text-zinc-900">{socio.Apellidos}, {socio.Nombre}</td>
+            <td className="px-4 py-3 text-right">{socio.PapeletasFalla || 0}</td>
+            <td className="px-4 py-3 text-right">{socio.PapeletasVirgen || 0}</td>
+            <td className="px-4 py-3 text-right">{socio.PapeletasNavidad || 0}</td>
+            <td className="px-4 py-3 text-right">{socio.PapeletasNino || 0}</td>
+          </>
+        ) : listado === "BANDA" ? (
+          <>
+            <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
+            <td className="px-4 py-3 font-medium text-zinc-900">{socio.Apellidos}, {socio.Nombre}</td>
+            <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"}</td>
+            <td className="px-4 py-3 text-zinc-600">{socio.SEXE || "-"}</td>
+          </>
+        ) : (
+          <>
+            <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
+            <td className="px-4 py-3 font-medium text-zinc-900">{socio.Apellidos}, {socio.Nombre}</td>
+            <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"} / {socio.SEXE || "-"}</td>
+            <td className="px-4 py-3 text-right font-medium">
+              {abreviarAntiguedad(socio.Antiguedad_Calculada)}
+            </td>
+          </>
+        )}
+      </tr>
+    ))
   )}
-</tr>
-        </thead>
-
-        <tbody>
-        {listado === "CUOTAS" ? (
-  cuotasFiltradas.map((cuota) => (
-    <tr
-      key={cuota.IDCuotaSocio}
-      className="border-t border-zinc-200 hover:bg-red-50"
-    >
-      <td className="px-4 py-3 text-zinc-600">
-        {cuota.NUMCENS}
-      </td>
-
-      <td className="px-4 py-3 font-medium text-zinc-900">
-        {cuota.Apellidos}, {cuota.Nombre}
-      </td>
-
-      <td className="px-4 py-3 text-zinc-600">
-        {cuota.IDCuota}
-      </td>
-
-      <td className="px-4 py-3 text-right">
-        {Number(cuota.Importe || 0).toFixed(2)} €
-      </td>
-
-      <td className="px-4 py-3 text-right text-green-700">
-        {Number(cuota.TotalPagado || 0).toFixed(2)} €
-      </td>
-
-      <td className="px-4 py-3 text-right font-medium text-red-700">
-        {Number(cuota.Pendiente || 0).toFixed(2)} €
-      </td>
-
-      <td className="px-4 py-3 text-zinc-600">
-        {cuota.Metodo || "-"}
-      </td>
-
-      <td className="px-4 py-3 text-zinc-600">
-        {cuota.EstadoPago || "-"}
-      </td>
-    </tr>
-  ))
-) : (
-
-  sociosMostrados.map((socio) => (
-    <tr
-      key={socio.NUMCENS}
-      className="border-t border-zinc-200 hover:bg-red-50"
-    >
-      {listado === "LOTERIA" ? (
-        <>
-          <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-          <td className="px-4 py-3 font-medium text-zinc-900">
-            {socio.Apellidos}, {socio.Nombre}
-          </td>
-          <td className="px-4 py-3 text-right">{socio.PapeletasFalla || 0}</td>
-          <td className="px-4 py-3 text-right">{socio.PapeletasVirgen || 0}</td>
-          <td className="px-4 py-3 text-right">{socio.PapeletasNavidad || 0}</td>
-          <td className="px-4 py-3 text-right">{socio.PapeletasNino || 0}</td>
-        </>
-      ) : listado === "BANDA" ? (
-        <>
-          <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-          <td className="px-4 py-3 font-medium text-zinc-900">
-            {socio.Apellidos}, {socio.Nombre}
-          </td>
-          <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"}</td>
-          <td className="px-4 py-3 text-zinc-600">{socio.SEXE || "-"}</td>
-        </>
-      ) : (
-        <>
-          <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-          <td className="px-4 py-3 font-medium text-zinc-900">
-            {socio.Apellidos}, {socio.Nombre}
-          </td>
-          <td className="px-4 py-3 text-zinc-600">
-            {socio.Comision || "-"} / {socio.SEXE || "-"}
-          </td>
-          <td className="px-4 py-3 text-right font-medium">
-            {abreviarAntiguedad(socio.Antiguedad_Calculada)}
-          </td>
-        </>
-      )}
-    </tr>
-  ))
-)}
 </tbody>
       </table>
     </div>
@@ -667,15 +689,6 @@ function BotonListado({
               : "shrink-0 border border-zinc-200 bg-white px-4 py-2 text-sm hover:border-red-900 hover:bg-red-50"
           }
       >
-        <span
-  className={
-    activo
-      ? "mr-2 text-xs font-semibold uppercase tracking-wide text-white"
-      : "mr-2 text-xs font-semibold uppercase tracking-wide text-red-900"
-  }
->
-  LISTADO
-</span>
 
 <span
   className={
