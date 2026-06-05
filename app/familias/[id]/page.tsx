@@ -19,6 +19,8 @@ export default async function FamiliaPage({
   .eq("ID_Familia", Number(id))
   .single();
 
+  const familiaAny = familia as any;
+
 const { data: miembros } = await supabase
   .from("SOCIOS")
   .select("*")
@@ -28,7 +30,7 @@ const { data: miembros } = await supabase
   const { data: titular } = await supabase
     .from("SOCIOS")
     .select("*")
-    .eq("NUMCENS", familia?.Titular_NUMCENS)
+    .eq("NUMCENS", familiaAny?.Titular_NUMCENS)
     .single();
 
     const { data: datosBancoTitular } = titular

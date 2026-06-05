@@ -217,11 +217,16 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
     .update({ Activo: false })
     .eq("NUMCENS", Number(numcens));
   
+    const metodoFinal =
+  iban.trim() !== ""
+    ? "Banco"
+    : metodo;
+
   const { error: errorFormaPago } = await supabase
     .from("FORMAS_PAGO_SOCIOS")
     .insert({
       NUMCENS: Number(numcens),
-      Metodo: metodo,
+      Metodo: metodoFinal,
       NumeroPlazos: numeroPlazos,
       Fraccionado: numeroPlazos > 1,
       Activo: true,
@@ -541,10 +546,16 @@ router.push(`/socios/${numcens}`);
   </div>
 
   <CampoTexto
-    label="IBAN"
-    value={iban}
-    onChange={(valor) => setIban(valor)}
-  />
+  label="IBAN"
+  value={iban}
+  onChange={(valor) => {
+    setIban(valor);
+
+    if (valor.trim() !== "") {
+      setMetodo("Banco");
+    }
+  }}
+/>
 
   <div>
     <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
