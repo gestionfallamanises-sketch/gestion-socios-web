@@ -90,6 +90,13 @@ const { data: pagosManuales } =
   const totalPendiente =
     plazosAny.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
 
+    function formatearFecha(fecha: string | null) {
+      if (!fecha) return "-";
+    
+      const [year, month, day] = fecha.split("-");
+      return `${day}-${month}-${year}`;
+    }
+    
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -247,19 +254,54 @@ const { data: pagosManuales } =
                                 className="border-t border-zinc-200 hover:bg-red-50"
                               >
                                 <td className="px-4 py-3 pl-8">
-                                  Plazo {plazo.NumeroPlazo}
-                                  <span className="ml-2 text-xs text-zinc-500">
-                                    {plazo.FechaVencimiento || ""}
-                                  </span>
-                                </td>
+  Plazo {plazo.NumeroPlazo}
+
+  {plazo.FechaPago &&
+    ["Pagado", "Parcial"].includes(plazo.Estado) && (
+      <span className="ml-2 text-xs text-zinc-500">
+        {formatearFecha(plazo.FechaPago)}
+      </span>
+    )}
+</td>
 
                                 <td className="px-4 py-3">
                                   <EstadoBadge estado={plazo.Estado} />
                                 </td>
 
                                 <td className="px-4 py-3 text-right">
-                                  {Number(plazo.ImportePlazo || 0).toFixed(2)} €
-                                </td>
+  <div className="flex items-center justify-end gap-1">
+  {plazo.TieneGastosDevolucion && (
+  <details className="relative inline-block">
+    <summary className="list-none cursor-pointer text-amber-600">
+      ⚠️
+    </summary>
+
+    <div className="absolute right-0 z-50 mt-2 w-56 border border-zinc-200 bg-white p-3 text-left text-xs text-zinc-700 shadow-lg">
+      <p>
+        Cuota:{" "}
+        {(
+          Number(plazo.ImportePlazo || 0) -
+          Number(plazo.GastosDevolucion || 0)
+        ).toFixed(2)} €
+      </p>
+
+      <p>
+        Gastos devolución:{" "}
+        {Number(plazo.GastosDevolucion || 0).toFixed(2)} €
+      </p>
+
+      <p className="mt-2 font-semibold">
+        Total: {Number(plazo.ImportePlazo || 0).toFixed(2)} €
+      </p>
+    </div>
+  </details>
+)}
+
+    <span>
+      {Number(plazo.ImportePlazo || 0).toFixed(2)} €
+    </span>
+  </div>
+</td>
 
                                 <td className="px-4 py-3 text-right text-green-700">
                                   {Number(plazo.ImportePagado || 0).toFixed(2)} €

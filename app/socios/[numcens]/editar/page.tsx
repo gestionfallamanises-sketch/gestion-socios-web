@@ -26,6 +26,20 @@ const [observacionesPago, setObservacionesPago] = useState("");
 const [pagador, setPagador] = useState("");
 const [busquedaPagador, setBusquedaPagador] = useState("");
 const [socios, setSocios] = useState<any[]>([]);
+const [pagadoresExtra, setPagadoresExtra] = useState<any[]>([
+  {
+    TitularCuenta: "",
+    IBAN: "",
+    NIF_TitularCuenta: "",
+    Porcentaje: 50,
+  },
+  {
+    TitularCuenta: "",
+    IBAN: "",
+    NIF_TitularCuenta: "",
+    Porcentaje: 50,
+  },
+]);
 
 const [modalCambioCuota, setModalCambioCuota] = useState<{
   campo: "EsBanda" | "ConLoteria";
@@ -96,18 +110,29 @@ setSocios(listaSocios || []);
       .eq("Activo", true)
       .maybeSingle();
     
-    if (formaPago) {
-      setMetodo(formaPago.Metodo || "Efectivo");
-      setNumeroPlazos(formaPago.NumeroPlazos || 1);
-      setObservacionesPago(formaPago.Observaciones || "");
-      setPagador(
-        formaPago.NUMCENS_Pagador &&
-        Number(formaPago.NUMCENS_Pagador) !== Number(numcens)
-          ? String(formaPago.NUMCENS_Pagador)
-          : ""
-      );
-    }
-
+      if (formaPago) {
+        setMetodo(formaPago.Metodo || "Efectivo");
+        setNumeroPlazos(formaPago.NumeroPlazos || 1);
+        setObservacionesPago(formaPago.Observaciones || "");
+        setPagador(
+          formaPago.NUMCENS_Pagador &&
+          Number(formaPago.NUMCENS_Pagador) !== Number(numcens)
+            ? String(formaPago.NUMCENS_Pagador)
+            : ""
+        );
+      }
+      
+      const { data: extras } = await supabase
+        .from("PAGADORES_EXTRA_CUOTA" as any)
+        .select("*")
+        .eq("NUMCENS", Number(numcens))
+        .eq("Activo", true)
+        .order("ID", { ascending: true });
+      
+      if (extras && extras.length > 0) {
+        setPagadoresExtra(extras);
+      }
+      
       setLoading(false);
     }
 
@@ -124,6 +149,21 @@ setSocios(listaSocios || []);
       ...actual,
       [campo]: valor,
     }));
+  }
+
+  function cambiarPagadorExtra(index: number, campo: string, valor: any) {
+    setHayCambios(true);
+  
+    setPagadoresExtra((actual) =>
+      actual.map((p, i) =>
+        i === index
+          ? {
+              ...p,
+              [campo]: valor,
+            }
+          : p
+      )
+    );
   }
 
   async function guardarCambios(e: React.FormEvent) {
@@ -244,6 +284,51 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
       return;
     }
     
+    await supabase
+  .from("PAGADORES_EXTRA_CUOTA")
+  .update({ Activo: false })
+  .eq("NUMCENS", Number(numcens))
+  .eq("Activo", true);
+
+  const pagadoresExtraValidos = pagadoresExtra.filter(
+    (p) =>
+      p.TitularCuenta?.trim() &&
+      p.IBAN?.trim() &&
+      Number(p.Porcentaje || 0) > 0
+  );
+
+if (pagadoresExtraValidos.length > 0) {
+  const totalPorcentaje = pagadoresExtraValidos.reduce(
+    (acc, p) => acc + Number(p.Porcentaje || 0),
+    0
+  );
+
+  if (totalPorcentaje !== 100) {
+    setGuardando(false);
+    setError("Los porcentajes de los pagadores especiales deben sumar 100%.");
+    return;
+  }
+
+  const { error: errorExtras } = await supabase
+    .from("PAGADORES_EXTRA_CUOTA")
+    .insert(
+      pagadoresExtraValidos.map((p) => ({
+        NUMCENS: Number(numcens),
+        TitularCuenta: p.TitularCuenta || null,
+        IBAN: p.IBAN || null,
+        NIF_TitularCuenta: p.NIF_TitularCuenta || null,
+        Porcentaje: Number(p.Porcentaje || 0),
+        Activo: true,
+      }))
+    );
+
+  if (errorExtras) {
+    setGuardando(false);
+    setError(errorExtras.message);
+    return;
+  }
+}
+
     const hoy = new Date();
 
 const ejercicioActual =
@@ -292,37 +377,47 @@ router.push(`/socios/${numcens}`);
       ← Volver a ficha
     </Link>
 
-          <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
-            <div className="border-l-4 border-red-900 px-6 py-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold text-zinc-900">
-                    Editar socio
-                  </h1>
+    <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
+  <div className="border-l-4 border-red-900 px-6 py-5">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-900">
+          Editar socio
+        </h1>
 
-                  <p className="mt-2 text-sm text-zinc-600">
-                    {socio.Apellidos}, {socio.Nombre} · NUMCENS {socio.NUMCENS}
-                  </p>
-                </div>
+        <p className="mt-2 text-sm text-zinc-600">
+          {socio.Apellidos}, {socio.Nombre} · NUMCENS {socio.NUMCENS}
+        </p>
+      </div>
 
-                <button
-  type="submit"
-  disabled={guardando || isBaja}
-  className={`px-5 py-2 text-sm font-medium text-white ${
-    isBaja
-      ? "cursor-not-allowed bg-zinc-400"
-      : "bg-red-900 hover:bg-red-950"
-  } disabled:opacity-50`}
->
-  {isBaja
-    ? "Socio dado de baja"
-    : guardando
-    ? "Guardando..."
-    : "Guardar cambios"}
-</button>
-              </div>
-            </div>
-          </section>
+      <div className="flex items-center gap-2">
+        <Link
+          href={`/socios/${numcens}`}
+          className="border border-zinc-300 bg-white px-5 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+        >
+          Cancelar
+        </Link>
+
+        <button
+          type="submit"
+          form="form-editar-socio"
+          disabled={guardando || isBaja}
+          className={`px-5 py-2 text-sm font-medium text-white ${
+            isBaja
+              ? "cursor-not-allowed bg-zinc-400"
+              : "bg-red-900 hover:bg-red-950"
+          } disabled:opacity-50`}
+        >
+          {isBaja
+            ? "Socio dado de baja"
+            : guardando
+            ? "Guardando..."
+            : "Guardar cambios"}
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
 
           {error && (
             <div className="mb-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -410,7 +505,7 @@ router.push(`/socios/${numcens}`);
                 </h2>
               </div>
 
-              <div className="grid gap-4 p-4 md:grid-cols-5">
+              <div className="grid gap-3 p-4 md:grid-cols-4 lg:grid-cols-5">
                 <div>
                   <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
                     Comisión
@@ -647,6 +742,54 @@ router.push(`/socios/${numcens}`);
 />
 
 </div>
+{pagadoresExtra.length > 0 && (
+  <div className="border-t border-zinc-200 p-4">
+    <h3 className="mb-4 text-sm font-semibold text-zinc-700">
+      Pagadores especiales (50/50)
+    </h3>
+
+    <div className="space-y-4">
+      {pagadoresExtra.map((p, index) => (
+        <div
+          key={index}
+          className="grid gap-3 rounded border border-zinc-200 p-3 md:grid-cols-4"
+        >
+          <CampoTexto
+  label="Titular"
+  value={p.TitularCuenta || ""}
+  onChange={(valor) =>
+    cambiarPagadorExtra(index, "TitularCuenta", valor)
+  }
+/>
+
+<CampoTexto
+  label="IBAN"
+  value={p.IBAN || ""}
+  onChange={(valor) =>
+    cambiarPagadorExtra(index, "IBAN", valor)
+  }
+/>
+
+<CampoTexto
+  label="NIF"
+  value={p.NIF_TitularCuenta || ""}
+  onChange={(valor) =>
+    cambiarPagadorExtra(index, "NIF_TitularCuenta", valor)
+  }
+/>
+
+<CampoTexto
+  label="%"
+  value={String(p.Porcentaje || 0)}
+  onChange={(valor) =>
+    cambiarPagadorExtra(index, "Porcentaje", Number(valor))
+  }
+/>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
 <div className="grid gap-4 border-t border-zinc-200 p-4 md:grid-cols-3">
 
@@ -692,26 +835,7 @@ router.push(`/socios/${numcens}`);
 
 </fieldset>
 
-            <div className="flex justify-end gap-3">
-              <Link
-                href={`/socios/${numcens}`}
-                className="border border-zinc-300 bg-white px-5 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
-              >
-                Cancelar
-                </Link>
-
-              <button
-  type="submit"
-  disabled={guardando || isBaja}
-  className={`px-5 py-2 text-sm font-medium text-white ${
-    isBaja
-      ? "cursor-not-allowed bg-zinc-400"
-      : "bg-red-900 hover:bg-red-950"
-  } disabled:opacity-50`}
->
-  {isBaja ? "Socio dado de baja" : guardando ? "Guardando..." : "Guardar cambios"}
-</button>
-            </div>
+            
           </form>
         </div>
 

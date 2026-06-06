@@ -30,7 +30,7 @@ const { data: miembros } = await supabase
   const { data: titular } = await supabase
     .from("SOCIOS")
     .select("*")
-    .eq("NUMCENS", familiaAny?.Titular_NUMCENS)
+    .eq("NUMCENS", (familia as any)?.Titular_NUMCENS)
     .single();
 
     const { data: datosBancoTitular } = titular

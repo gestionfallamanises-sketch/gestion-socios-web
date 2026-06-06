@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
 
+function formatearFecha(fecha: string | null) {
+  if (!fecha) return "-";
+
+  const [year, month, day] = fecha.split("-");
+  return `${day}-${month}-${year}`;
+}
+
 export default function RemesasPage() {
   const [remesas, setRemesas] = useState<any[]>([]);
   const [ejercicios, setEjercicios] = useState<any[]>([]);
@@ -263,8 +270,8 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
       </td>
 
       <td className="px-4 py-3">
-        {remesa.FechaRemesa || "-"}
-      </td>
+  {formatearFecha(remesa.FechaRemesa)}
+</td>
 
       <td className="px-4 py-3 text-right">
         {Number(remesa.TotalRemesa || 0).toFixed(2)} €
@@ -322,6 +329,7 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
 }
 
 function EstadoBadge({ estado }: { estado: string }) {
+
   return (
     <span
       className={
