@@ -182,30 +182,8 @@ const { data: pagosAplicados } =
                         </td>
 
                         <td className="px-4 py-3 text-right">
-  <div className="flex items-center justify-end gap-1">
-    <span>
-      {Number(plazo.ImportePlazo || 0).toFixed(2)} €
-    </span>
-
-    {plazo.TieneGastosDevolucion && (
-      <span
-        title={
-          `Cuota: ${(
-            Number(plazo.ImportePlazo || 0) -
-            Number(plazo.GastosDevolucion || 0)
-          ).toFixed(2)} €\n` +
-          `Gastos devolución: ${Number(
-            plazo.GastosDevolucion || 0
-          ).toFixed(2)} €\n` +
-          `Total: ${Number(plazo.ImportePlazo || 0).toFixed(2)} €`
-        }
-        className="cursor-help text-amber-600"
-      >
-        ⚠️
-      </span>
-    )}
-  </div>
-</td>
+                          {Number(plazo.ImportePlazo || 0).toFixed(2)} €
+                        </td>
 
                         <td className="px-4 py-3 text-right text-green-700">
                           {Number(plazo.ImportePagado || 0).toFixed(2)} €

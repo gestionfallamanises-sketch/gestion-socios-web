@@ -192,6 +192,13 @@ const remesaAgrupada = Object.values(
     }, {})
   );
 
+  (remesaAgrupada as any[]).sort((a: any, b: any) =>
+    (a.NombreDeudor || "").localeCompare(
+      b.NombreDeudor || "",
+      "es"
+    )
+  );
+
   const remesaAgrupadaFiltrada = textoBusqueda
   ? remesaAgrupada.filter((fila) => {
       const texto = [
@@ -211,12 +218,7 @@ const remesaAgrupada = Object.values(
     })
   : remesaAgrupada;
 
-  (remesaAgrupada as any[]).sort((a: any, b: any) =>
-    (a.NombreDeudor || "").localeCompare(
-      b.NombreDeudor || "",
-      "es"
-    )
-  );
+ 
   function formatearFecha(fecha: string | null) {
     if (!fecha) return "-";
   
@@ -400,9 +402,10 @@ const remesaAgrupada = Object.values(
   </span>
 ) : (
   <EditarImporteRemesaInput
-    idDetalleRemesa={linea.IDDetalleRemesa}
-    importeActual={linea.Importe}
-  />
+  idDetalleRemesa={linea.IDDetalleRemesa}
+  idRemesa={Number(id)}
+  importeInicial={linea.Importe}
+/>
 )}
 </td>
 

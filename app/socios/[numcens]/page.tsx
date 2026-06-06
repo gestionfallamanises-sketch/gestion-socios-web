@@ -109,6 +109,39 @@ const totalPendienteReal =
 
   const formaPagoAny = formaPago as any;
 
+  const { data: pagadoresExtra } = await supabase
+  .from("PAGADORES_EXTRA_CUOTA")
+  .select("*")
+  .eq("NUMCENS", (socio as any).NUMCENS)
+  .eq("Activo", true)
+  .order("ID", { ascending: true });
+
+const pagadoresExtraAny = (pagadoresExtra as any[]) || [];
+
+const { data: socioPagador } =
+  formaPagoAny?.NUMCENS_Pagador
+    ? await supabase
+        .from("SOCIOS")
+        .select("NUMCENS, Nombre, Apellidos")
+        .eq("NUMCENS", formaPagoAny.NUMCENS_Pagador)
+        .maybeSingle()
+    : { data: null };
+
+const textoPagador =
+  pagadoresExtraAny.length > 0
+    ? pagadoresExtraAny
+        .map(
+          (p) =>
+            `${Number(p.Porcentaje || 0)}% ${p.TitularCuenta || "-"}`
+        )
+        .join(" · ")
+    : !formaPagoAny?.NUMCENS_Pagador ||
+      Number(formaPagoAny.NUMCENS_Pagador) === Number((socio as any).NUMCENS)
+    ? "Mismo socio"
+    : `${socioPagador?.NUMCENS || ""} · ${
+        socioPagador?.Apellidos || ""
+      }, ${socioPagador?.Nombre || ""}`;
+
   function cuotaMiembro(numcensMiembro: number) {
     return (cuotasFamilia as any[])?.find(
       (c) =>
@@ -177,158 +210,78 @@ const totalPendienteReal =
 </section>
 
 <section className="mb-8 border border-zinc-200 bg-white">
+  <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
+    <div>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+        Datos personales
+      </h2>
+
+      <p className="text-xs text-zinc-500">
+        Información principal del socio
+      </p>
+    </div>
+
+    {socioAny.Estado?.toLowerCase() !== "baja" ? (
+      <Link
+        href={"/socios/" + socioAny.NUMCENS + "/editar"}
+        className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+      >
+        Editar
+      </Link>
+    ) : (
+      <div className="cursor-not-allowed bg-zinc-400 px-4 py-2 text-sm font-medium text-white">
+        Socio dado de baja
+      </div>
+    )}
+  </div>
+
+  <div className="grid grid-cols-2 lg:grid-cols-6">
+  <Bloque
+  label="Fecha nacimiento"
+  value={
+    socioAny["FECHA de NACIMIENTO"]
+      ? new Date(socioAny["FECHA de NACIMIENTO"])
+          .toLocaleDateString("es-ES")
+      : "-"
+  }
+/>
+<Bloque label="Teléfono 1" value={socioAny["Teléfono 1"]} />
+
+<Bloque label="Teléfono 2" value={socioAny["Teléfono 2"]} />
+    <Bloque label="NIF" value={socioAny.NIF} />
+    <Bloque label="Código postal" value={socioAny["Código Postal"]} />
+    <Bloque label="Ciudad" value={socioAny.Ciudad} />
+  </div>
+  <div className="border-t border-zinc-200">
+  <Bloque
+    label="Dirección"
+    value={socioAny.Dirección}
+  />
+</div>
+</section>
+
+<section className="mb-8 border border-zinc-200 bg-white">
   <div className="bg-zinc-100 px-4 py-3">
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
       Configuración socio
     </h2>
   </div>
 
-  <div className="grid grid-cols-2 lg:grid-cols-5">
-    <div className="border-r border-b border-zinc-200">
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Comisión
-      </div>
-
-      <div className="bg-white px-4 py-3 text-sm">
-        {socioAny.Comision || "-"}
-      </div>
-    </div>
-
-    <div className="border-r border-b border-zinc-200">
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Sexo
-      </div>
-
-      <div className="bg-white px-4 py-3 text-sm">
-        {socioAny.SEXE || "-"}
-      </div>
-    </div>
-
-    <div className="border-r border-b border-zinc-200">
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Banda
-      </div>
-
-      <div className="bg-white px-4 py-3 text-sm">
-        {socioAny.EsBanda ? "Sí" : "No"}
-      </div>
-    </div>
-
-    <div className="border-b border-zinc-200">
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Cargo
-      </div>
-
-      <div className="bg-white px-4 py-3 text-sm">
-        {socioAny.CARREG || "-"}
-      </div>
-    </div>
-    
-    <div className="border-r border-b border-zinc-200">
-      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-        Lotería
-      </div>
-
-      <div className="bg-white px-4 py-3 text-sm">
-        {socioAny.ConLoteria ? "Sí" : "No"}
-      </div>
-    </div>
-
-    <div className="border-r border-b border-zinc-200">
-  <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-    Papeletas falla
-  </div>
-
-  <div className="bg-white px-4 py-3 text-sm">
-    {socioAny.PapeletasFalla || 0}
-  </div>
-</div>
-
-<div className="border-r border-b border-zinc-200">
-  <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-    Virgen
-  </div>
-
-  <div className="bg-white px-4 py-3 text-sm">
-    {socioAny.PapeletasVirgen || 0}
-  </div>
-</div>
-
-<div className="border-r border-b border-zinc-200">
-  <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-    Navidad
-  </div>
-
-  <div className="bg-white px-4 py-3 text-sm">
-    {socioAny.PapeletasNavidad || 0}
-  </div>
-</div>
-
-<div className="border-r border-b border-zinc-200">
-  <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
-    Niño
-  </div>
-
-  <div className="bg-white px-4 py-3 text-sm">
-    {socioAny.PapeletasNino || 0}
-  </div>
-</div>
+  <div className="grid grid-cols-2   lg:grid-cols-9">
+    <Bloque label="Comisión" value={socioAny.Comision} />
+    <Bloque label="Sexo" value={socioAny.SEXE} />
+    <Bloque label="Banda" value={socioAny.EsBanda ? "Sí" : "No"} />
+    <Bloque label="Cargo" value={socioAny.CARREG} />
+    <Bloque label="Lotería" value={socioAny.ConLoteria ? "Sí" : "No"} />
+    <Bloque label="Falla" value={socioAny.PapeletasFalla || 0} />
+    <Bloque label="Virgen" value={socioAny.PapeletasVirgen || 0} />
+    <Bloque label="Navidad" value={socioAny.PapeletasNavidad || 0} />
+    <Bloque label="Niño" value={socioAny.PapeletasNino || 0} />
   </div>
 </section>
 
-          <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="border border-zinc-200 bg-white">
-          <div className="flex items-center justify-between">
-  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-    Datos personales
-  </h2>
-
-  {socioAny.Estado?.toLowerCase() !== "baja" ? (
-    <Link
-      href={"/socios/" + socioAny.NUMCENS + "/editar"}
-      className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-    >
-      Editar
-    </Link>
-  ) : (
-    <div className="cursor-not-allowed bg-zinc-400 px-4 py-2 text-sm font-medium text-white">
-      Socio dado de baja
-    </div>
-  )}
-</div>
-
-<div className="p-4 text-sm">
-
-                <div className="grid grid-cols-2 gap-4 border-b border-zinc-100 py-3">
-                  <Campo label="Sexo" value={socioAny.SEXE} />
-                  <Campo
-                    label="Fecha nacimiento"
-                    value={socio["FECHA de NACIMIENTO"]}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 border-b border-zinc-100 py-3">
-                  <Campo label="Teléfono" value={socio["Teléfono 1"]} />
-                  <Campo label="NIF" value={socioAny.NIF} />
-                </div>
-
-                <div className="border-b border-zinc-100 py-3">
-                  <Campo label="Dirección" value={socioAny.Dirección} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Campo
-                    label="Código Postal"
-                    value={socio["Código Postal"]}
-                  />
-                  <Campo label="Ciudad" value={socioAny.Ciudad} />
-                </div>
-              </div>
-            </section>
-
-            <section className="border border-zinc-200 bg-white">
-            <div className="bg-zinc-100 px-4 py-3">
-  <div>
+<section className="mb-8 border border-zinc-200 bg-white">
+  <div className="bg-zinc-100 px-4 py-3">
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
       Datos de pago
     </h2>
@@ -337,56 +290,49 @@ const totalPendienteReal =
       Banco, forma de pago y cuota actual
     </p>
   </div>
+
+  <div className="grid grid-cols-2 lg:grid-cols-5">
+  <Bloque
+    label="Cuota actual"
+    value={
+      (cuotaActual as any)?.Importe
+        ? Number((cuotaActual as any).Importe).toFixed(2) + " €"
+        : "-"
+    }
+  />
+
+  <Bloque
+    label="Tipo cuota"
+    value={
+      (cuotaActual as any)?.Descripcion ||
+      (cuotaActual as any)?.TipoCuota ||
+      (cuotaActual as any)?.IDCuota
+    }
+  />
+
+  <Bloque
+    label="IBAN"
+    value={datosBancoAny?.IBAN}
+  />
+
+  <Bloque
+    label="Forma pago"
+    value={formaPagoAny?.Metodo || "-"}
+  />
+
+  <Bloque
+    label="Nº plazos"
+    value={formaPagoAny?.NumeroPlazos || "-"}
+  />
 </div>
 
-              <div className="p-4 text-sm">
-                <div className="border-b border-zinc-100 py-3">
-                  <Campo label="IBAN" value={datosBancoAny?.IBAN} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 border-b border-zinc-100 py-3">
-                <Campo
-  label="Forma de pago"
-  value={formaPagoAny?.Metodo || ((cuotaActual as any)?.Metodo)}
-/>
-
-<Campo
-  label="Pagador"
-  value={
-    formaPagoAny?.NUMCENS_Pagador
-      ? formaPagoAny.NUMCENS_Pagador
-      : "-"
-  }
-/>
-
-<Campo
-  label="Nº plazos"
-  value={formaPagoAny?.NumeroPlazos || "-"}
-/>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Campo
-                    label="Cuota actual"
-                    value={
-                      (cuotaActual as any)?.Importe
-                        ? Number((cuotaActual as any).Importe).toFixed(2) + " €"
-                        : "-"
-                    }
-                  />
-                  <Campo
-                    label="Tipo cuota"
-                    value={
-                      (cuotaActual as any)?.Descripcion ||
-                      (cuotaActual as any)?.TipoCuota ||
-                      (cuotaActual as any)?.IDCuota
-                    }
-                  />
-                </div>
-              </div>
-            </section>
-          </div>
-
+<div className="border-t border-zinc-200">
+  <Bloque
+    label="Pagador"
+    value={textoPagador}
+  />
+</div>
+</section>
           <section className="mb-10 border border-zinc-200 bg-white">
           <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
   <div>
@@ -627,6 +573,20 @@ function Campo({ label, value }: { label: string; value: any }) {
     <div>
       <p className="text-zinc-500">{label}</p>
       <p className="font-medium">{value || "-"}</p>
+    </div>
+  );
+}
+
+function Bloque({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="border-r border-b border-zinc-200">
+      <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
+        {label}
+      </div>
+
+      <div className="bg-white px-4 py-3 text-sm">
+        {value || "-"}
+      </div>
     </div>
   );
 }

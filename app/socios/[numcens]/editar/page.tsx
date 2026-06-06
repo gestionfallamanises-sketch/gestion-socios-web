@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Sidebar from "../../../components/Sidebar";
 import { supabase } from "../../../../lib/supabase";
 import ConfirmModal from "@/app/components/ConfirmModal";
+import { useHotkeys } from "react-hotkeys-hook";
 
 export default function EditarSocioPage() {
   const params = useParams();
@@ -45,6 +46,26 @@ const [modalCambioCuota, setModalCambioCuota] = useState<{
   campo: "EsBanda" | "ConLoteria";
   valor: boolean;
 } | null>(null);
+
+useHotkeys(
+  "ctrl+s",
+  (e) => {
+    e.preventDefault();
+
+    if (!guardando && !isBaja) {
+      document
+        .getElementById("form-editar-socio")
+        ?.requestSubmit();
+    }
+  },
+  {
+    enableOnFormTags: true,
+  }
+);
+
+useHotkeys("esc", () => {
+  router.push(`/socios/${numcens}`);
+});
 
 useEffect(() => {
   const avisarAntesDeSalir = (e: BeforeUnloadEvent) => {
@@ -183,6 +204,7 @@ setSocios(listaSocios || []);
         Nombre: socio.Nombre,
         Apellidos: socio.Apellidos,
         "Teléfono 1": socio["Teléfono 1"],
+        "Teléfono 2": socio["Teléfono 2"],
         Dirección: socio.Dirección,
         Ciudad: socio.Ciudad,
         "Código Postal": socio["Código Postal"],
@@ -476,6 +498,11 @@ router.push(`/socios/${numcens}`);
                   onChange={(valor) => cambiarCampo("Teléfono 1", valor)}
                 />
 
+<CampoTexto
+  label="Teléfono 2"
+  value={socio["Teléfono 2"] || ""}
+  onChange={(valor) => cambiarCampo("Teléfono 2", valor)}
+/>
                 <CampoTexto
                   label="Dirección"
                   value={socio.Dirección || ""}
