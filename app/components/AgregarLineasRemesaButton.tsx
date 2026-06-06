@@ -183,7 +183,7 @@ export default function AgregarLineasRemesaButton({
 
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-zinc-900">
-                      {linea.NUMCENS} · {linea.Socio}
+                    {linea.NUMCENS} · {linea.Socio} · Plazo {linea.NumeroPlazo}
                     </p>
 
                     <p className="text-xs text-zinc-500">
