@@ -67,18 +67,20 @@ export default function AgregarLineasRemesaButton({
   async function confirmarAgregarSeleccionadas() {
     setModalConfirmar(false);
   
-    if (seleccionadas.length === 0) {
+    const idsSeleccionadas = [...seleccionadas];
+  
+    if (idsSeleccionadas.length === 0) {
       alert("Selecciona al menos una línea.");
       return;
     }
   
     setGuardando(true);
   
-    const { error } = await (supabase as any).rpc(
+    const { data, error } = await (supabase as any).rpc(
       "agregar_lineas_seleccionadas_remesa",
       {
         p_id_remesa: idRemesa,
-        p_idplazos: seleccionadas,
+        p_idplazos: idsSeleccionadas,
       }
     );
   
@@ -87,6 +89,16 @@ export default function AgregarLineasRemesaButton({
       setGuardando(false);
       return;
     }
+  
+    if (!data || Number(data) === 0) {
+      alert(
+        "No se ha añadido ninguna línea. Puede que ya estuvieran añadidas o que hayan cambiado los estados."
+      );
+      setGuardando(false);
+      return;
+    }
+  
+    alert(`Se han añadido ${data} línea(s) a la remesa.`);
   
     setGuardando(false);
     setLineas([]);

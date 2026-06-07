@@ -181,6 +181,7 @@ const sociosBaja = socios
     : [];
 
     const cuotasFiltradas = cuotas.filter((cuota) => {
+
         const coincideTipo =
           filtroTipoCuota === "TODOS" || cuota.IDCuota === filtroTipoCuota;
       
@@ -218,6 +219,27 @@ const sociosBaja = socios
           pagador.Metodo === filtroMetodoPagador
         );
       });
+
+      const pagadorSocios = cuotas
+  .filter((cuota) => {
+    return (
+      filtroMetodoPagador === "TODOS" ||
+      cuota.Metodo === filtroMetodoPagador
+    );
+  })
+  .sort((a, b) => {
+    const pagadorA = String(a.PagadorNombre || a.NUMCENS_Pagador || "");
+    const pagadorB = String(b.PagadorNombre || b.NUMCENS_Pagador || "");
+
+    const cmpPagador = pagadorA.localeCompare(pagadorB, "es");
+
+    if (cmpPagador !== 0) return cmpPagador;
+
+    const socioA = `${a.Apellidos || ""}, ${a.Nombre || ""}`;
+    const socioB = `${b.Apellidos || ""}, ${b.Nombre || ""}`;
+
+    return socioA.localeCompare(socioB, "es");
+  });
 
 const sociosMostrados = sociosBase
   .filter((socio) => {
@@ -564,14 +586,27 @@ const sociosMostrados = sociosBase
         <th className="px-4 py-3">Forma pago</th>
         <th className="px-4 py-3">Estado</th>
       </>
+
+) : listado === "PAGADOR_SOCIOS" ? (
+  <>
+    <th className="w-24 px-4 py-3">NUMCENS pagador</th>
+    <th className="px-4 py-3">Pagador</th>
+    <th className="w-24 px-4 py-3">NUMCENS socio</th>
+    <th className="px-4 py-3">Socio</th>
+    <th className="px-4 py-3">Método</th>
+    <th className="w-28 px-4 py-3 text-right">Cuota</th>
+  </>
+
     ) : listado === "PAGADORES" ? (
       <>
-        <th className="px-4 py-3">Pagador</th>
+        <th className="w-8 px-4 py-3">Pagador</th>
         <th className="px-4 py-3">Nombre</th>
-        <th className="px-4 py-3">Método</th>
+        <th className="w-20 px-4 py-3">Método</th>
         <th className="px-4 py-3">Titular</th>
-        <th className="px-4 py-3">IBAN</th>
-        <th className="px-4 py-3 text-right">Socios</th>
+        <th className="px-4 py-3 whitespace-nowrap">
+  IBAN
+</th>
+        <th className="w-16 px-4 py-3 text-right">Socios</th>
       </>
     ) : (
       <>
@@ -600,6 +635,39 @@ const sociosMostrados = sociosBase
         <td className="px-4 py-3 text-zinc-600">{cuota.EstadoPago || "-"}</td>
       </tr>
     ))
+
+  ) : listado === "PAGADOR_SOCIOS" ? (
+    pagadorSocios.map((cuota) => (
+      <tr
+        key={cuota.IDCuotaSocio}
+        className="border-t border-zinc-200 hover:bg-red-50"
+      >
+        <td className="px-4 py-3 text-zinc-600">
+          {cuota.NUMCENS_Pagador || cuota.NUMCENS || "-"}
+        </td>
+  
+        <td className="px-4 py-3 font-medium text-zinc-900">
+          {cuota.PagadorNombre || "Mismo socio"}
+        </td>
+  
+        <td className="px-4 py-3 text-zinc-600">
+          {cuota.NUMCENS}
+        </td>
+  
+        <td className="px-4 py-3 font-medium text-zinc-900">
+          {cuota.Apellidos}, {cuota.Nombre}
+        </td>
+  
+        <td className="px-4 py-3 text-zinc-600">
+          {cuota.Metodo || "-"}
+        </td>
+  
+        <td className="px-4 py-3 text-right">
+          {Number(cuota.Importe || 0).toFixed(2)} €
+        </td>
+      </tr>
+    ))
+
   ) : listado === "PAGADORES" ? (
     pagadoresFiltrados.map((pagador) => (
       <tr key={`${pagador.Pagador}-${pagador.Metodo}`} className="border-t border-zinc-200 hover:bg-red-50">
@@ -607,7 +675,9 @@ const sociosMostrados = sociosBase
         <td className="px-4 py-3 font-medium text-zinc-900">{pagador.NombrePagador || "-"}</td>
         <td className="px-4 py-3 text-zinc-600">{pagador.Metodo || "-"}</td>
         <td className="px-4 py-3 text-zinc-600">{pagador.TitularCuenta || "-"}</td>
-        <td className="px-4 py-3 text-zinc-600">{pagador.IBAN || "-"}</td>
+        <td className="px-4 py-3 text-zinc-600 whitespace-nowrap">
+  {pagador.IBAN || "-"}
+</td>
         <td className="px-4 py-3 text-right font-medium">{pagador.NumeroSocios || 0}</td>
       </tr>
     ))
