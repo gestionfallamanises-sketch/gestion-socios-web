@@ -72,6 +72,16 @@ const { data: pagosManuales } =
 
     const pagosManualesAny = (pagosManuales as any[]) || [];
 
+    const { data: aplicacionesRemesa } =
+  idsPlazos.length > 0
+    ? await (supabase as any)
+        .from("REMESAS_APLICACIONES")
+        .select("*")
+        .in("IDPlazo", idsPlazos)
+    : { data: [] };
+
+const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
+
   function plazosDeCuota(idCuotaSocio: number) {
     return (
       plazosAny.filter(
@@ -97,6 +107,32 @@ const { data: pagosManuales } =
       return `${day}-${month}-${year}`;
     }
     
+    function movimientosDePlazo(idPlazo: number) {
+      const movimientos: any[] = [];
+    
+      aplicacionesRemesaAny
+        .filter((r) => Number(r.IDPlazo) === Number(idPlazo))
+        .forEach((r) => {
+          movimientos.push({
+            fecha: r.FechaAplicacion,
+            texto: `Remesa ${r.IDRemesa}`,
+            importe: Number(r.ImporteAplicado || 0),
+          });
+        });
+    
+      pagosManualesAny
+        .filter((p) => Number(p.IDPlazo) === Number(idPlazo))
+        .forEach((p) => {
+          movimientos.push({
+            fecha: p.PAGOS_MANUALES?.FechaPago,
+            texto: "Pago manual",
+            importe: Number(p.ImporteAplicado || 0),
+          });
+        });
+    
+      return movimientos;
+    }
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -171,12 +207,9 @@ const { data: pagosManuales } =
                   <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
                     <tr>
                       <th className="px-4 py-3">Ejercicio / plazo</th>
-                      <th className="px-4 py-3">Estado</th>
-                      <th className="px-4 py-3 text-right">Importe</th>
-                      <th className="px-4 py-3 text-right">Pagado</th>
-                      <th className="px-4 py-3 text-right">Pendiente</th>
-                      <th className="px-4 py-3">Método</th>
-                      <th className="px-4 py-3">Remesa</th>
+                      <th>Importe</th>
+<th>Estado</th>
+<th>Movimientos</th>
                       <th className="px-4 py-3 text-right">Acción</th>
                     </tr>
                   </thead>
@@ -264,62 +297,28 @@ const { data: pagosManuales } =
     )}
 </td>
 
-                                <td className="px-4 py-3">
-                                  <EstadoBadge estado={plazo.Estado} />
-                                </td>
-
-                                <td className="px-4 py-3 text-right">
-  <div className="flex items-center justify-end gap-1">
-  {plazo.TieneGastosDevolucion && (
-  <details className="relative inline-block">
-    <summary className="list-none cursor-pointer text-amber-600">
-      ⚠️
-    </summary>
-
-    <div className="absolute right-0 z-50 mt-2 w-56 border border-zinc-200 bg-white p-3 text-left text-xs text-zinc-700 shadow-lg">
-      <p>
-        Cuota:{" "}
-        {(
-          Number(plazo.ImportePlazo || 0) -
-          Number(plazo.GastosDevolucion || 0)
-        ).toFixed(2)} €
-      </p>
-
-      <p>
-        Gastos devolución:{" "}
-        {Number(plazo.GastosDevolucion || 0).toFixed(2)} €
-      </p>
-
-      <p className="mt-2 font-semibold">
-        Total: {Number(plazo.ImportePlazo || 0).toFixed(2)} €
-      </p>
-    </div>
-  </details>
-)}
-
-    <span>
-      {Number(plazo.ImportePlazo || 0).toFixed(2)} €
-    </span>
-  </div>
+<td className="px-4 py-3 text-right">
+  {Number(plazo.ImportePlazo || 0).toFixed(2)} €
 </td>
 
-                                <td className="px-4 py-3 text-right text-green-700">
-                                  {Number(plazo.ImportePagado || 0).toFixed(2)} €
-                                </td>
+<td className="px-4 py-3">
+  <EstadoBadge estado={plazo.Estado} />
+</td>
 
-                                <td className="px-4 py-3 text-right text-red-700">
-                                  {Number(plazo.Pendiente || 0).toFixed(2)} €
-                                </td>
-
-                                <td className="px-4 py-3">
-                                  {plazo.Metodo || "-"}
-                                </td>
-
-                                <td className="px-4 py-3">
-                                  {plazo.IDRemesa
-                                    ? `Remesa ${plazo.IDRemesa}`
-                                    : "-"}
-                                </td>
+<td className="px-4 py-3">
+  {movimientosDePlazo(plazo.IDPlazo).length === 0 ? (
+    <span className="text-zinc-400">Sin movimientos</span>
+  ) : (
+    <div className="space-y-1">
+      {movimientosDePlazo(plazo.IDPlazo).map((mov, idx) => (
+        <div key={idx} className="text-xs">
+          {formatearFecha(mov.fecha)} · {mov.texto} ·{" "}
+          {mov.importe.toFixed(2)} €
+        </div>
+      ))}
+    </div>
+  )}
+</td>
 
                                 <td className="px-4 py-3 text-right">
                                   {plazo.Estado === "Pagado" ? (
@@ -351,74 +350,6 @@ const { data: pagosManuales } =
             )}
           </section>
 
-          <section className="mt-8 border border-zinc-200 bg-white">
-  <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-    <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-        Historial de pagos manuales
-      </h2>
-
-      <p className="text-xs text-zinc-500">
-        Pagos aplicados a los plazos de este socio
-      </p>
-    </div>
-  </div>
-
-  {!pagosManuales || pagosManuales.length === 0 ? (
-    <div className="p-6 text-sm text-zinc-500">
-      Todavía no hay pagos manuales registrados.
-    </div>
-  ) : (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-          <tr>
-            <th className="px-4 py-3">Fecha</th>
-            <th className="px-4 py-3">Plazo</th>
-            <th className="px-4 py-3 text-right">Importe</th>
-            <th className="px-4 py-3">Método</th>
-            <th className="px-4 py-3">Observaciones</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {pagosManualesAny.map((pago) => {
-            const plazo = plazosAny.find(
-              (p) => Number(p.IDPlazo) === Number(pago.IDPlazo)
-            );
-
-            return (
-              <tr
-                key={pago.ID}
-                className="border-t border-zinc-200 hover:bg-red-50"
-              >
-                <td className="px-4 py-3">
-                  {pago.PAGOS_MANUALES?.FechaPago || "-"}
-                </td>
-
-                <td className="px-4 py-3">
-                  {plazo ? `Plazo ${plazo.NumeroPlazo}` : "-"}
-                </td>
-
-                <td className="px-4 py-3 text-right">
-                  {Number(pago.ImporteAplicado || 0).toFixed(2)} €
-                </td>
-
-                <td className="px-4 py-3">
-                  {pago.PAGOS_MANUALES?.Metodo || "-"}
-                </td>
-
-                <td className="px-4 py-3">
-                  {pago.PAGOS_MANUALES?.Observaciones || "-"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  )}
-</section>
         </div>
       </main>
     </div>
@@ -457,17 +388,21 @@ function Resumen({
 }
 
 function EstadoBadge({ estado }: { estado: string }) {
+  const color =
+    estado === "Pagada" || estado === "Pagado"
+      ? "bg-green-500"
+      : estado === "Parcial" || estado === "En remesa"
+      ? "bg-yellow-500"
+      : estado === "Devuelto"
+      ? "bg-red-500"
+      : "bg-zinc-300";
+
   return (
-    <span
-      className={
-        estado === "Pagada" || estado === "Pagado"
-          ? "bg-green-100 px-3 py-1 text-xs font-semibold text-green-700"
-          : estado === "Parcial" || estado === "En remesa"
-          ? "bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700"
-          : "bg-red-100 px-3 py-1 text-xs font-semibold text-red-700"
-      }
+    <div
+      className="flex items-center justify-center"
+      title={estado || "Sin estado"}
     >
-      {estado || "-"}
-    </span>
+      <span className={`h-5 w-5 rounded-full ${color}`} />
+    </div>
   );
 }

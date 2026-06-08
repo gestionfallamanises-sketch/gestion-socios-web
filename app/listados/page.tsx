@@ -20,6 +20,7 @@ const [filtroFormaPago, setFiltroFormaPago] = useState("TODAS");
 const [filtroEstadoCuota, setFiltroEstadoCuota] = useState("TODOS");
 const [pagadores, setPagadores] = useState<any[]>([]);
 const [filtroMetodoPagador, setFiltroMetodoPagador] = useState("TODOS");
+const [filtroIBAN, setFiltroIBAN] = useState("TODOS");
 
 useEffect(() => {
   async function fetchSocios() {
@@ -66,10 +67,11 @@ useEffect(() => {
       if (!ejercicioSeleccionado) return;
   
       const { data, error } = await supabase
-        .from("vista_cuotas_socios")
-        .select("*")
-        .eq("Ejercicio", ejercicioSeleccionado)
-        .order("Apellidos", { ascending: true });
+  .from("vista_cuotas_socios")
+  .select("*")
+  .eq("Ejercicio", ejercicioSeleccionado)
+  .eq("EstadoSocio", "Activo")
+  .order("Apellidos", { ascending: true });
   
       if (error) {
         setError(error.message);
@@ -214,10 +216,19 @@ const sociosBaja = socios
       ).sort();
 
       const pagadoresFiltrados = pagadores.filter((pagador) => {
-        return (
+        const cumpleMetodo =
           filtroMetodoPagador === "TODOS" ||
-          pagador.Metodo === filtroMetodoPagador
-        );
+          pagador.Metodo === filtroMetodoPagador;
+      
+        const cumpleIBAN =
+          filtroIBAN === "TODOS" ||
+          (filtroIBAN === "CON_IBAN" &&
+            pagador.IBAN &&
+            pagador.IBAN.trim() !== "") ||
+          (filtroIBAN === "SIN_IBAN" &&
+            (!pagador.IBAN || pagador.IBAN.trim() === ""));
+      
+        return cumpleMetodo && cumpleIBAN;
       });
 
       const pagadorSocios = cuotas

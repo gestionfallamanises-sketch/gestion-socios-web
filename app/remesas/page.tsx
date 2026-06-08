@@ -27,6 +27,15 @@ export default function RemesasPage() {
     cargarRemesas();
   }, [ejercicio]);
 
+  useEffect(() => {
+    if (
+      plazosDisponibles.length > 0 &&
+      !plazosDisponibles.includes(numeroPlazo)
+    ) {
+      setNumeroPlazo(plazosDisponibles[0]);
+    }
+  }, [remesas, ejercicio]);
+
   async function cargarEjercicios() {
     const { data } = await supabase
       .from("EJERCICIOS")
@@ -137,6 +146,14 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
     cargarRemesas();
   }
 
+  const plazosGenerados = remesas
+  .filter((r) => Number(r.Ejercicio) === Number(ejercicio))
+  .map((r) => Number(r.NumeroPlazo));
+
+  const plazosDisponibles = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(
+    (n) => !plazosGenerados.includes(n)
+  );
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -197,11 +214,11 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
                   onChange={(e) => setNumeroPlazo(Number(e.target.value))}
                   className="w-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
                 >
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                    <option key={n} value={n}>
-                      Plazo {n}
-                    </option>
-                  ))}
+                 {plazosDisponibles.map((n) => (
+    <option key={n} value={n}>
+      Plazo {n}
+    </option>
+  ))}
                 </select>
               </div>
 
