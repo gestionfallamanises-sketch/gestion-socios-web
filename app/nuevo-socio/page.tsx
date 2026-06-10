@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Sidebar from "../components/Sidebar";
 import { useRouter } from "next/navigation";
+function limpiarNif(nif: string) {
+  return nif.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
 
 export default function NuevoSocioPage() {
   const router = useRouter();
@@ -51,11 +54,47 @@ export default function NuevoSocioPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [avisoNif, setAvisoNif] = useState<any | null>(null);
+const [continuarConNifDuplicado, setContinuarConNifDuplicado] = useState(false);
+
+async function comprobarNifDuplicado(nif: string) {
+  const nifLimpio = limpiarNif(nif);
+
+  setContinuarConNifDuplicado(false);
+  setAvisoNif(null);
+
+  if (!nifLimpio || nifLimpio.startsWith("FN")) return;
+
+  const { data, error } = await supabase
+    .from("SOCIOS")
+    .select("NUMCENS, Nombre, Apellidos, Estado, NIF")
+    .neq("NIF", null);
+
+  if (error) return;
+
+  const encontrado = (data || []).find(
+    (socio: any) => limpiarNif(socio.NIF || "") === nifLimpio
+  );
+
+  if (encontrado) {
+    setAvisoNif(encontrado);
+  }
+}
 
   async function crearSocio(e: React.FormEvent) {
     e.preventDefault();
     setGuardando(true);
     setError(null);
+
+    const nifLimpio = limpiarNif(form.NIF);
+
+if (avisoNif && !continuarConNifDuplicado && !nifLimpio.startsWith("FN")) {
+  setGuardando(false);
+  setError(
+    "Ya existe un socio con ese NIF. Revisa el aviso y pulsa 'Continuar igualmente' si quieres crearlo."
+  );
+  return;
+}
 
     const { error } = await supabase.from("SOCIOS").insert({
       id: Number(form.NUMCENS),
