@@ -160,7 +160,10 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
 
           <section className="mb-8 border border-zinc-200 bg-white">
           <div className="grid grid-cols-2 lg:grid-cols-5">
-              <Resumen label="Cuotas" value={cuotas?.length || 0} />
+          <Resumen
+  label="Ejercicio"
+  value={cuotasAny[0]?.Ejercicio || "-"}
+/>
               <Resumen
                 label="Total cuotas"
                 value={`${totalImporte.toFixed(2)} €`}
@@ -185,17 +188,26 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
           </section>
 
           <section className="border border-zinc-200 bg-white">
-            <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                  Historial de cuotas y plazos
-                </h2>
+          <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
+  <div>
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+      Historial de cuotas y plazos
+    </h2>
 
-                <p className="text-xs text-zinc-500">
-                  Cuotas generadas, recibos, remesas y pagos asociados
-                </p>
-              </div>
-            </div>
+    <p className="text-xs text-zinc-500">
+      Cuotas generadas, recibos, remesas y pagos asociados
+    </p>
+  </div>
+
+  {cuotasAny.length > 0 && (
+    <Link
+      href={"/cuotas/" + cuotasAny[0].IDCuotaSocio + "/pago"}
+      className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+    >
+      Registrar pago
+    </Link>
+  )}
+</div>
 
             {!cuotas || cuotas.length === 0 ? (
               <div className="p-6 text-sm text-zinc-500">
@@ -205,13 +217,12 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                    <tr>
-                      <th className="px-4 py-3">Ejercicio / plazo</th>
-                      <th>Importe</th>
-<th>Estado</th>
-<th>Movimientos</th>
-                      <th className="px-4 py-3 text-right">Acción</th>
-                    </tr>
+                  <tr>
+  <th className="px-4 py-3">Plazo</th>
+  <th className="px-4 py-3">Importe</th>
+  <th className="px-4 py-3">Estado</th>
+  <th className="px-4 py-3">Movimientos</th>
+</tr>
                   </thead>
 
                   <tbody>
@@ -228,46 +239,7 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
 
                       return (
                         <Fragment key={`grupo-cuota-${cuota.IDCuotaSocio}`}>
-                          <tr
-                            key={`cuota-${cuota.IDCuotaSocio}`}
-                            className="border-t border-zinc-300 bg-zinc-50"
-                          >
-                            <td className="px-4 py-3 font-semibold">
-                              Ejercicio {cuota.Ejercicio}
-                            </td>
-
-                            <td className="px-4 py-3">
-                              <EstadoBadge estado={cuota.EstadoPago} />
-                            </td>
-
-                            <td className="px-4 py-3 text-right font-medium">
-                              {Number(cuota.Importe || 0).toFixed(2)} €
-                            </td>
-
-                            <td className="px-4 py-3 text-right text-green-700">
-                              {pagadoCuota.toFixed(2)} €
-                            </td>
-
-                            <td className="px-4 py-3 text-right text-red-700">
-                              {pendienteCuota.toFixed(2)} €
-                            </td>
-
-                            <td className="px-4 py-3">{cuota.Metodo || "-"}</td>
-
-                            <td className="px-4 py-3">-</td>
-
-                            <td className="px-4 py-3 text-right">
-                              <Link
-                                href={
-                                  "/cuotas/" + cuota.IDCuotaSocio + "/pago"
-                                }
-                                className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
-                              >
-                                Registrar pago
-                              </Link>
-                            </td>
-                          </tr>
-
+                          
                           {plazosCuota.length === 0 ? (
                             <tr
                               key={`sin-plazos-${cuota.IDCuotaSocio}`}
@@ -319,25 +291,6 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
     </div>
   )}
 </td>
-
-                                <td className="px-4 py-3 text-right">
-                                  {plazo.Estado === "Pagado" ? (
-                                    <span className="text-xs text-zinc-400">
-                                      Pagado
-                                    </span>
-                                  ) : (
-                                    <Link
-                                      href={
-                                        "/cuotas/" +
-                                        cuota.IDCuotaSocio +
-                                        "/pago"
-                                      }
-                                      className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
-                                    >
-                                      Pagar
-                                    </Link>
-                                  )}
-                                </td>
                               </tr>
                             ))
                           )}
