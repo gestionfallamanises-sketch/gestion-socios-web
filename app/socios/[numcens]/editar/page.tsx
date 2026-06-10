@@ -8,6 +8,10 @@ import { supabase } from "../../../../lib/supabase";
 import ConfirmModal from "@/app/components/ConfirmModal";
 import { useHotkeys } from "react-hotkeys-hook";
 
+function limpiarNif(nif: string) {
+  return nif.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
 export default function EditarSocioPage() {
   const params = useParams();
   const router = useRouter();
@@ -16,8 +20,11 @@ export default function EditarSocioPage() {
   const [socio, setSocio] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hayCambios, setHayCambios] = useState(false);
+const [error, setError] = useState<string | null>(null);
+const [avisoNif, setAvisoNif] = useState<any | null>(null);
+const [modalNifDuplicado, setModalNifDuplicado] = useState(false);
+const [nifDuplicadoConfirmado, setNifDuplicadoConfirmado] = useState(false);
+const [hayCambios, setHayCambios] = useState(false);
   const [iban, setIban] = useState("");
 const [titularCuenta, setTitularCuenta] = useState("");
 const [nifTitularCuenta, setNifTitularCuenta] = useState("");
@@ -187,6 +194,30 @@ setSocios(listaSocios || []);
     );
   }
 
+  async function comprobarNifDuplicado(nif: string) {
+    const nifLimpio = limpiarNif(nif);
+  
+    setAvisoNif(null);
+  
+    if (!nifLimpio || nifLimpio.startsWith("FN")) return;
+  
+    const { data } = await supabase
+      .from("SOCIOS")
+      .select("NUMCENS, Nombre, Apellidos, Estado, NIF");
+  
+    const encontrado = (data || []).find(
+      (s: any) =>
+        Number(s.NUMCENS) !== Number(numcens) &&
+        limpiarNif(s.NIF || "") === nifLimpio
+    );
+  
+    if (encontrado) {
+      setAvisoNif(encontrado);
+      setModalNifDuplicado(true);
+      setNifDuplicadoConfirmado(false);
+    }
+  }
+
   async function guardarCambios(e: React.FormEvent) {
     e.preventDefault();
 
@@ -197,6 +228,29 @@ setSocios(listaSocios || []);
 
     setGuardando(true);
     setError(null);
+
+    await comprobarNifDuplicado(socio.NIF || "");
+
+    const nifLimpio = limpiarNif(socio.NIF || "");
+
+    if (nifLimpio && !nifLimpio.startsWith("FN") && !nifDuplicadoConfirmado) {
+      const { data } = await supabase
+        .from("SOCIOS")
+        .select("NUMCENS, Nombre, Apellidos, Estado, NIF");
+    
+      const encontrado = (data || []).find(
+        (s: any) =>
+          Number(s.NUMCENS) !== Number(numcens) &&
+          limpiarNif(s.NIF || "") === nifLimpio
+      );
+    
+      if (encontrado) {
+        setAvisoNif(encontrado);
+        setModalNifDuplicado(true);
+        setGuardando(false);
+        return;
+      }
+    }
 
     const { error } = await supabase
       .from("SOCIOS")
@@ -479,11 +533,26 @@ router.push(`/socios/${numcens}`);
                   onChange={(valor) => cambiarCampo("Apellidos", valor)}
                 />
 
-<CampoTexto
-  label="NIF"
-  value={socio.NIF || ""}
-  onChange={(valor) => cambiarCampo("NIF", valor)}
-/>
+<div>
+  <CampoTexto
+    label="NIF"
+    value={socio.NIF || ""}
+    onChange={(valor) => {
+      cambiarCampo("NIF", valor);
+      setAvisoNif(null);
+    }}
+  />
+
+  {avisoNif && (
+    <div className="mt-2 border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+      ⚠️ Ya existe otro socio con este NIF
+      <br />
+      {avisoNif.NUMCENS} · {avisoNif.Apellidos}, {avisoNif.Nombre}
+      <br />
+      Estado: {avisoNif.Estado}
+    </div>
+  )}
+</div>
 
 <CampoTexto
   label="Fecha nacimiento"
@@ -865,6 +934,25 @@ router.push(`/socios/${numcens}`);
             
           </form>
         </div>
+        <ConfirmModal
+  open={modalNifDuplicado}
+  title="NIF duplicado"
+  message={
+    avisoNif
+      ? `Ya existe otro socio con este NIF: ${avisoNif.NUMCENS} · ${avisoNif.Apellidos}, ${avisoNif.Nombre}. Estado: ${avisoNif.Estado}.`
+      : "Ya existe otro socio con este NIF."
+  }
+  confirmText="Continuar igualmente"
+  cancelText="Cancelar"
+  onCancel={() => {
+    setModalNifDuplicado(false);
+    setNifDuplicadoConfirmado(false);
+  }}
+  onConfirm={() => {
+    setModalNifDuplicado(false);
+    setNifDuplicadoConfirmado(true);
+  }}
+/>
 
         <ConfirmModal
   open={modalCambioCuota !== null}

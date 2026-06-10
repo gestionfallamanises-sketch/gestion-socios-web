@@ -88,6 +88,28 @@ async function comprobarNifDuplicado(nif: string) {
 
     const nifLimpio = limpiarNif(form.NIF);
 
+if (nifLimpio && !nifLimpio.startsWith("FN") && !continuarConNifDuplicado) {
+  const { data: sociosConNif } = await supabase
+    .from("SOCIOS")
+    .select("NUMCENS, Nombre, Apellidos, Estado, NIF")
+    .neq("NIF", null);
+
+  const socioDuplicado = (sociosConNif || []).find(
+    (socio: any) => limpiarNif(socio.NIF || "") === nifLimpio
+  );
+
+  if (socioDuplicado) {
+    setAvisoNif(socioDuplicado);
+    setGuardando(false);
+    setError(
+      "Ya existe un socio con ese NIF. Revisa el aviso y pulsa 'Continuar igualmente' si quieres crearlo."
+    );
+    return;
+  }
+}
+
+    const nifLimpio = limpiarNif(form.NIF);
+
 if (avisoNif && !continuarConNifDuplicado && !nifLimpio.startsWith("FN")) {
   setGuardando(false);
   setError(
@@ -224,12 +246,44 @@ if (avisoNif && !continuarConNifDuplicado && !nifLimpio.startsWith("FN")) {
               </Campo>
 
               <Campo label="NIF">
-                <input
-                  className={inputClass}
-                  value={form.NIF}
-                  onChange={(e) => setForm({ ...form, NIF: e.target.value })}
-                />
-              </Campo>
+  <input
+    className={inputClass}
+    value={form.NIF}
+    onChange={(e) => {
+      setForm({ ...form, NIF: e.target.value });
+      setAvisoNif(null);
+      setContinuarConNifDuplicado(false);
+    }}
+    onBlur={() => comprobarNifDuplicado(form.NIF)}
+  />
+
+  {avisoNif && (
+    <div className="mt-2 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+      <p className="font-semibold">
+        ⚠️ Ya existe un socio con este NIF
+      </p>
+
+      <p className="mt-1">
+        NUMCENS {avisoNif.NUMCENS} · {avisoNif.Apellidos}, {avisoNif.Nombre}
+      </p>
+
+      <p>
+        Estado: {avisoNif.Estado || "-"}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => {
+          setContinuarConNifDuplicado(true);
+          setError(null);
+        }}
+        className="mt-2 border border-amber-500 bg-white px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+      >
+        Continuar igualmente
+      </button>
+    </div>
+  )}
+</Campo>
 
               <Campo label="Comisión">
                 <select
