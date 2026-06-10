@@ -108,16 +108,6 @@ if (nifLimpio && !nifLimpio.startsWith("FN") && !continuarConNifDuplicado) {
   }
 }
 
-    const nifLimpio = limpiarNif(form.NIF);
-
-if (avisoNif && !continuarConNifDuplicado && !nifLimpio.startsWith("FN")) {
-  setGuardando(false);
-  setError(
-    "Ya existe un socio con ese NIF. Revisa el aviso y pulsa 'Continuar igualmente' si quieres crearlo."
-  );
-  return;
-}
-
     const { error } = await supabase.from("SOCIOS").insert({
       id: Number(form.NUMCENS),
       NUMCENS: Number(form.NUMCENS),
