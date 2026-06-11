@@ -279,7 +279,11 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
 
 <td className="px-4 py-3">
   {movimientosDePlazo(plazo.IDPlazo).length === 0 ? (
-    <span className="text-zinc-400">Sin movimientos</span>
+    plazo.Estado === "Sin cobro" ? (
+      <span className="font-medium text-orange-700">Sin cobro</span>
+    ) : (
+      <span className="text-zinc-400">Sin movimientos</span>
+    )
   ) : (
     <div className="space-y-1">
       {movimientosDePlazo(plazo.IDPlazo).map((mov, idx) => (
