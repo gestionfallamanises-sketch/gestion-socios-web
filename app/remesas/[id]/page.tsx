@@ -53,6 +53,11 @@ export default async function RemesaDetallePage({
     .order("NUMCENS", { ascending: true });
 
   const lineasAny = (lineas as any[]) || [];
+  lineasAny.forEach((linea) => {
+    linea.Concepto = `${linea.NUMCENS || "?"}-${
+      linea.CUOTAS_SOCIOS?.Ejercicio || remesaAny?.Ejercicio || "?"
+    }-${linea.CUOTAS_PLAZOS?.NumeroPlazo || "?"}`;
+  });
 
   const lineasParaBanco = lineasAny.filter(
     (linea) =>
@@ -276,36 +281,44 @@ const remesaAgrupada = Object.values(
       className="h-9 w-80 border border-zinc-300 px-3 text-sm outline-none focus:border-red-900"
     />
 
-    <button
-      type="submit"
-      className="h-9 bg-red-900 px-4 text-sm font-medium text-white hover:bg-red-950"
-    >
-      Buscar
-    </button>
+<button
+  type="submit"
+  className="h-9 bg-red-900 px-4 text-sm font-medium text-white hover:bg-red-950"
+>
+  Buscar
+</button>
 
-    {remesaAny?.Estado !== "Cobrada" && (
-  <AgregarLineasRemesaButton
-    idRemesa={Number(id)}
-  />
+{remesaAny?.Estado !== "Cobrada" && (
+  <div className="flex gap-2">
+    <AgregarLineasRemesaButton
+      idRemesa={Number(id)}
+    />
+
+    <AgregarLineasRemesaButton
+      idRemesa={Number(id)}
+      modo="especial"
+    />
+  </div>
 )}
 
-    {buscar && (
-      <a
-        href={`/remesas/${id}`}
-        className="flex h-9 items-center bg-zinc-200 px-4 text-sm font-medium hover:bg-zinc-300"
-      >
-        Limpiar
-      </a>
-    )}
+{buscar && (
+  <a
+    href={`/remesas/${id}`}
+    className="flex h-9 items-center bg-zinc-200 px-4 text-sm font-medium hover:bg-zinc-300"
+  >
+    Limpiar
+  </a>
+)}
   </form>
 
   <div className="flex items-center gap-2">
     <PrintButton />
 
     <ExportarRemesaExcelButton
-      filas={lineasAny}
-      idRemesa={remesaAny?.IDRemesa}
-    />
+  filas={lineasAny}
+  idRemesa={remesaAny?.IDRemesa}
+  ejercicio={remesaAny?.Ejercicio}
+/>
   </div>
 </div>
               </div>

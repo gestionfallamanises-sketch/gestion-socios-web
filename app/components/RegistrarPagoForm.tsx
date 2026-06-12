@@ -6,11 +6,13 @@ import { supabase } from "@/lib/supabaseClient";
 type Props = {
   idCuotaSocio: number;
   numcens: number;
+  pendienteMaximo?: number;
 };
 
 export default function RegistrarPagoForm({
   idCuotaSocio,
   numcens,
+  pendienteMaximo,
 }: Props) {
   const [importe, setImporte] = useState("");
   const [observaciones, setObservaciones] = useState("");
@@ -22,6 +24,18 @@ export default function RegistrarPagoForm({
       return;
     }
   
+    if (
+      pendienteMaximo !== undefined &&
+      Number(importe) > Number(pendienteMaximo)
+    ) {
+      alert(
+        `El importe máximo pendiente es ${Number(
+          pendienteMaximo
+        ).toFixed(2)} €.`
+      );
+      return;
+    }
+    
     setLoading(true);
   
     const { data, error } = await (supabase as any).rpc(

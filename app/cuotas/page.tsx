@@ -46,13 +46,21 @@ export default function CuotasPage() {
       setCuotas(data);
     }
   }
+  function normalizarTexto(texto: string) {
+    return texto
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
 
   const cuotasFiltradas = cuotas.filter((cuota) => {
     const texto = `${cuota.Nombre || ""} ${cuota.Apellidos || ""} ${
-      cuota.NUMCENS || ""
-    }`.toLowerCase();
+  cuota.NUMCENS || ""
+}`;
 
-    const coincideBusqueda = texto.includes(busqueda.toLowerCase());
+const coincideBusqueda = normalizarTexto(texto).includes(
+  normalizarTexto(busqueda)
+);
 
     const coincideEstado =
       filtroEstado === "Todos" || cuota.EstadoPago === filtroEstado;

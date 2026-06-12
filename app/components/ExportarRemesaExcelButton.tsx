@@ -5,9 +5,14 @@ import * as XLSX from "xlsx";
 type Props = {
   filas: any[];
   idRemesa: number | string;
+  ejercicio?: number | string;
 };
 
-export default function ExportarRemesaExcelButton({ filas, idRemesa }: Props) {
+export default function ExportarRemesaExcelButton({
+  filas,
+  idRemesa,
+  ejercicio,
+}: Props) {
   function exportarExcel() {
     
     const esBanco = filas?.[0]?.NombreDeudor !== undefined;
@@ -26,17 +31,33 @@ const datos = esBanco
       "IMPORTE": Number(fila.Importe || 0).toFixed(2),
       "TIPO DE ADEUDO": "RCUR",
     }))
-  : filas.map((fila) => ({
-      "SOCIO CUOTA": `${fila.NUMCENS || ""} · ${fila.socioCuotaNombre || ""}`,
-      "PAGADOR": fila.NUMCENS_Pagador || "",
-      "REFERENCIA MANDATO": `${fila.NUMCENS || "?"}-${
-        fila.CUOTAS_SOCIOS?.Ejercicio || "?"
-      }-${fila.CUOTAS_PLAZOS?.NumeroPlazo || "?"}`,
-      "CUOTA / PLAZO": `Cuota ${
-        fila.CUOTAS_SOCIOS?.Ejercicio || ""
-      } · Plazo ${fila.CUOTAS_PLAZOS?.NumeroPlazo || ""}`,
-      "IMPORTE": Number(fila.Importe || 0).toFixed(2),
-    }));
+    : filas.map((fila) => {
+      const ejercicioFinal =
+        fila.CUOTAS_SOCIOS?.Ejercicio ||
+        fila.Ejercicio ||
+        fila.EjercicioRemesa ||
+        "";
+  
+      const numeroPlazo =
+        fila.CUOTAS_PLAZOS?.NumeroPlazo ||
+        fila.NumeroPlazo ||
+        "";
+  
+      const referencia =
+        fila.Concepto ||
+        `${fila.NUMCENS || "?"}-${ejercicioFinal || "?"}-${numeroPlazo || "?"}`;
+  
+      return {
+        "SOCIO CUOTA": `${fila.NUMCENS || ""} · ${fila.socioCuotaNombre || ""}`,
+        "PAGADOR": fila.NUMCENS_Pagador || "",
+        "REFERENCIA MANDATO": referencia,
+        "CUOTA / PLAZO": `Cuota ${ejercicioFinal} - Plazo ${numeroPlazo}`,
+        "IMPORTE": `${Number(fila.Importe || 0).toLocaleString("es-ES", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})} €`,
+      };
+    });
 
     const hoja = XLSX.utils.json_to_sheet(datos);
     const libro = XLSX.utils.book_new();

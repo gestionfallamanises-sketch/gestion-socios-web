@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
+import RegistrarPagoModalButton from "@/app/components/RegistrarPagoModalButton";
 
 export default async function CuotasSocioPage({
   params,
@@ -152,12 +153,15 @@ export default async function CuotasSocioPage({
                           <td className="px-4 py-3">{cuota.Metodo || "-"}</td>
 
                           <td className="px-4 py-3 text-right">
-                            <Link
-                              href={"/cuotas/" + cuota.IDCuotaSocio + "/pago"}
-                              className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
-                            >
-                              Registrar pago
-                            </Link>
+                          {Number(cuota.Pendiente || 0) > 0 ? (
+  <RegistrarPagoModalButton
+    idCuotaSocio={Number(cuota.IDCuotaSocio)}
+    numcens={Number(cuota.NUMCENS)}
+    pendienteMaximo={Number(cuota.Pendiente || 0)}
+  />
+) : (
+  <span className="text-xs text-zinc-400">Pagada</span>
+)}
                           </td>
                         </tr>
                       );

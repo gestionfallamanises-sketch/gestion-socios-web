@@ -17,6 +17,7 @@ export default function RemesasPage() {
   const [ejercicio, setEjercicio] = useState(2027);
   const [numeroPlazo, setNumeroPlazo] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [fechaVencimiento, setFechaVencimiento] = useState("");
 
   useEffect(() => {
     cargarEjercicios();
@@ -66,6 +67,11 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
   }
 
   async function generarRemesa() {
+    if (!fechaVencimiento) {
+      alert("Selecciona una fecha de vencimiento para la remesa.");
+      return;
+    }
+  
     setLoading(true);
   
     const { data, error } = await (supabase as any).rpc(
@@ -73,6 +79,7 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
       {
         p_ejercicio: ejercicio,
         p_numero_plazo: numeroPlazo,
+        p_fecha_vencimiento: fechaVencimiento,
       }
     );
   
@@ -85,6 +92,7 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
   
     alert("Remesa creada ID: " + data);
   
+    setFechaVencimiento("");
     await cargarRemesas();
     window.location.reload();
   }
@@ -125,24 +133,62 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
   }
 
   async function confirmarCobrada(idRemesa: number) {
+    const { data: noIncluidos, error: errorNoIncluidos } = await (supabase as any).rpc(
+      "buscar_no_incluidos_remesa",
+      {
+        p_id_remesa: idRemesa,
+      }
+    );
+  
+    if (errorNoIncluidos) {
+      alert(errorNoIncluidos.message);
+      return;
+    }
+  
+    if (noIncluidos && noIncluidos.length > 0) {
+      const listado = noIncluidos
+        .slice(0, 10)
+        .map(
+          (s: any) =>
+            `${s.NUMCENS} · ${s.Socio} · ${Number(
+              s.ImportePendiente || 0
+            ).toFixed(2)} €`
+        )
+        .join("\n");
+  
+      const mas =
+        noIncluidos.length > 10
+          ? `\n\n...y ${noIncluidos.length - 10} más.`
+          : "";
+  
+      const confirmarNoIncluidos = confirm(
+        `ATENCIÓN: hay ${noIncluidos.length} socio(s) de banco con 10 plazos que no están incluidos en esta remesa.\n\n` +
+          `${listado}${mas}\n\n` +
+          `Si continúas, al confirmar la remesa deberán marcarse como SIN COBRO y recalcularse los pagos restantes.\n\n` +
+          `¿Quieres continuar?`
+      );
+  
+      if (!confirmarNoIncluidos) return;
+    }
+  
     const confirmar = confirm(
       "¿Seguro que quieres marcar esta remesa como cobrada?"
     );
-
+  
     if (!confirmar) return;
-
+  
     const { error } = await (supabase as any).rpc(
       "confirmar_remesa_cobrada_real",
       {
         p_id_remesa: idRemesa,
       }
     );
-
+  
     if (error) {
       alert(error.message);
       return;
     }
-
+  
     cargarRemesas();
   }
 
@@ -185,7 +231,7 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
               </div>
             </div>
 
-            <div className="grid gap-4 p-4 md:grid-cols-3">
+            <div className="grid gap-4 p-4 md:grid-cols-4">
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
                   Ejercicio
@@ -221,6 +267,19 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
   ))}
                 </select>
               </div>
+
+              <div>
+  <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+    Fecha vencimiento
+  </label>
+
+  <input
+    type="date"
+    value={fechaVencimiento}
+    onChange={(e) => setFechaVencimiento(e.target.value)}
+    className="w-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
+  />
+</div>
 
               <div className="flex items-end">
                 <button

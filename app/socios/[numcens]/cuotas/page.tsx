@@ -2,6 +2,8 @@ import { Fragment } from "react";
 import Link from "next/link";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
+import RegistrarPagoModalButton from "@/app/components/RegistrarPagoModalButton";
+import AnularPagoManualButton from "@/app/components/AnularPagoManualButton";
 
 export default async function CuotasSocioPage({
   params,
@@ -117,6 +119,7 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
             fecha: r.FechaAplicacion,
             texto: `Remesa ${r.IDRemesa}`,
             importe: Number(r.ImporteAplicado || 0),
+            tipo: "remesa",
           });
         });
     
@@ -127,11 +130,58 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
             fecha: p.PAGOS_MANUALES?.FechaPago,
             texto: "Pago manual",
             importe: Number(p.ImporteAplicado || 0),
+            tipo: "manual",
+            idPagoManual: p.PAGOS_MANUALES?.IDPagoManual,
           });
         });
     
       return movimientos;
     }
+
+    const movimientosHistorial = plazosAny
+  .flatMap((plazo) => {
+    const movimientos = movimientosDePlazo(plazo.IDPlazo);
+
+    if (plazo.Estado === "Sin cobro") {
+      movimientos.push({
+        fecha: plazo.FechaVencimiento || plazo.FechaPago || null,
+        texto: "Sin cobro",
+        importe: 0,
+      });
+    }
+
+    return movimientos;
+  })
+  .sort((a, b) => {
+    const fechaA = a.fecha || "";
+    const fechaB = b.fecha || "";
+    return fechaA.localeCompare(fechaB);
+  });
+
+const plazosPendientes = plazosAny.filter(
+  (plazo) =>
+    Number(plazo.Pendiente || 0) > 0 &&
+    plazo.Estado !== "Pagado"
+);
+
+const totalCuotasPendientes = plazosPendientes.length;
+
+const resumenPendientes = Object.values(
+  plazosPendientes.reduce((acc: any, plazo: any) => {
+    const importe = Number(plazo.Pendiente || 0).toFixed(2);
+
+    if (!acc[importe]) {
+      acc[importe] = {
+        importe: Number(plazo.Pendiente || 0),
+        cantidad: 0,
+      };
+    }
+
+    acc[importe].cantidad += 1;
+
+    return acc;
+  }, {})
+) as any[];
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -147,15 +197,27 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
           </Link>
 
           <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
-            <div className="border-l-4 border-red-900 px-6 py-5">
-              <h1 className="text-2xl font-bold text-zinc-900">
-                Cuotas del socio
-              </h1>
+          <div className="border-l-4 border-red-900 px-6 py-5">
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h1 className="text-2xl font-bold text-zinc-900">
+        Cuotas del socio
+      </h1>
 
-              <p className="mt-2 text-sm text-zinc-600">
-                {socioAny?.Apellidos}, {socioAny?.Nombre} · NUMCENS {numcens}
-              </p>
-            </div>
+      <p className="mt-2 text-sm text-zinc-600">
+        {socioAny?.Apellidos}, {socioAny?.Nombre} · NUMCENS {numcens}
+      </p>
+    </div>
+
+    {cuotasAny.length > 0 && totalPendiente > 0 && (
+  <RegistrarPagoModalButton
+  idCuotaSocio={Number(cuotasAny[0].IDCuotaSocio)}
+  numcens={Number(numcens)}
+  pendienteMaximo={totalPendiente}
+/>
+)}
+  </div>
+</div>
           </section>
 
           <section className="mb-8 border border-zinc-200 bg-white">
@@ -185,127 +247,93 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
   } plazo${Number(formaPagoAny?.NumeroPlazos || 0) === 1 ? "" : "s"}`}
 />
             </div>
+          
           </section>
-
+          <div className="mb-8 grid gap-4 lg:grid-cols-2">
           <section className="border border-zinc-200 bg-white">
-          <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-  <div>
+  <div className="bg-zinc-100 px-4 py-3">
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-      Historial de cuotas y plazos
+      Pagos realizados
     </h2>
-
     <p className="text-xs text-zinc-500">
-      Cuotas generadas, recibos, remesas y pagos asociados
+      Remesas, pagos manuales e intentos sin cobro
     </p>
   </div>
 
-  {cuotasAny.length > 0 && (
-    <Link
-      href={"/cuotas/" + cuotasAny[0].IDCuotaSocio + "/pago"}
-      className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-    >
-      Registrar pago
-    </Link>
+  <div className="p-4">
+    {movimientosHistorial.length === 0 ? (
+      <p className="text-sm text-zinc-500">
+        Todavía no hay movimientos registrados.
+      </p>
+    ) : (
+      <div className="space-y-2">
+        {movimientosHistorial.map((mov, idx) => (
+          <div
+            key={idx}
+            className="flex items-center justify-between border-b border-zinc-100 pb-2 text-sm"
+          >
+            <span>
+              {formatearFecha(mov.fecha)} · {mov.texto}
+            </span>
+
+            <div className="flex items-center">
+  <span
+    className={
+      mov.texto === "Sin cobro"
+        ? "font-medium text-orange-700"
+        : "font-medium text-green-700"
+    }
+  >
+    {mov.texto === "Sin cobro"
+      ? "Sin cobro"
+      : `${Number(mov.importe || 0).toFixed(2)} €`}
+  </span>
+
+  {mov.tipo === "manual" && mov.idPagoManual && (
+    <AnularPagoManualButton
+      idPagoManual={Number(mov.idPagoManual)}
+    />
   )}
 </div>
-
-            {!cuotas || cuotas.length === 0 ? (
-              <div className="p-6 text-sm text-zinc-500">
-                Este socio no tiene cuotas registradas.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                  <tr>
-  <th className="px-4 py-3">Plazo</th>
-  <th className="px-4 py-3">Importe</th>
-  <th className="px-4 py-3">Estado</th>
-  <th className="px-4 py-3">Movimientos</th>
-</tr>
-                  </thead>
-
-                  <tbody>
-                    {cuotasAny.map((cuota) => {
-                      const plazosCuota = plazosDeCuota(cuota.IDCuotaSocio);
-                      const pagadoCuota = plazosCuota.reduce(
-                        (acc, p) => acc + Number(p.ImportePagado || 0),
-                        0
-                      );
-                      const pendienteCuota = plazosCuota.reduce(
-                        (acc, p) => acc + Number(p.Pendiente || 0),
-                        0
-                      );
-
-                      return (
-                        <Fragment key={`grupo-cuota-${cuota.IDCuotaSocio}`}>
-                          
-                          {plazosCuota.length === 0 ? (
-                            <tr
-                              key={`sin-plazos-${cuota.IDCuotaSocio}`}
-                              className="border-t border-zinc-200"
-                            >
-                              <td
-                                colSpan={8}
-                                className="px-4 py-3 text-sm text-zinc-500"
-                              >
-                                Esta cuota todavía no tiene plazos generados.
-                              </td>
-                            </tr>
-                          ) : (
-                            plazosCuota.map((plazo) => (
-                              <tr
-                                key={`plazo-${plazo.IDPlazo}`}
-                                className="border-t border-zinc-200 hover:bg-red-50"
-                              >
-                                <td className="px-4 py-3 pl-8">
-  Plazo {plazo.NumeroPlazo}
-
-  {plazo.FechaPago &&
-    ["Pagado", "Parcial"].includes(plazo.Estado) && (
-      <span className="ml-2 text-xs text-zinc-500">
-        {formatearFecha(plazo.FechaPago)}
-      </span>
+          </div>
+        ))}
+      </div>
     )}
-</td>
+  </div>
+</section>
 
-<td className="px-4 py-3 text-right">
-  {Number(plazo.ImportePlazo || 0).toFixed(2)} €
-</td>
+<section className="border border-zinc-200 bg-white">
+  <div className="bg-zinc-100 px-4 py-3">
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+      Cuotas pendientes recalculadas
+    </h2>
+    <p className="text-xs text-zinc-500">
+      Resumen actual según pagos realizados y cuotas pendientes
+    </p>
+  </div>
 
-<td className="px-4 py-3">
-  <EstadoBadge estado={plazo.Estado} />
-</td>
-
-<td className="px-4 py-3">
-  {movimientosDePlazo(plazo.IDPlazo).length === 0 ? (
-    plazo.Estado === "Sin cobro" ? (
-      <span className="font-medium text-orange-700">Sin cobro</span>
+  <div className="p-4">
+    {totalCuotasPendientes === 0 ? (
+      <p className="text-sm font-medium text-green-700">
+        No quedan cuotas pendientes.
+      </p>
     ) : (
-      <span className="text-zinc-400">Sin movimientos</span>
-    )
-  ) : (
-    <div className="space-y-1">
-      {movimientosDePlazo(plazo.IDPlazo).map((mov, idx) => (
-        <div key={idx} className="text-xs">
-          {formatearFecha(mov.fecha)} · {mov.texto} ·{" "}
-          {mov.importe.toFixed(2)} €
-        </div>
-      ))}
-    </div>
-  )}
-</td>
-                              </tr>
-                            ))
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+      <div className="space-y-2 text-sm">
+        {resumenPendientes.map((grupo) => (
+          <p key={grupo.importe}>
+            {grupo.cantidad} cuota
+            {grupo.cantidad === 1 ? "" : "s"} pendiente
+            {grupo.cantidad === 1 ? "" : "s"} de{" "}
+            <span className="font-medium">
+              {Number(grupo.importe || 0).toFixed(2)} €
+            </span>
+          </p>
+        ))}
+      </div>
+    )}
+  </div>
+</section>
+</div>
 
         </div>
       </main>

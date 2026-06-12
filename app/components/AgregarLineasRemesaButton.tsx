@@ -7,8 +7,10 @@ import ConfirmModal from "@/app/components/ConfirmModal";
 
 export default function AgregarLineasRemesaButton({
   idRemesa,
+  modo = "normal",
 }: {
   idRemesa: number;
+  modo?: "normal" | "especial";
 }) {
   const router = useRouter();
 
@@ -23,11 +25,13 @@ export default function AgregarLineasRemesaButton({
     setSeleccionadas([]);
 
     const { data, error } = await (supabase as any).rpc(
-        "buscar_lineas_faltantes_remesa",
-        {
-          p_id_remesa: idRemesa,
-        }
-      );
+      modo === "especial"
+        ? "buscar_lineas_especiales_remesa"
+        : "buscar_lineas_faltantes_remesa",
+      {
+        p_id_remesa: idRemesa,
+      }
+    );
 
     if (error) {
       alert(error.message);
@@ -114,7 +118,11 @@ export default function AgregarLineasRemesaButton({
         onClick={buscarLineas}
         className="h-9 bg-red-900 px-4 text-sm font-medium text-white hover:bg-red-950"
       >
-        {cargando ? "Buscando..." : "Líneas pendientes"}
+        {cargando
+  ? "Buscando..."
+  : modo === "especial"
+  ? "Plazos especiales"
+  : "10 plazos"}
       </button>
 
       {lineas.length > 0 && (
@@ -195,7 +203,10 @@ export default function AgregarLineasRemesaButton({
 
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-zinc-900">
-                    {linea.NUMCENS} · {linea.Socio} · Plazo {linea.NumeroPlazo}
+                    {linea.NUMCENS} · {linea.Socio}
+{modo === "especial"
+  ? ` · ${linea.NumeroPlazos || "-"} plazos`
+  : ` · Plazo ${linea.NumeroPlazo}`}
                     </p>
 
                     <p className="text-xs text-zinc-500">
