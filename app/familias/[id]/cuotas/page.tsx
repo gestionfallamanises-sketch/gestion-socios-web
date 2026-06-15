@@ -90,6 +90,91 @@ export default async function CuotasFamiliaPage({
   const familiaAny = familia as any;
   const pagosAny = (pagos as any[]) || [];
 
+  function formatearFecha(fecha: string | null) {
+    if (!fecha) return "-";
+  
+    const [year, month, day] = fecha.split("-");
+    return `${day}-${month}-${year}`;
+  }
+  
+  function movimientosDePlazo(idPlazo: number) {
+    const movimientos: any[] = [];
+  
+    pagosAny
+      .filter((p) => Number(p.IDPlazo) === Number(idPlazo))
+      .forEach((p) => {
+        movimientos.push({
+          fecha: p.PAGOS_MANUALES?.FechaPago,
+          texto: "Pago manual familiar",
+          importe: Number(p.ImporteAplicado || 0),
+        });
+      });
+  
+    return movimientos;
+  }
+  
+  const movimientosFamilia = plazosAny
+    .flatMap((plazo) => {
+      const movimientos = movimientosDePlazo(plazo.IDPlazo);
+  
+      if (plazo.Estado === "Sin cobro") {
+        movimientos.push({
+          fecha: plazo.FechaVencimiento || plazo.FechaPago || null,
+          texto: `${socioDeCuota(plazo.IDCuotaSocio)} · Sin cobro`,
+          importe: 0,
+        });
+      }
+  
+      return movimientos.map((mov) => ({
+        ...mov,
+        socio: socioDeCuota(plazo.IDCuotaSocio),
+      }));
+    })
+    .sort((a, b) => {
+      const fechaA = a.fecha || "";
+      const fechaB = b.fecha || "";
+      return fechaA.localeCompare(fechaB);
+    });
+  
+  const pendientesPorSocio = cuotasAny
+    .map((cuota) => {
+      const plazosCuota = plazosAny.filter(
+        (p) => Number(p.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
+      );
+  
+      const pendientes = plazosCuota.filter(
+        (p) =>
+          Number(p.Pendiente || 0) > 0 &&
+          p.Estado !== "Pagado"
+      );
+  
+      const grupos = Object.values(
+        pendientes.reduce((acc: any, plazo: any) => {
+          const importe = Number(plazo.Pendiente || 0).toFixed(2);
+  
+          if (!acc[importe]) {
+            acc[importe] = {
+              importe: Number(plazo.Pendiente || 0),
+              cantidad: 0,
+            };
+          }
+  
+          acc[importe].cantidad += 1;
+          return acc;
+        }, {})
+      ) as any[];
+  
+      return {
+        socio: `${cuota.Apellidos}, ${cuota.Nombre}`,
+        grupos,
+        totalPendiente: pendientes.reduce(
+          (acc, p) => acc + Number(p.Pendiente || 0),
+          0
+        ),
+      };
+    })
+    .filter((item) => item.totalPendiente > 0);
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -135,133 +220,94 @@ export default async function CuotasFamiliaPage({
             </div>
           </section>
 
-          <section className="mb-8 border border-zinc-200 bg-white">
-            <div className="bg-zinc-100 px-4 py-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                Plazos familiares
-              </h2>
+          <div className="mb-8 grid gap-4 lg:grid-cols-2">
+  <section className="border border-zinc-200 bg-white">
+    <div className="bg-zinc-100 px-4 py-3">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+        Pagos realizados
+      </h2>
+      <p className="text-xs text-zinc-500">
+        Pagos manuales familiares e intentos sin cobro
+      </p>
+    </div>
+
+    <div className="p-4">
+      {movimientosFamilia.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          Todavía no hay movimientos registrados.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {movimientosFamilia.map((mov, idx) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between border-b border-zinc-100 pb-2 text-sm"
+            >
+              <span>
+                {formatearFecha(mov.fecha)} · {mov.socio} · {mov.texto}
+              </span>
+
+              <span
+                className={
+                  mov.texto.includes("Sin cobro")
+                    ? "font-medium text-orange-700"
+                    : "font-medium text-green-700"
+                }
+              >
+                {mov.texto.includes("Sin cobro")
+                  ? "Sin cobro"
+                  : `${Number(mov.importe || 0).toFixed(2)} €`}
+              </span>
             </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </section>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                  <tr>
-                    <th className="px-4 py-3">Socio</th>
-                    <th className="px-4 py-3">Plazo</th>
-                    <th className="px-4 py-3 text-right">Importe</th>
-                    <th className="px-4 py-3 text-right">Pagado</th>
-                    <th className="px-4 py-3 text-right">Pendiente</th>
-                    <th className="px-4 py-3">Estado</th>
-                    <th className="px-4 py-3">Método</th>
-                  </tr>
-                </thead>
+  <section className="border border-zinc-200 bg-white">
+    <div className="bg-zinc-100 px-4 py-3">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+        Cuotas pendientes recalculadas
+      </h2>
+      <p className="text-xs text-zinc-500">
+        Resumen pendiente por miembro de la familia
+      </p>
+    </div>
 
-                <tbody>
-                  {!plazos || plazos.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
-                        No hay plazos generados.
-                      </td>
-                    </tr>
-                  ) : (
-                    plazosAny.map((plazo) => (
-                      <tr key={plazo.IDPlazo} className="border-t border-zinc-200 hover:bg-red-50">
-                        <td className="px-4 py-3 font-medium">
-                          {socioDeCuota(plazo.IDCuotaSocio)}
-                        </td>
+    <div className="p-4">
+      {pendientesPorSocio.length === 0 ? (
+        <p className="text-sm font-medium text-green-700">
+          No quedan cuotas pendientes.
+        </p>
+      ) : (
+        <div className="space-y-4 text-sm">
+          {pendientesPorSocio.map((item) => (
+            <div
+              key={item.socio}
+              className="border-b border-zinc-100 pb-3 last:border-b-0"
+            >
+              <p className="mb-1 font-medium text-zinc-900">
+                {item.socio}
+              </p>
 
-                        <td className="px-4 py-3">
-                          Plazo {plazo.NumeroPlazo}
-                        </td>
-
-                        <td className="px-4 py-3 text-right">
-                          {Number(plazo.ImportePlazo || 0).toFixed(2)} €
-                        </td>
-
-                        <td className="px-4 py-3 text-right text-green-700">
-                          {Number(plazo.ImportePagado || 0).toFixed(2)} €
-                        </td>
-
-                        <td className="px-4 py-3 text-right text-red-700">
-                          {Number(plazo.Pendiente || 0).toFixed(2)} €
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <EstadoBadge estado={plazo.Estado} />
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {plazo.Metodo || "-"}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+              {item.grupos.map((grupo: any) => (
+                <p key={grupo.importe} className="text-zinc-700">
+                  {grupo.cantidad} cuota
+                  {grupo.cantidad === 1 ? "" : "s"} pendiente
+                  {grupo.cantidad === 1 ? "" : "s"} de{" "}
+                  <span className="font-medium">
+                    {Number(grupo.importe || 0).toFixed(2)} €
+                  </span>
+                </p>
+              ))}
             </div>
-          </section>
-
-          <section className="border border-zinc-200 bg-white">
-            <div className="bg-zinc-100 px-4 py-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                Historial de pagos familiares
-              </h2>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                  <tr>
-                    <th className="px-4 py-3">Fecha</th>
-                    <th className="px-4 py-3">Plazo</th>
-                    <th className="px-4 py-3 text-right">Importe</th>
-                    <th className="px-4 py-3">Método</th>
-                    <th className="px-4 py-3">Observaciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {!pagos || pagos.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
-                        No hay pagos registrados.
-                      </td>
-                    </tr>
-                  ) : (
-                    pagosAny.map((pago) => {
-                      const plazo = plazosAny.find(
-                        (p) => Number(p.IDPlazo) === Number(pago.IDPlazo)
-                      );
-
-                      return (
-                        <tr key={pago.ID} className="border-t border-zinc-200 hover:bg-red-50">
-                          <td className="px-4 py-3">
-                            {pago.PAGOS_MANUALES?.FechaPago || "-"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {plazo ? `${socioDeCuota(plazo.IDCuotaSocio)} · Plazo ${plazo.NumeroPlazo}` : "-"}
-                          </td>
-
-                          <td className="px-4 py-3 text-right">
-                            {Number(pago.ImporteAplicado || 0).toFixed(2)} €
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {pago.PAGOS_MANUALES?.Metodo || "-"}
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {pago.PAGOS_MANUALES?.Observaciones || "-"}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          ))}
+        </div>
+      )}
+    </div>
+  </section>
+</div>
         </div>
       </main>
     </div>

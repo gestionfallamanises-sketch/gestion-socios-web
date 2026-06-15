@@ -71,6 +71,28 @@ const [busquedaSocioCargo, setBusquedaSocioCargo] = useState("");
     cargarTarifas();
   }
 
+  async function recalcularCuotasEjercicio() {
+    const confirmar = confirm(
+      `¿Recalcular todas las cuotas del ejercicio ${ejercicioSeleccionado}?`
+    );
+  
+    if (!confirmar) return;
+  
+    const { error } = await (supabase as any).rpc(
+      "generar_actualizar_cuotas_completo",
+      {
+        p_ejercicio: ejercicioSeleccionado,
+      }
+    );
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    alert("Cuotas recalculadas correctamente");
+  }
+  
   async function marcarActivo(ejercicio: number) {
     await (supabase as any)
   .from("EJERCICIOS")
@@ -276,24 +298,32 @@ const { error } = await (supabase as any)
 
               <div className="flex flex-wrap items-center gap-3">
 
-                <select
-                  value={ejercicioSeleccionado}
-                  onChange={(e) =>
-                    setEjercicioSeleccionado(
-                      Number(e.target.value)
-                    )
-                  }
-                  className="border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
-                >
-                  {ejercicios.map((ejercicio) => (
-                    <option
-                      key={ejercicio.Ejercicio}
-                      value={ejercicio.Ejercicio}
-                    >
-                      Ejercicio {ejercicio.Ejercicio}
-                    </option>
-                  ))}
-                </select>
+  <select
+    value={ejercicioSeleccionado}
+    onChange={(e) =>
+      setEjercicioSeleccionado(
+        Number(e.target.value)
+      )
+    }
+    className="border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
+  >
+    {ejercicios.map((ejercicio) => (
+      <option
+        key={ejercicio.Ejercicio}
+        value={ejercicio.Ejercicio}
+      >
+        Ejercicio {ejercicio.Ejercicio}
+      </option>
+    ))}
+  </select>
+
+  <button
+    onClick={recalcularCuotasEjercicio}
+    title="Recalcular tarifas socios"
+    className="flex h-10 w-10 items-center justify-center border border-zinc-300 bg-white text-zinc-600 hover:border-red-900 hover:text-red-900"
+  >
+    ↻
+  </button>
 
                 <button
                   onClick={() =>

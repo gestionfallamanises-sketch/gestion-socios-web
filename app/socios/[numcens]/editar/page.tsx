@@ -32,6 +32,7 @@ const [metodo, setMetodo] = useState("Efectivo");
 const [numeroPlazos, setNumeroPlazos] = useState(1);
 const [observacionesPago, setObservacionesPago] = useState("");
 const [pagador, setPagador] = useState("");
+const [pagadorOriginal, setPagadorOriginal] = useState<number | null>(null);
 const [busquedaPagador, setBusquedaPagador] = useState("");
 const [socios, setSocios] = useState<any[]>([]);
 const [pagadoresExtra, setPagadoresExtra] = useState<any[]>([
@@ -48,7 +49,12 @@ const [pagadoresExtra, setPagadoresExtra] = useState<any[]>([
     Porcentaje: 50,
   },
 ]);
-
+const [modalSociosPagados, setModalSociosPagados] = useState(false);
+const [sociosPagados, setSociosPagados] = useState<any[]>([]);
+const [sociosPagadosSeleccionados, setSociosPagadosSeleccionados] = useState<number[]>([]);
+const [aplicarASociosPagados, setAplicarASociosPagados] = useState(false);
+const [continuarGuardado, setContinuarGuardado] =
+  useState(false);
 const [modalCambioCuota, setModalCambioCuota] = useState<{
   campo: "EsBanda" | "ConLoteria";
   valor: boolean;
@@ -142,6 +148,8 @@ setSocios(listaSocios || []);
         setMetodo(formaPago.Metodo || "Efectivo");
         setNumeroPlazos(formaPago.NumeroPlazos || 1);
         setObservacionesPago(formaPago.Observaciones || "");
+        setPagadorOriginal(Number(formaPago.NUMCENS_Pagador || numcens));
+
         setPagador(
           formaPago.NUMCENS_Pagador &&
           Number(formaPago.NUMCENS_Pagador) !== Number(numcens)
@@ -218,14 +226,63 @@ setSocios(listaSocios || []);
     }
   }
 
+  async function buscarSociosPagadosPorEsteSocio() {
+    const { data, error } = await (supabase as any)
+      .from("FORMAS_PAGO_SOCIOS")
+      .select(`
+        NUMCENS,
+        SOCIOS:NUMCENS (
+          NUMCENS,
+          Nombre,
+          Apellidos
+        )
+      `)
+      .eq("Activo", true)
+      .eq("NUMCENS_Pagador", Number(numcens))
+      .neq("NUMCENS", Number(numcens));
+  
+    if (error) {
+      setError(error.message);
+      return [];
+    }
+  
+    const relacionados = (data || []).map((item: any) => ({
+      NUMCENS: item.SOCIOS?.NUMCENS || item.NUMCENS,
+      Nombre: item.SOCIOS?.Nombre || "",
+      Apellidos: item.SOCIOS?.Apellidos || "",
+    }));
+    
+    return [
+      {
+        NUMCENS: Number(numcens),
+        Nombre: socio?.Nombre || "",
+        Apellidos: socio?.Apellidos || "",
+        actual: true,
+      },
+      ...relacionados,
+    ];
+  }
+
   async function guardarCambios(e: React.FormEvent) {
     e.preventDefault();
 
-    if (isBaja) {
-      setError("Este socio está dado de baja. No se pueden editar sus datos.");
-      return;
+    if (!continuarGuardado) {
+      const sociosRelacionados =
+        await buscarSociosPagadosPorEsteSocio();
+    
+      if (sociosRelacionados.length > 0) {
+        setSociosPagados(sociosRelacionados);
+    
+        setSociosPagadosSeleccionados(
+          sociosRelacionados.map(
+            (s: any) => Number(s.NUMCENS)
+          )
+        );
+    
+        setModalSociosPagados(true);
+        return;
+      }
     }
-
     setGuardando(true);
     setError(null);
 
@@ -333,10 +390,10 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
     .update({ Activo: false })
     .eq("NUMCENS", Number(numcens));
   
-    const metodoFinal =
-  iban.trim() !== ""
-    ? "Banco"
-    : metodo;
+    const metodoFinal = metodo;
+    const pagadorFinal = pagador
+    ? Number(pagador)
+    : pagadorOriginal || Number(numcens);
 
   const { error: errorFormaPago } = await supabase
     .from("FORMAS_PAGO_SOCIOS")
@@ -346,25 +403,24 @@ PapeletasNino: Number(socio.PapeletasNino || 0),
       NumeroPlazos: numeroPlazos,
       Fraccionado: numeroPlazos > 1,
       Activo: true,
-      NUMCENS_Pagador: Number(
-        pagador ||
-          socio?.titularNumcens ||
-          numcens
-      ),
+      NUMCENS_Pagador: pagadorFinal,
       Observaciones: observacionesPago || null,
     });
   
     if (errorFormaPago) {
       setGuardando(false);
       setError(errorFormaPago.message);
+      setContinuarGuardado(false);
+setAplicarASociosPagados(false);
       return;
     }
-    
+
     await supabase
   .from("PAGADORES_EXTRA_CUOTA")
   .update({ Activo: false })
   .eq("NUMCENS", Number(numcens))
   .eq("Activo", true);
+  
 
   const pagadoresExtraValidos = pagadoresExtra.filter(
     (p) =>
@@ -405,6 +461,25 @@ if (pagadoresExtraValidos.length > 0) {
   }
 }
 
+if (aplicarASociosPagados && sociosPagadosSeleccionados.length > 0) {
+  const { error: errorAplicarSocios } = await (supabase as any).rpc(
+    "aplicar_forma_pago_a_socios_seleccionados",
+    {
+      p_numcens_pagador: Number(numcens),
+      p_socios: sociosPagadosSeleccionados,
+      p_metodo: metodoFinal,
+      p_numero_plazos: numeroPlazos,
+      p_observaciones: observacionesPago || null,
+    }
+  );
+
+  if (errorAplicarSocios) {
+    setGuardando(false);
+    setError(errorAplicarSocios.message);
+    return;
+  }
+}
+
     const hoy = new Date();
 
 const ejercicioActual =
@@ -424,9 +499,29 @@ const { error: errorRecalculo } = await (supabase as any).rpc(
       setError(errorRecalculo.message);
       return;
     }
+
+    const { data: cuotaActual } = await (supabase as any)
+    .from("CUOTAS_SOCIOS")
+    .select("IDCuotaSocio")
+    .eq("NUMCENS", Number(numcens))
+    .eq("Ejercicio", ejercicioActual)
+    .maybeSingle();
+  
+  if (cuotaActual?.IDCuotaSocio) {
+    await (supabase as any).rpc("rehacer_plazos_cuota", {
+      p_id_cuota_socio: cuotaActual.IDCuotaSocio,
+    });
+  
+    await (supabase as any).rpc("recalcular_pendientes_cuota", {
+      p_id_cuota_socio: cuotaActual.IDCuotaSocio,
+    });
+  }
     
     setHayCambios(false);
 setGuardando(false);
+
+setContinuarGuardado(false);
+setAplicarASociosPagados(false);
 
 router.push(`/socios/${numcens}`);
   }
@@ -739,13 +834,7 @@ router.push(`/socios/${numcens}`);
   <CampoTexto
   label="IBAN"
   value={iban}
-  onChange={(valor) => {
-    setIban(valor);
-
-    if (valor.trim() !== "") {
-      setMetodo("Banco");
-    }
-  }}
+  onChange={setIban}
 />
 
   <div>
@@ -970,8 +1059,98 @@ router.push(`/socios/${numcens}`);
     );
 
     setModalCambioCuota(null);
+
   }}
 />
+
+{modalSociosPagados && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="w-full max-w-lg border border-zinc-200 bg-white shadow-xl">
+          <div className="border-l-4 border-red-900 px-6 py-5">
+            <h2 className="text-lg font-bold text-red-900">
+              Socios asociados al pagador
+            </h2>
+    
+            <p className="mt-2 text-sm leading-6 text-zinc-700">
+              Este socio es el pagador de otros socios. Selecciona a cuáles deseas
+              aplicar también esta configuración de pago.
+            </p>
+    
+            <p className="mt-2 text-xs text-zinc-500">
+              Los datos bancarios no se modificarán.
+            </p>
+          </div>
+    
+          <div className="max-h-72 overflow-y-auto px-6 py-4">
+            <div className="space-y-2">
+              {sociosPagados.map((socioPagado) => {
+                const seleccionado = sociosPagadosSeleccionados.includes(
+                  Number(socioPagado.NUMCENS)
+                );
+    
+                return (
+                  <label
+                    key={socioPagado.NUMCENS}
+                    className="flex cursor-pointer items-center gap-3 border border-zinc-200 px-3 py-2 text-sm hover:bg-red-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={seleccionado}
+                      onChange={() => {
+                        setSociosPagadosSeleccionados((actual) =>
+                          seleccionado
+                            ? actual.filter(
+                                (n) => n !== Number(socioPagado.NUMCENS)
+                              )
+                            : [...actual, Number(socioPagado.NUMCENS)]
+                        );
+                      }}
+                    />
+    
+                    <span>
+                      {socioPagado.NUMCENS} · {socioPagado.Apellidos},{" "}
+                      {socioPagado.Nombre}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+    
+          <div className="flex justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-6 py-4">
+          <button
+  type="button"
+  onClick={() => {
+    setModalSociosPagados(false);
+    setContinuarGuardado(false);
+    setAplicarASociosPagados(false);
+  }}
+  className="bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-300"
+>
+  Cancelar
+</button>
+    
+            <button
+              type="button"
+              onClick={() => {
+                setAplicarASociosPagados(true);
+                setModalSociosPagados(false);
+                setContinuarGuardado(true);
+              
+                setTimeout(() => {
+                  document
+                    .getElementById("form-editar-socio")
+                    ?.requestSubmit();
+                }, 0);
+              }}
+              className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+            >
+              Aplicar a seleccionados
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
       </main>
     </div>
   );

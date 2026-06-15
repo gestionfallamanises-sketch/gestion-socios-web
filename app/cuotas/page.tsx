@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
 import Sidebar from "@/app/components/Sidebar";
 import GenerarCuotasButton from "@/app/components/GenerarCuotasButton";
+import RegistrarPagoGeneralButton from "@/app/components/RegistrarPagoGeneralButton";
 
 export default function CuotasPage() {
   const [cuotas, setCuotas] = useState<any[]>([]);
@@ -105,31 +106,33 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <select
-                    value={ejercicioSeleccionado}
-                    onChange={(e) =>
-                      setEjercicioSeleccionado(Number(e.target.value))
-                    }
-                    className="border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
-                  >
-                    {ejercicios.length === 0 ? (
-                      <option value={ejercicioSeleccionado}>
-                        Ejercicio {ejercicioSeleccionado}
-                      </option>
-                    ) : (
-                      ejercicios.map((ejercicio) => (
-                        <option
-                          key={ejercicio.Ejercicio}
-                          value={ejercicio.Ejercicio}
-                        >
-                          Ejercicio {ejercicio.Ejercicio}
-                        </option>
-                      ))
-                    )}
-                  </select>
+  <select
+    value={ejercicioSeleccionado}
+    onChange={(e) =>
+      setEjercicioSeleccionado(Number(e.target.value))
+    }
+    className="border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
+  >
+    {ejercicios.length === 0 ? (
+      <option value={ejercicioSeleccionado}>
+        Ejercicio {ejercicioSeleccionado}
+      </option>
+    ) : (
+      ejercicios.map((ejercicio) => (
+        <option
+          key={ejercicio.Ejercicio}
+          value={ejercicio.Ejercicio}
+        >
+          Ejercicio {ejercicio.Ejercicio}
+        </option>
+      ))
+    )}
+  </select>
 
-                  <GenerarCuotasButton ejercicio={ejercicioSeleccionado} />
-                </div>
+  <RegistrarPagoGeneralButton />
+
+  <GenerarCuotasButton ejercicio={ejercicioSeleccionado} />
+</div>
               </div>
             </div>
           </section>
@@ -214,7 +217,6 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                     <th className="px-4 py-3 text-right">Pendiente</th>
                     <th className="px-4 py-3">Forma pago</th>
                     <th className="px-4 py-3">Estado</th>
-                    <th className="px-4 py-3 text-right">Acción</th>
                   </tr>
                 </thead>
 
@@ -289,15 +291,6 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                               </span>
                             )}
                           </div>
-                        </td>
-
-                        <td className="px-4 py-3 text-right">
-                          <a
-                            href={`/cuotas/${cuota.IDCuotaSocio}/pago`}
-                            className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
-                          >
-                            Registrar pago
-                          </a>
                         </td>
                       </tr>
                     );
