@@ -73,24 +73,18 @@ export default async function SocioPage({
     .limit(1)
     .maybeSingle();
 
-    const { data: plazosCuotaActual } = (cuotaActual as any)?.IDCuotaSocio
-  ? await supabase
-      .from("CUOTAS_PLAZOS")
+    const { data: resumenCuotaActual } = (cuotaActual as any)?.IDCuotaSocio
+  ? await (supabase as any)
+      .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
       .eq("IDCuotaSocio", (cuotaActual as any)?.IDCuotaSocio)
-  : { data: [] };
+      .maybeSingle()
+  : { data: null };
 
-  const totalPagadoReal =
-  (plazosCuotaActual as any[])?.reduce(
-    (total, plazo) => total + Number(plazo.ImportePagado || 0),
-    0
-  ) || 0;
+const resumenCuotaActualAny = resumenCuotaActual as any;
 
-const totalPendienteReal =
-  (plazosCuotaActual as any[])?.reduce(
-    (total, plazo) => total + Number(plazo.Pendiente || 0),
-    0
-  ) || 0;
+const totalPagadoReal = Number(resumenCuotaActualAny?.TotalPagado || 0);
+const totalPendienteReal = Number(resumenCuotaActualAny?.Pendiente || 0);
 
   const { data: datosBanco } = await supabase
     .from("DATOS_BANCARIOS")
