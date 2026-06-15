@@ -40,6 +40,16 @@ export default async function CuotasSocioPage({
   
 const idsCuotas = cuotasAny.map((c) => c.IDCuotaSocio);
 
+const { data: resumenCuotas } =
+  idsCuotas.length > 0
+    ? await (supabase as any)
+        .from("VISTA_CUOTAS_RESUMEN")
+        .select("*")
+        .in("IDCuotaSocio", idsCuotas)
+    : { data: [] };
+
+const resumenCuotasAny = (resumenCuotas as any[]) || [];
+
   const { data: plazos } =
     idsCuotas.length > 0
     ? await (supabase as any)
@@ -84,6 +94,15 @@ const { data: pagosManuales } =
 
 const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
 
+const { data: gastosDevolucion } = await (supabase as any)
+  .from("PAGOS_MANUALES")
+  .select("*")
+  .eq("NUMCENS", Number(numcens))
+  .ilike("Observaciones", "%GASTOS DEVOLUCION%")
+  .order("FechaPago", { ascending: true });
+
+const gastosDevolucionAny = (gastosDevolucion as any[]) || [];
+
   function plazosDeCuota(idCuotaSocio: number) {
     return (
       plazosAny.filter(
@@ -93,14 +112,22 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
   }
 
   const totalImporte =
-    cuotasAny.reduce((acc, cuota) => acc + Number(cuota.Importe || 0), 0) || 0;
+  resumenCuotasAny.reduce(
+    (acc, cuota) => acc + Number(cuota.ImporteCuota || 0),
+    0
+  ) || 0;
 
-  const totalPagado =
-    plazosAny.reduce((acc, plazo) => acc + Number(plazo.ImportePagado || 0), 0) ||
-    0;
+const totalPagado =
+  resumenCuotasAny.reduce(
+    (acc, cuota) => acc + Number(cuota.TotalPagado || 0),
+    0
+  ) || 0;
 
-  const totalPendiente =
-    plazosAny.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
+const totalPendiente =
+  resumenCuotasAny.reduce(
+    (acc, cuota) => acc + Number(cuota.Pendiente || 0),
+    0
+  ) || 0;
 
     function formatearFecha(fecha: string | null) {
       if (!fecha) return "-";
@@ -138,8 +165,8 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
       return movimientos;
     }
 
-    const movimientosHistorial = plazosAny
-  .flatMap((plazo) => {
+    const movimientosHistorial = [
+      ...plazosAny.flatMap((plazo) => {
     const movimientos = movimientosDePlazo(plazo.IDPlazo);
 
     if (plazo.Estado === "Sin cobro") {
@@ -151,7 +178,15 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
     }
 
     return movimientos;
-  })
+  }),
+
+  ...gastosDevolucionAny.map((gasto) => ({
+    fecha: gasto.FechaPago,
+    texto: "Gastos devolución",
+    importe: -Number(gasto.Importe || 0),
+    tipo: "gasto-devolucion",
+  })),
+]
   .sort((a, b) => {
     const fechaA = a.fecha || "";
     const fechaB = b.fecha || "";
@@ -280,13 +315,15 @@ const resumenPendientes = Object.values(
   <span
     className={
       mov.texto === "Sin cobro"
-        ? "font-medium text-orange-700"
-        : "font-medium text-green-700"
+  ? "font-medium text-orange-700"
+  : mov.tipo === "gasto-devolucion"
+  ? "font-medium text-red-700"
+  : "font-medium text-green-700"
     }
   >
     {mov.texto === "Sin cobro"
-      ? "Sin cobro"
-      : `${Number(mov.importe || 0).toFixed(2)} €`}
+  ? "Sin cobro"
+  : `${Number(mov.importe || 0).toFixed(2)} €`}
   </span>
 
   {mov.tipo === "manual" && mov.idPagoManual && (

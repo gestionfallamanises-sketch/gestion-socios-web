@@ -18,6 +18,12 @@ export default async function PagoPage({ params }: Props) {
     .eq("IDCuotaSocio", id)
     .single();
 
+    const { data: resumenCuota } = await (supabase as any)
+  .from("VISTA_CUOTAS_RESUMEN")
+  .select("*")
+  .eq("IDCuotaSocio", id)
+  .single();
+
     const { data: plazos } = await supabase
     .from("CUOTAS_PLAZOS")
     .select("*")
@@ -61,11 +67,10 @@ const { data: pagosAplicados } =
 
   const plazosAny = (plazos as any[]) || [];
 
-  const totalPagadoPlazos =
-    plazosAny.reduce((acc, plazo) => acc + Number(plazo.ImportePagado || 0), 0)
+  const resumenAny = resumenCuota as any;
 
-  const totalPendientePlazos =
-    plazosAny.reduce((acc, plazo) => acc + Number(plazo.Pendiente || 0), 0) || 0;
+const totalPagadoReal = Number(resumenAny?.TotalPagado || 0);
+const totalPendienteReal = Number(resumenAny?.Pendiente || 0);
     
     const cuotaAny = cuota as any;
 
@@ -104,17 +109,17 @@ const { data: pagosAplicados } =
                 value={`${Number(cuotaAny.Importe || 0).toFixed(2)} €`}
               />
 
-              <Resumen
-                label="Pagado"
-                value={`${totalPagadoPlazos.toFixed(2)} €`}
-                color="green"
-              />
+<Resumen
+  label="Pagado"
+  value={`${totalPagadoReal.toFixed(2)} €`}
+  color="green"
+/>
 
-              <Resumen
-                label="Pendiente"
-                value={`${totalPendientePlazos.toFixed(2)} €`}
-                color="red"
-              />
+<Resumen
+  label="Pendiente"
+  value={`${totalPendienteReal.toFixed(2)} €`}
+  color="red"
+/>
 
               <Resumen label="Método" value={cuotaAny.Metodo || "-"} />
             </div>
