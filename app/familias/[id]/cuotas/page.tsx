@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
-import RegistrarPagoFamiliaForm from "@/app/components/RegistrarPagoFamiliaForm";
 
 export default async function CuotasFamiliaPage({
   params,
@@ -68,14 +67,35 @@ export default async function CuotasFamiliaPage({
           .order("ID", { ascending: false })
       : { data: [] };
 
-      const totalCuotas =
-      cuotasAny.reduce((t, c) => t + Number(c.Importe || 0), 0) || 0;
-    
-    const totalPagado =
-      plazosAny.reduce((t, p) => t + Number(p.ImportePagado || 0), 0) || 0;
-    
-    const totalPendiente =
-      plazosAny.reduce((t, p) => t + Number(p.Pendiente || 0), 0) || 0;
+      const idsCuotasFamilia = cuotasAny.map((c) => c.IDCuotaSocio);
+
+const { data: resumenCuotasFamilia } =
+  idsCuotasFamilia.length > 0
+    ? await (supabase as any)
+        .from("VISTA_CUOTAS_RESUMEN")
+        .select("*")
+        .in("IDCuotaSocio", idsCuotasFamilia)
+    : { data: [] };
+
+const resumenCuotasFamiliaAny = (resumenCuotasFamilia as any[]) || [];
+
+const totalCuotas =
+  resumenCuotasFamiliaAny.reduce(
+    (t, c) => t + Number(c.ImporteCuota || 0),
+    0
+  ) || 0;
+
+const totalPagado =
+  resumenCuotasFamiliaAny.reduce(
+    (t, c) => t + Number(c.TotalPagado || 0),
+    0
+  ) || 0;
+
+const totalPendiente =
+  resumenCuotasFamiliaAny.reduce(
+    (t, c) => t + Number(c.Pendiente || 0),
+    0
+  ) || 0;
 
       function socioDeCuota(idCuotaSocio: number) {
         const cuota = cuotasAny.find(
@@ -205,18 +225,6 @@ export default async function CuotasFamiliaPage({
               <Bloque label="Total cuotas" value={`${totalCuotas.toFixed(2)} €`} />
               <Bloque label="Total pagado" value={`${totalPagado.toFixed(2)} €`} />
               <Bloque label="Total pendiente" value={`${totalPendiente.toFixed(2)} €`} />
-            </div>
-          </section>
-
-          <section className="mb-8 border border-zinc-200 bg-white">
-            <div className="bg-zinc-100 px-4 py-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                Registrar pago familiar
-              </h2>
-            </div>
-
-            <div className="p-4">
-              <RegistrarPagoFamiliaForm idFamilia={Number(id)} />
             </div>
           </section>
 

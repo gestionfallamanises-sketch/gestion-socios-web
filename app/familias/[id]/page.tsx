@@ -3,7 +3,6 @@ import { supabase } from "@/lib/supabaseClient";
 import AddMemberForm from "../../components/AddMemberForm";
 import MakeTitularButton from "../../components/MakeTitularButton";
 import RemoveMemberButton from "../../components/RemoveMemberButton";
-import RegistrarPagoFamiliaForm from "../../components/RegistrarPagoFamiliaForm";
 import GenerarCuotasButton from "@/app/components/GenerarCuotasButton";
 
 export default async function FamiliaPage({
@@ -106,17 +105,27 @@ const { data: plazosFamilia } =
     0
   );
 
-  const totalPagado =
-  plazosFamilia?.reduce(
-    (total, plazo) =>
-      total + Number(plazo.ImportePagado || 0),
+  const idsCuotasFamilia = cuotasActuales.map((c) => c.IDCuotaSocio);
+
+const { data: resumenCuotasFamilia } =
+  idsCuotasFamilia.length > 0
+    ? await (supabase as any)
+        .from("VISTA_CUOTAS_RESUMEN")
+        .select("*")
+        .in("IDCuotaSocio", idsCuotasFamilia)
+    : { data: [] };
+
+const resumenCuotasFamiliaAny = (resumenCuotasFamilia as any[]) || [];
+
+const totalPagado =
+  resumenCuotasFamiliaAny.reduce(
+    (total, cuota) => total + Number(cuota.TotalPagado || 0),
     0
   ) || 0;
 
 const totalPendiente =
-  plazosFamilia?.reduce(
-    (total, plazo) =>
-      total + Number(plazo.Pendiente || 0),
+  resumenCuotasFamiliaAny.reduce(
+    (total, cuota) => total + Number(cuota.Pendiente || 0),
     0
   ) || 0;
 
@@ -345,7 +354,6 @@ const totalPendiente =
           </div>
 
           <div className="border-t border-zinc-200 p-4">
-  <RegistrarPagoFamiliaForm idFamilia={Number(id)} />
 </div>
 
           <div className="overflow-x-auto border-t border-zinc-200">
