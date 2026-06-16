@@ -38,7 +38,7 @@ export default function CuotasPage() {
 
   async function cargarCuotas() {
     const { data } = await supabase
-      .from("vista_cuotas_socios")
+    .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
       .eq("Ejercicio", ejercicioSeleccionado)
       .order("Apellidos", { ascending: true });
@@ -55,9 +55,15 @@ export default function CuotasPage() {
   }
 
   const cuotasFiltradas = cuotas.filter((cuota) => {
-    const texto = `${cuota.Nombre || ""} ${cuota.Apellidos || ""} ${
-  cuota.NUMCENS || ""
-}`;
+    const texto = [
+      cuota.Nombre,
+      cuota.Apellidos,
+      cuota.NUMCENS,
+      cuota.PagadorNombre,
+      cuota.NUMCENS_Pagador,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
 const coincideBusqueda = normalizarTexto(texto).includes(
   normalizarTexto(busqueda)
@@ -168,7 +174,7 @@ const coincideBusqueda = normalizarTexto(texto).includes(
 
               <input
                 type="text"
-                placeholder="Buscar socio o NUMCENS..."
+                placeholder="Buscar socio, pagador o NUMCENS..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900 lg:w-96"
