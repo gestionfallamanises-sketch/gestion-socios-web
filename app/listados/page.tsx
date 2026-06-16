@@ -1,8 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../../lib/supabase";
+
+function LinkSocio({ numcens, children }: { numcens: any; children: any }) {
+  return (
+    <Link
+      href={`/socios/${numcens}`}
+      className="font-medium text-red-900 hover:underline"
+    >
+      {children}
+    </Link>
+  );
+}
 
 export default function ListadosPage() {
     const [listado, setListado] = useState("");
@@ -67,7 +79,7 @@ useEffect(() => {
       if (!ejercicioSeleccionado) return;
   
       const { data, error } = await supabase
-  .from("vista_cuotas_socios")
+  .from("VISTA_CUOTAS_RESUMEN")
   .select("*")
   .eq("Ejercicio", ejercicioSeleccionado)
   .eq("EstadoSocio", "Activo")
@@ -636,8 +648,10 @@ const sociosMostrados = sociosBase
       <tr key={cuota.IDCuotaSocio} className="border-t border-zinc-200 hover:bg-red-50">
         <td className="px-4 py-3 text-zinc-600">{cuota.NUMCENS}</td>
         <td className="px-4 py-3 font-medium text-zinc-900">
-          {cuota.Apellidos}, {cuota.Nombre}
-        </td>
+  <LinkSocio numcens={cuota.NUMCENS}>
+    {cuota.Apellidos}, {cuota.Nombre}
+  </LinkSocio>
+</td>
         <td className="px-4 py-3 text-zinc-600">{cuota.IDCuota}</td>
         <td className="px-4 py-3 text-right">{Number(cuota.Importe || 0).toFixed(2)} €</td>
         <td className="px-4 py-3 text-right text-green-700">{Number(cuota.TotalPagado || 0).toFixed(2)} €</td>
@@ -666,8 +680,10 @@ const sociosMostrados = sociosBase
         </td>
   
         <td className="px-4 py-3 font-medium text-zinc-900">
-          {cuota.Apellidos}, {cuota.Nombre}
-        </td>
+  <LinkSocio numcens={cuota.NUMCENS}>
+    {cuota.Apellidos}, {cuota.Nombre}
+  </LinkSocio>
+</td>
   
         <td className="px-4 py-3 text-zinc-600">
           {cuota.Metodo || "-"}
@@ -698,7 +714,11 @@ const sociosMostrados = sociosBase
         {listado === "LOTERIA" ? (
           <>
             <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-            <td className="px-4 py-3 font-medium text-zinc-900">{socio.Apellidos}, {socio.Nombre}</td>
+            <td className="px-4 py-3 font-medium text-zinc-900">
+  <LinkSocio numcens={socio.NUMCENS}>
+    {socio.Apellidos}, {socio.Nombre}
+  </LinkSocio>
+</td>
             <td className="px-4 py-3 text-right">{socio.PapeletasFalla || 0}</td>
             <td className="px-4 py-3 text-right">{socio.PapeletasVirgen || 0}</td>
             <td className="px-4 py-3 text-right">{socio.PapeletasNavidad || 0}</td>
@@ -707,14 +727,22 @@ const sociosMostrados = sociosBase
         ) : listado === "BANDA" ? (
           <>
             <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-            <td className="px-4 py-3 font-medium text-zinc-900">{socio.Apellidos}, {socio.Nombre}</td>
+            <td className="px-4 py-3 font-medium text-zinc-900">
+  <LinkSocio numcens={socio.NUMCENS}>
+    {socio.Apellidos}, {socio.Nombre}
+  </LinkSocio>
+</td>
             <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"}</td>
             <td className="px-4 py-3 text-zinc-600">{socio.SEXE || "-"}</td>
           </>
         ) : (
           <>
             <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-            <td className="px-4 py-3 font-medium text-zinc-900">{socio.Apellidos}, {socio.Nombre}</td>
+            <td className="px-4 py-3 font-medium text-zinc-900">
+  <LinkSocio numcens={socio.NUMCENS}>
+    {socio.Apellidos}, {socio.Nombre}
+  </LinkSocio>
+</td>
             <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"} / {socio.SEXE || "-"}</td>
             <td className="px-4 py-3 text-right font-medium">
               {abreviarAntiguedad(socio.Antiguedad_Calculada)}
