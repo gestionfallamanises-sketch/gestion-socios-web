@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Sidebar from "@/app/components/Sidebar";
 import GenerarCuotasButton from "@/app/components/GenerarCuotasButton";
 import RegistrarPagoGeneralButton from "@/app/components/RegistrarPagoGeneralButton";
+import Link from "next/link";
 
 export default function CuotasPage() {
   const [cuotas, setCuotas] = useState<any[]>([]);
@@ -236,8 +237,13 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                         className="border-t border-zinc-200 hover:bg-red-50"
                       >
                         <td className="px-4 py-3 font-medium text-zinc-900">
-                          {cuota.Apellidos}, {cuota.Nombre}
-                        </td>
+  <Link
+    href={`/socios/${cuota.NUMCENS}`}
+    className="text-red-900 hover:underline"
+  >
+    {cuota.Apellidos}, {cuota.Nombre}
+  </Link>
+</td>
 
                         <td className="px-4 py-3 text-zinc-600">
                           {cuota.NUMCENS}

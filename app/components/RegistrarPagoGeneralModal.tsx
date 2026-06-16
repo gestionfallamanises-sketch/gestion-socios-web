@@ -84,7 +84,7 @@ const diferencia =
     }
   
     const { data, error } = await supabase
-      .from("vista_cuotas_socios")
+    .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
       .eq("Ejercicio", 2027)
       .or(

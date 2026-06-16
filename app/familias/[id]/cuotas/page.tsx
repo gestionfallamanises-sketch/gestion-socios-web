@@ -27,7 +27,7 @@ export default async function CuotasFamiliaPage({
   const { data: cuotas } =
     numsFamilia.length > 0
       ? await supabase
-          .from("vista_cuotas_socios")
+      .from("VISTA_CUOTAS_RESUMEN")
           .select("*")
           .in("NUMCENS", numsFamilia)
           .order("Ejercicio", { ascending: false })

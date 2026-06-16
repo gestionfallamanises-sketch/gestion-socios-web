@@ -57,7 +57,7 @@ export default async function SocioPage({
   const { data: cuotasFamilia } =
     numsFamilia.length > 0
       ? await supabase
-          .from("vista_cuotas_socios")
+      .from("VISTA_CUOTAS_RESUMEN")
           .select("*")
           .in("NUMCENS", numsFamilia)
           .order("Ejercicio", { ascending: false })
@@ -66,7 +66,7 @@ export default async function SocioPage({
       const cuotasFamiliaAny = (cuotasFamilia as any[]) || [];
 
   const { data: cuotaActual } = await supabase
-    .from("vista_cuotas_socios")
+  .from("VISTA_CUOTAS_RESUMEN")
     .select("*")
     .eq("NUMCENS", (socio as any).NUMCENS)
     .order("Ejercicio", { ascending: false })

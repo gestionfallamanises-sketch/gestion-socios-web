@@ -22,7 +22,7 @@ export default async function CuotasSocioPage({
     const socioAny = socio as any;
 
   const { data: cuotas } = await (supabase as any)
-    .from("vista_cuotas_socios")
+  .from("VISTA_CUOTAS_RESUMEN")
     .select("*")
     .eq("NUMCENS", Number(numcens))
     .order("Ejercicio", { ascending: false });

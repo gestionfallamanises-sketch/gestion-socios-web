@@ -61,7 +61,7 @@ const { data: miembros } = await supabase
   const { data: cuotasFamilia } =
     numsFamilia.length > 0
       ? await supabase
-          .from("vista_cuotas_socios")
+      .from("VISTA_CUOTAS_RESUMEN")
           .select("*")
           .in("NUMCENS", numsFamilia)
           .order("Ejercicio", { ascending: false })
