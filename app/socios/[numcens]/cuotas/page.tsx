@@ -4,6 +4,7 @@ import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
 import RegistrarPagoModalButton from "@/app/components/RegistrarPagoModalButton";
 import AnularPagoManualButton from "@/app/components/AnularPagoManualButton";
+import PrintButton from "@/app/components/PrintButton";
 
 export default async function CuotasSocioPage({
   params,
@@ -220,9 +221,11 @@ const resumenPendientes = Object.values(
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
-      <Sidebar />
+      <div className="print:hidden">
+  <Sidebar />
+</div>
 
-      <main className="min-w-0 flex-1 p-8">
+<main className="min-w-0 flex-1 p-8 print:p-0">
         <div className="mx-auto max-w-7xl">
           <Link
             href={"/socios/" + numcens}
@@ -231,29 +234,33 @@ const resumenPendientes = Object.values(
             ← Volver a ficha socio
           </Link>
 
-          <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
-          <div className="border-l-4 border-red-900 px-6 py-5">
-  <div className="flex items-center justify-between gap-4">
-    <div>
-      <h1 className="text-2xl font-bold text-zinc-900">
-        Cuotas del socio
-      </h1>
+          <section className="mb-8 border border-zinc-200 bg-white shadow-sm print:mb-4">
+  <div className="border-l-4 border-red-900 px-6 py-5 print:border-l-0 print:px-0">
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-900">
+          Cuotas del socio
+        </h1>
 
-      <p className="mt-2 text-sm text-zinc-600">
-        {socioAny?.Apellidos}, {socioAny?.Nombre} · NUMCENS {numcens}
-      </p>
+        <p className="mt-2 text-sm text-zinc-600">
+          {socioAny?.Apellidos}, {socioAny?.Nombre} · NUMCENS {numcens}
+        </p>
+      </div>
+
+      <div className="flex gap-2 print:hidden">
+        <PrintButton />
+
+        {cuotasAny.length > 0 && totalPendiente > 0 && (
+          <RegistrarPagoModalButton
+            idCuotaSocio={Number(cuotasAny[0].IDCuotaSocio)}
+            numcens={Number(numcens)}
+            pendienteMaximo={totalPendiente}
+          />
+        )}
+      </div>
     </div>
-
-    {cuotasAny.length > 0 && totalPendiente > 0 && (
-  <RegistrarPagoModalButton
-  idCuotaSocio={Number(cuotasAny[0].IDCuotaSocio)}
-  numcens={Number(numcens)}
-  pendienteMaximo={totalPendiente}
-/>
-)}
   </div>
-</div>
-          </section>
+</section>
 
           <section className="mb-8 border border-zinc-200 bg-white">
           <div className="grid grid-cols-2 lg:grid-cols-5">
@@ -327,9 +334,11 @@ const resumenPendientes = Object.values(
   </span>
 
   {mov.tipo === "manual" && mov.idPagoManual && (
+    <span className="print:hidden">
     <AnularPagoManualButton
       idPagoManual={Number(mov.idPagoManual)}
     />
+  </span>
   )}
 </div>
           </div>

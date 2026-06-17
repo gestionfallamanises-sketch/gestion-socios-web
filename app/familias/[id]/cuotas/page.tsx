@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
+import PrintButton from "@/app/components/PrintButton";
 
 export default async function CuotasFamiliaPage({
   params,
@@ -67,6 +68,14 @@ export default async function CuotasFamiliaPage({
           .order("ID", { ascending: false })
       : { data: [] };
 
+      const { data: aplicacionesRemesa } =
+  idsPlazos.length > 0
+    ? await (supabase as any)
+        .from("REMESAS_APLICACIONES")
+        .select("*")
+        .in("IDPlazo", idsPlazos)
+    : { data: [] };
+
       const idsCuotasFamilia = cuotasAny.map((c) => c.IDCuotaSocio);
 
 const { data: resumenCuotasFamilia } =
@@ -108,7 +117,8 @@ const totalPendiente =
   }
 
   const familiaAny = familia as any;
-  const pagosAny = (pagos as any[]) || [];
+const pagosAny = (pagos as any[]) || [];
+const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
 
   function formatearFecha(fecha: string | null) {
     if (!fecha) return "-";
@@ -120,6 +130,17 @@ const totalPendiente =
   function movimientosDePlazo(idPlazo: number) {
     const movimientos: any[] = [];
   
+    aplicacionesRemesaAny
+      .filter((r) => Number(r.IDPlazo) === Number(idPlazo))
+      .forEach((r) => {
+        movimientos.push({
+          fecha: r.FechaAplicacion,
+          texto: `Remesa ${r.IDRemesa}`,
+          importe: Number(r.ImporteAplicado || 0),
+          tipo: "remesa",
+        });
+      });
+  
     pagosAny
       .filter((p) => Number(p.IDPlazo) === Number(idPlazo))
       .forEach((p) => {
@@ -127,6 +148,7 @@ const totalPendiente =
           fecha: p.PAGOS_MANUALES?.FechaPago,
           texto: "Pago manual familiar",
           importe: Number(p.ImporteAplicado || 0),
+          tipo: "manual",
         });
       });
   
@@ -209,16 +231,22 @@ const totalPendiente =
           </Link>
 
           <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
-            <div className="border-l-4 border-red-900 px-6 py-5">
-              <h1 className="text-2xl font-bold text-zinc-900">
-                Cuotas y pagos familiares
-              </h1>
+  <div className="border-l-4 border-red-900 px-6 py-5">
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-900">
+          Cuotas y pagos familiares
+        </h1>
 
-              <p className="mt-2 text-sm text-zinc-600">
-                {familiaAny?.Nombre_Familia || "Familia"} · {miembrosAny.length || 0} miembros
-              </p>
-            </div>
-          </section>
+        <p className="mt-2 text-sm text-zinc-600">
+          {familiaAny?.Nombre_Familia || "Familia"} · {miembrosAny.length || 0} miembros
+        </p>
+      </div>
+
+      <PrintButton />
+    </div>
+  </div>
+</section>
 
           <section className="mb-8 border border-zinc-200 bg-white">
             <div className="grid grid-cols-1 text-sm md:grid-cols-3">
@@ -235,7 +263,7 @@ const totalPendiente =
         Pagos realizados
       </h2>
       <p className="text-xs text-zinc-500">
-        Pagos manuales familiares e intentos sin cobro
+      Remesas, pagos manuales familiares e intentos sin cobro
       </p>
     </div>
 
