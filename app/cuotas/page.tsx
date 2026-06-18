@@ -39,15 +39,17 @@ export default function CuotasPage() {
 
   async function cargarCuotas() {
     const { data } = await supabase
-    .from("VISTA_CUOTAS_RESUMEN")
+      .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
       .eq("Ejercicio", ejercicioSeleccionado)
+      .eq("EstadoSocio", "Activo")
       .order("Apellidos", { ascending: true });
-
+  
     if (data) {
       setCuotas(data);
     }
   }
+  
   function normalizarTexto(texto: string) {
     return texto
       .normalize("NFD")

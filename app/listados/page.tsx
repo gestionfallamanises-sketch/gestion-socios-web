@@ -195,6 +195,7 @@ const sociosBaja = socios
     : [];
 
     const cuotasFiltradas = cuotas.filter((cuota) => {
+      if (cuota.EstadoSocio !== "Activo") return false;
 
         const coincideTipo =
           filtroTipoCuota === "TODOS" || cuota.IDCuota === filtroTipoCuota;
@@ -298,6 +299,14 @@ const sociosMostrados = sociosBase
     return nombreA.localeCompare(nombreB);
   });
 
+  function tipoCuotaSocio(numcens: any) {
+    const cuota = cuotas.find(
+      (c) => Number(c.NUMCENS) === Number(numcens)
+    );
+  
+    return cuota?.IDCuota || "-";
+  }
+
   function exportarExcel() {
     let filas: any[] = [];
     let nombreArchivo = "listado.csv";
@@ -318,7 +327,8 @@ const sociosMostrados = sociosBase
     } else if (listado === "LOTERIA") {
       filas = sociosLoteria.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
-        Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+        SSocio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+        Tipo: tipoCuotaSocio(socio.NUMCENS),
         Falla: socio.PapeletasFalla || 0,
         Virgen: socio.PapeletasVirgen || 0,
         Navidad: socio.PapeletasNavidad || 0,
@@ -384,7 +394,7 @@ const sociosMostrados = sociosBase
 
       <main className="min-w-0 flex-1 p-8">
         <div className="mx-auto max-w-7xl">
-          <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
+        <section className="mb-8 border border-zinc-200 bg-white shadow-sm print:hidden">
           <div className="border-l-4 border-red-900 px-6 py-5">
   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
     <div>
@@ -423,7 +433,7 @@ const sociosMostrados = sociosBase
 </div>
           </section>
 
-          <section className="mb-4 flex flex-wrap gap-2">
+          <section className="mb-4 flex flex-wrap gap-2 print:hidden">
           <BotonListado
   titulo="Socios activos"
   activo={listado === "ACTIVOS"}
@@ -483,7 +493,7 @@ const sociosMostrados = sociosBase
 </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 print:hidden">
   <button
     onClick={exportarExcel}
     className="bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
@@ -586,7 +596,8 @@ const sociosMostrados = sociosBase
       <>
         <th className="px-4 py-3">NUMCENS</th>
         <th className="px-4 py-3">Socio</th>
-        <th className="px-4 py-3 text-right">Falla</th>
+<th className="px-4 py-3 text-xs">Tipo</th>
+<th className="px-4 py-3 text-right">Falla</th>
         <th className="px-4 py-3 text-right">Virgen</th>
         <th className="px-4 py-3 text-right">Navidad</th>
         <th className="px-4 py-3 text-right">Niño</th>
@@ -718,8 +729,11 @@ const sociosMostrados = sociosBase
   <LinkSocio numcens={socio.NUMCENS}>
     {socio.Apellidos}, {socio.Nombre}
   </LinkSocio>
+  </td>
+<td className="px-4 py-3 text-xs text-zinc-500">
+  {tipoCuotaSocio(socio.NUMCENS)}
 </td>
-            <td className="px-4 py-3 text-right">{socio.PapeletasFalla || 0}</td>
+<td className="px-4 py-3 text-right">{socio.PapeletasFalla || 0}</td>
             <td className="px-4 py-3 text-right">{socio.PapeletasVirgen || 0}</td>
             <td className="px-4 py-3 text-right">{socio.PapeletasNavidad || 0}</td>
             <td className="px-4 py-3 text-right">{socio.PapeletasNino || 0}</td>
