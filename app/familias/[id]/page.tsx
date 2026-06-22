@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import AddMemberForm from "../../components/AddMemberForm";
 import MakeTitularButton from "../../components/MakeTitularButton";
 import RemoveMemberButton from "../../components/RemoveMemberButton";
+import TrasladarFamiliaButton from "../../components/TrasladarFamiliaButton";
 import GenerarCuotasButton from "@/app/components/GenerarCuotasButton";
 
 export default async function FamiliaPage({
@@ -222,7 +223,10 @@ const totalPendiente =
               </p>
             </div>
 
-            <AddMemberForm idFamilia={Number(id)} />
+            <div className="flex items-start gap-2">
+  <TrasladarFamiliaButton idFamiliaOrigen={Number(id)} />
+  <AddMemberForm idFamilia={Number(id)} />
+</div>
           </div>
 
           {!miembros || miembros.length === 0 ? (
@@ -236,7 +240,7 @@ const totalPendiente =
                   <tr>
                     <th className="px-4 py-3">NUMCENS</th>
                     <th className="px-4 py-3">Nombre</th>
-                    <th className="px-4 py-3">Comisión</th>
+                    <th className="px-4 py-3">Tipo cuota</th>
                     <th className="px-4 py-3">Lotería</th>
                     <th className="px-4 py-3">Pagador</th>
                     <th className="px-4 py-3 text-right">Cuota</th>
@@ -269,7 +273,9 @@ const totalPendiente =
           </Link>
         </td>
 
-        <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"}</td>
+        <td className="px-4 py-3 text-zinc-600">
+  {cuota?.Tipo || cuota?.TipoCuota || cuota?.NombreCuota || cuota?.Descripcion || cuota?.IDCuota || "-"}
+</td>
 
         <td className="px-4 py-3 text-zinc-600">
           {socio.ConLoteria ? "Sí" : "No"}
@@ -283,11 +289,7 @@ const totalPendiente =
         fp.Activo === true
     );
 
-    return (
-      formaPago?.NUMCENS_Pagador ||
-      cuota?.NUMCENS_Pagador ||
-      "-"
-    );
+    return familia.Titular_NUMCENS || "-";
   })()}
 </td>
 
