@@ -45,6 +45,13 @@ export default function Sidebar() {
   Remesas
 </Link>
 
+<Link
+  href="/loterias"
+  className="block rounded-lg px-4 py-2 hover:bg-zinc-600"
+>
+  Loterías
+</Link>
+
         <Link
           href="/configuracion"
           className="block rounded-lg px-4 py-2 hover:bg-zinc-600"

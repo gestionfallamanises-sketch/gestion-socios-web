@@ -222,13 +222,24 @@ export default function FamiliasPage() {
                         </td>
 
                         <td className="no-print px-4 py-3 text-right">
-                          <Link
-                            href={`/familias/${familia.ID_Familia}`}
-                            className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
-                          >
-                            Ver familia
-                          </Link>
-                        </td>
+  <div className="flex items-center justify-end gap-2">
+    <button
+      type="button"
+      onClick={() => eliminarFamilia(familia)}
+      title="Eliminar familia"
+      className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 hover:bg-red-200"
+    >
+      ×
+    </button>
+
+    <Link
+      href={`/familias/${familia.ID_Familia}`}
+      className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
+    >
+      Ver familia
+    </Link>
+  </div>
+</td>
                       </tr>
                     ))}
                   </tbody>
