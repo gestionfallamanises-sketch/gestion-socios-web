@@ -44,6 +44,45 @@ export default function FamiliasPage() {
       .includes(busqueda.toLowerCase())
   );
 
+  async function eliminarFamilia(familia: any) {
+    const { data: miembros, error: errorMiembros } = await (supabase as any)
+      .from("SOCIOS")
+      .select("NUMCENS")
+      .eq("ID_Familia", familia.ID_Familia)
+  
+    if (errorMiembros) {
+      alert("Error comprobando miembros: " + errorMiembros.message);
+      return;
+    }
+  
+    if (miembros && miembros.length > 0) {
+      alert(
+        "No se puede eliminar esta familia porque todavía tiene socios asignados. Traslada primero los miembros a otra familia."
+      );
+      return;
+    }
+  
+    const confirmar = confirm(
+      `La familia está vacía. ¿Quieres eliminarla definitivamente?`
+    );
+  
+    if (!confirmar) return;
+  
+    const { error } = await (supabase as any)
+      .from("FAMILIAS")
+      .delete()
+.eq("ID_Familia", familia.ID_Familia)
+  
+    if (error) {
+      alert("Error eliminando familia: " + error.message);
+      return;
+    }
+  
+    alert("Familia eliminada correctamente");
+    cargarFamilias();
+  }
+
+>>>>>>> 680bf24 (Familias: trasladar miembros y eliminar familias vacías)
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
