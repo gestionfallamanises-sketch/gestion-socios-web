@@ -82,7 +82,6 @@ export default function FamiliasPage() {
     cargarFamilias();
   }
 
->>>>>>> 680bf24 (Familias: trasladar miembros y eliminar familias vacías)
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
