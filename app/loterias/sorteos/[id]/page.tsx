@@ -5,6 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabase";
 
+function normalizarTexto(texto: string) {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 export default function SorteoDetallePage() {
   const params = useParams();
   const router = useRouter();
@@ -78,19 +85,30 @@ if (errorMovimientos) {
 
 setMovimientos(movimientosData || []);
 
-    const numcensResponsables = gruposData.map(
-      (g: any) => g.NUMCENS_Responsable
-    );
-  
-    const { data: sociosData, error: errorSocios } = await (supabase as any)
-      .from("SOCIOS")
-      .select("NUMCENS, Apellidos, Nombre")
-      .in("NUMCENS", numcensResponsables);
-  
-    if (errorSocios) {
-      alert("Error cargando responsables: " + errorSocios.message);
-      return;
-    }
+const numcensResponsables = (gruposData || [])
+.filter(
+  (g: any) =>
+    g.NUMCENS_Responsable !== null &&
+    g.NUMCENS_Responsable !== undefined &&
+    g.NUMCENS_Responsable !== "null"
+)
+.map((g: any) => Number(g.NUMCENS_Responsable));
+
+let sociosData: any[] = [];
+
+if (numcensResponsables.length > 0) {
+const { data, error: errorSocios } = await (supabase as any)
+  .from("SOCIOS")
+  .select("NUMCENS, Apellidos, Nombre")
+  .in("NUMCENS", numcensResponsables);
+
+if (errorSocios) {
+  alert("Error cargando responsables: " + errorSocios.message);
+  return;
+}
+
+sociosData = data || [];
+}
   
     const gruposConNombre = gruposData.map((grupo: any) => {
       const socio = sociosData?.find(
@@ -104,9 +122,17 @@ setMovimientos(movimientosData || []);
       return {
         ...grupo,
       
-        NombreCompleto: socio
-          ? `${grupo.NUMCENS_Responsable} - ${socio.Apellidos}, ${socio.Nombre}`
-          : String(grupo.NUMCENS_Responsable),
+        NombreCompleto: grupo.EsExterno
+  ? `EXT - ${grupo.NombreExterno || "Externo"}`
+  : socio
+  ? `${grupo.NUMCENS_Responsable} - ${socio.Apellidos}, ${socio.Nombre}`
+  : String(grupo.NUMCENS_Responsable),
+
+ResponsableOrden: grupo.EsExterno
+  ? grupo.NombreExterno || ""
+  : socio
+  ? `${socio.Apellidos || ""} ${socio.Nombre || ""}`
+  : "",
       
           PapeletasFalla:
   Number(movimiento?.PapeletasFalla || 0) > 0
@@ -114,24 +140,34 @@ setMovimientos(movimientosData || []);
     : Number(grupo.PapeletasFalla || 0),
 
     ImporteFalla:
-    Number(movimiento?.ImporteFalla || 0) > 0
-      ? Number(movimiento.ImporteFalla)
-      : Number(
-          (Number(movimiento?.PapeletasFalla || grupo.PapeletasFalla || 0) *
-            Number(sorteoData.ImportePapeletaFalla || 0)).toFixed(2)
-        ),
+  Number(movimiento?.ImporteFalla || 0) > 0
+    ? Number(movimiento.ImporteFalla)
+    : Number(
+        (
+          Number(movimiento?.PapeletasFalla || grupo.PapeletasFalla || 0) *
+          (
+            Number(sorteoData.ImportePapeletaFalla || 0) +
+            Number(sorteoData.BeneficioFalla || 0)
+          )
+        ).toFixed(2)
+      ),
               PapeletasVirgen:
               Number(movimiento?.PapeletasVirgen || 0) > 0
                 ? Number(movimiento.PapeletasVirgen)
                 : Number(grupo.PapeletasVirgen || 0),
           
                 ImporteVirgen:
-                Number(movimiento?.ImporteVirgen || 0) > 0
-                  ? Number(movimiento.ImporteVirgen)
-                  : Number(
-                      (Number(movimiento?.PapeletasVirgen || grupo.PapeletasVirgen || 0) *
-                        Number(sorteoData.ImportePapeletaVirgen || 0)).toFixed(2)
-                    ),
+  Number(movimiento?.ImporteVirgen || 0) > 0
+    ? Number(movimiento.ImporteVirgen)
+    : Number(
+        (
+          Number(movimiento?.PapeletasVirgen || grupo.PapeletasVirgen || 0) *
+          (
+            Number(sorteoData.ImportePapeletaVirgen || 0) +
+            Number(sorteoData.BeneficioVirgen || 0)
+          )
+        ).toFixed(2)
+      ),
           
           ImportePagado: movimiento?.ImportePagado ?? 0,
 
@@ -161,7 +197,13 @@ IDGrupoLoteria: movimiento?.IDGrupoLoteria ?? grupo.ID,
       };
     });
   
-    setGrupos(gruposConNombre);
+    setGrupos(
+      gruposConNombre.sort((a: any, b: any) =>
+        normalizarTexto(a.ResponsableOrden || "").localeCompare(
+          normalizarTexto(b.ResponsableOrden || "")
+        )
+      )
+    );
   }
 
   function actualizarGrupo(index: number, campo: string, valor: any) {
@@ -244,12 +286,30 @@ IDGrupoLoteria: movimiento?.IDGrupoLoteria ?? grupo.ID,
       .from("LOTERIA_SORTEOS_GRUPOS")
       .update({
         PapeletasFalla: grupo.PapeletasFalla,
-        ImporteFalla: grupo.ImporteFalla,
+        ImporteFalla: Number(
+          (
+            Number(grupo.PapeletasFalla || 0) *
+            (
+              Number(sorteo?.ImportePapeletaFalla || 0) +
+              Number(sorteo?.BeneficioFalla || 0)
+            )
+          ).toFixed(2)
+        ),
+      
         PapeletasVirgen: grupo.PapeletasVirgen,
-        ImporteVirgen: grupo.ImporteVirgen,
+        ImporteVirgen: Number(
+          (
+            Number(grupo.PapeletasVirgen || 0) *
+            (
+              Number(sorteo?.ImportePapeletaVirgen || 0) +
+              Number(sorteo?.BeneficioVirgen || 0)
+            )
+          ).toFixed(2)
+        ),
+      
         ImportePagado: grupo.ImportePagado,
         PapeletasPremioFalla: grupo.PapeletasPremioFalla,
-PapeletasPremioVirgen: grupo.PapeletasPremioVirgen,
+        PapeletasPremioVirgen: grupo.PapeletasPremioVirgen,
         ImportePremio: grupo.ImportePremio,
         PremioEntregado: grupo.PremioEntregado,
         PagadoConfirmado: grupo.PagadoConfirmado,
@@ -343,12 +403,21 @@ alert("Cambios guardados");
       <main className="flex-1 p-8">
         <div className="mx-auto max-w-7xl">
        
-        <button
-  onClick={() => router.push("/loterias/sorteos")}
-  className="mb-4 text-sm font-medium text-red-900 hover:underline"
->
-  ← Volver a sorteos
-</button>
+        <div className="no-print mb-4 flex items-center justify-between">
+  <button
+    onClick={() => router.push("/loterias/sorteos")}
+    className="text-sm font-medium text-red-900 hover:underline"
+  >
+    ← Volver a sorteos
+  </button>
+
+  <button
+    onClick={() => window.print()}
+    className="rounded bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+  >
+    🖨️ Imprimir
+  </button>
+</div>
 
           <section className="mb-6 border border-zinc-200 bg-white p-6">
 
@@ -601,7 +670,7 @@ alert("Cambios guardados");
       onChange={(e) =>
         actualizarGrupo(index, "ImportePremio", Number(e.target.value))
       }
-      className="w- bg-transparent text-right text-sm focus:outline-none"
+      className="w-7 bg-transparent text-right text-sm focus:outline-none"
     />
     <span className="text-xs text-zinc-500">€</span>
 

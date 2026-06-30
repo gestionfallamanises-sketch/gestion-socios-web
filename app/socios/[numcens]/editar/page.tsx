@@ -326,10 +326,7 @@ setSocios(listaSocios || []);
         ConLoteria: socio.ConLoteria,
 EsBanda: socio.EsBanda,
 CARREG: socio.CARREG,
-PapeletasFalla: Number(socio.PapeletasFalla || 0),
-PapeletasVirgen: Number(socio.PapeletasVirgen || 0),
-PapeletasNavidad: Number(socio.PapeletasNavidad || 0),
-PapeletasNino: Number(socio.PapeletasNino || 0),
+
       })
       .eq("NUMCENS", Number(numcens));
 
@@ -781,29 +778,7 @@ router.push(`/socios/${numcens}`);
   }
 />
 
-<CampoTexto
-  label="Papeletas falla"
-  value={String(socio.PapeletasFalla || 0)}
-  onChange={(valor) => cambiarCampo("PapeletasFalla", valor)}
-/>
 
-<CampoTexto
-  label="Papeletas virgen"
-  value={String(socio.PapeletasVirgen || 0)}
-  onChange={(valor) => cambiarCampo("PapeletasVirgen", valor)}
-/>
-
-<CampoTexto
-  label="Papeletas Navidad"
-  value={String(socio.PapeletasNavidad || 0)}
-  onChange={(valor) => cambiarCampo("PapeletasNavidad", valor)}
-/>
-
-<CampoTexto
-  label="Papeletas niño"
-  value={String(socio.PapeletasNino || 0)}
-  onChange={(valor) => cambiarCampo("PapeletasNino", valor)}
-/>
               </div>
             </section>
 

@@ -33,14 +33,31 @@ const [filtroEstadoCuota, setFiltroEstadoCuota] = useState("TODOS");
 const [pagadores, setPagadores] = useState<any[]>([]);
 const [filtroMetodoPagador, setFiltroMetodoPagador] = useState("TODOS");
 const [filtroIBAN, setFiltroIBAN] = useState("TODOS");
+const [fechaNacimientoDesde, setFechaNacimientoDesde] = useState("");
+const [fechaNacimientoHasta, setFechaNacimientoHasta] = useState("");
 
 useEffect(() => {
   async function fetchSocios() {
     const { data, error } = await supabase
-      .from("SOCIOS_ANTIGUEDAD_CALCULADA")
-      .select(
-        "NUMCENS, Nombre, Apellidos, Estado, Comision, SEXE, Antiguedad_Calculada, Antiguedad_Meses_Total, ConLoteria, NumPapeletas, PapeletasFalla, PapeletasVirgen, PapeletasNavidad, PapeletasNino, EsBanda"
-      );
+    .from("SOCIOS_ANTIGUEDAD_CALCULADA")
+    .select(`
+      NUMCENS,
+      Nombre,
+      Apellidos,
+      Estado,
+      Comision,
+      SEXE,
+      Antiguedad_Calculada,
+      Antiguedad_Meses_Total,
+      "FECHA de NACIMIENTO",
+      ConLoteria,
+      NumPapeletas,
+      PapeletasFalla,
+      PapeletasVirgen,
+      PapeletasNavidad,
+      PapeletasNino,
+      EsBanda
+    `);
 
     if (error) {
       setError(error.message);
@@ -139,41 +156,6 @@ const sociosBaja = socios
     const nombreB = `${b.Apellidos || ""}, ${b.Nombre || ""}`.toLowerCase();
     return nombreA.localeCompare(nombreB);
   });
-
-  const sociosLoteria = socios
-  .filter((socio) => {
-    const falla = Number(socio.PapeletasFalla || 0);
-    const virgen = Number(socio.PapeletasVirgen || 0);
-    const navidad = Number(socio.PapeletasNavidad || 0);
-    const nino = Number(socio.PapeletasNino || 0);
-
-    return falla + virgen + navidad + nino > 0;
-  })
-  .sort((a, b) => {
-    const nombreA = `${a.Apellidos || ""}, ${a.Nombre || ""}`.toLowerCase();
-    const nombreB = `${b.Apellidos || ""}, ${b.Nombre || ""}`.toLowerCase();
-    return nombreA.localeCompare(nombreB);
-  });
-
-  const totalFalla = sociosLoteria.reduce(
-    (sum, socio) => sum + Number(socio.PapeletasFalla || 0),
-    0
-  );
-  
-  const totalVirgen = sociosLoteria.reduce(
-    (sum, socio) => sum + Number(socio.PapeletasVirgen || 0),
-    0
-  );
-  
-  const totalNavidad = sociosLoteria.reduce(
-    (sum, socio) => sum + Number(socio.PapeletasNavidad || 0),
-    0
-  );
-  
-  const totalNino = sociosLoteria.reduce(
-    (sum, socio) => sum + Number(socio.PapeletasNino || 0),
-    0
-  );
   
   const sociosBanda = socios
   .filter((socio) => socio.EsBanda === true && socio.Estado === "Activo")
@@ -188,8 +170,6 @@ const sociosBaja = socios
     ? sociosActivos
     : listado === "BAJAS"
     ? sociosBaja
-    : listado === "LOTERIA"
-    ? sociosLoteria
     : listado === "BANDA"
     ? sociosBanda
     : [];
@@ -324,18 +304,7 @@ const sociosMostrados = sociosBase
       }));
   
       nombreArchivo = `cuotas_${ejercicioSeleccionado || ""}.csv`;
-    } else if (listado === "LOTERIA") {
-      filas = sociosLoteria.map((socio) => ({
-        NUMCENS: socio.NUMCENS || "",
-        SSocio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
-        Tipo: tipoCuotaSocio(socio.NUMCENS),
-        Falla: socio.PapeletasFalla || 0,
-        Virgen: socio.PapeletasVirgen || 0,
-        Navidad: socio.PapeletasNavidad || 0,
-        Niño: socio.PapeletasNino || 0,
-      }));
-  
-      nombreArchivo = "loteria.csv";
+    
     } else if (listado === "BANDA") {
       filas = sociosBanda.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
@@ -388,6 +357,26 @@ const sociosMostrados = sociosBase
     URL.revokeObjectURL(url);
   }
 
+  const sociosNacimiento = socios
+  .filter((socio) => {
+    const fecha = socio["FECHA de NACIMIENTO"];
+
+    if (!fechaNacimientoDesde || !fechaNacimientoHasta || !fecha) {
+      return false;
+    }
+
+    return (
+      fecha >= fechaNacimientoDesde &&
+      fecha <= fechaNacimientoHasta &&
+      socio.Estado === "Activo"
+    );
+  })
+  .sort((a, b) => {
+    const nombreA = `${a.Apellidos || ""}, ${a.Nombre || ""}`.toLowerCase();
+    const nombreB = `${b.Apellidos || ""}, ${b.Nombre || ""}`.toLowerCase();
+    return nombreA.localeCompare(nombreB);
+  });
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -439,6 +428,11 @@ const sociosMostrados = sociosBase
   activo={listado === "ACTIVOS"}
   onClick={() => setListado("ACTIVOS")}
 />
+<BotonListado
+  titulo="Nacimiento"
+  activo={listado === "NACIMIENTO"}
+  onClick={() => setListado("NACIMIENTO")}
+/>
 
 <BotonListado
   titulo="Socios de baja"
@@ -450,12 +444,6 @@ const sociosMostrados = sociosBase
   titulo="Cuotas"
   activo={listado === "CUOTAS"}
   onClick={() => setListado("CUOTAS")}
-/>
-
-<BotonListado
-  titulo="Lotería"
-  activo={listado === "LOTERIA"}
-  onClick={() => setListado("LOTERIA")}
 />
 
 <BotonListado
@@ -487,9 +475,11 @@ const sociosMostrados = sociosBase
         </h2>
 
         <p className="text-xs text-zinc-500">
-  {listado === "CUOTAS"
-    ? `Mostrando ${cuotasFiltradas.length} cuotas`
-    : `Mostrando ${sociosMostrados.length} socios`}
+        {listado === "CUOTAS"
+  ? `Mostrando ${cuotasFiltradas.length} cuotas`
+  : listado === "NACIMIENTO"
+  ? `Mostrando ${sociosNacimiento.length} socios`
+  : `Mostrando ${sociosMostrados.length} socios`}
 </p>
       </div>
 
@@ -555,6 +545,33 @@ const sociosMostrados = sociosBase
   </div>
 </div>
  )}
+
+{listado === "NACIMIENTO" && (
+  <div className="border-t border-zinc-200 bg-white px-4 py-4">
+    <div className="flex flex-wrap items-center gap-4">
+      <label className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
+        Nacidos desde:
+        <input
+          type="date"
+          value={fechaNacimientoDesde}
+          onChange={(e) => setFechaNacimientoDesde(e.target.value)}
+          className="border border-zinc-300 px-2 py-1 text-xs font-normal"
+        />
+      </label>
+
+      <label className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
+        Hasta:
+        <input
+          type="date"
+          value={fechaNacimientoHasta}
+          onChange={(e) => setFechaNacimientoHasta(e.target.value)}
+          className="border border-zinc-300 px-2 py-1 text-xs font-normal"
+        />
+      </label>
+    </div>
+  </div>
+)}
+
  {listado === "CUOTAS" && (
   <div className="border-t border-zinc-200 bg-white px-4 py-4">
     <div className="flex flex-wrap items-center gap-4">
@@ -592,17 +609,16 @@ const sociosMostrados = sociosBase
       <table className="w-full text-sm">
       <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
   <tr>
-    {listado === "LOTERIA" ? (
-      <>
-        <th className="px-4 py-3">NUMCENS</th>
-        <th className="px-4 py-3">Socio</th>
-<th className="px-4 py-3 text-xs">Tipo</th>
-<th className="px-4 py-3 text-right">Falla</th>
-        <th className="px-4 py-3 text-right">Virgen</th>
-        <th className="px-4 py-3 text-right">Navidad</th>
-        <th className="px-4 py-3 text-right">Niño</th>
-      </>
-    ) : listado === "BANDA" ? (
+
+  {listado === "NACIMIENTO" ? (
+  <>
+    <th className="px-4 py-3">NUMCENS</th>
+    <th className="px-4 py-3">Socio</th>
+    <th className="px-4 py-3">Fecha nacimiento</th>
+    <th className="px-4 py-3">Comisión</th>
+    <th className="px-4 py-3">Antigüedad</th>
+  </>
+) : listado === "BANDA" ? (
       <>
         <th className="px-4 py-3">NUMCENS</th>
         <th className="px-4 py-3">Socio</th>
@@ -654,7 +670,36 @@ const sociosMostrados = sociosBase
 </thead>
 
 <tbody>
-  {listado === "CUOTAS" ? (
+{listado === "NACIMIENTO" ? (
+  sociosNacimiento.map((socio) => (
+    <tr key={socio.NUMCENS} className="border-t border-zinc-200 hover:bg-red-50">
+      <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
+
+      <td className="px-4 py-3 font-medium text-zinc-900">
+        <LinkSocio numcens={socio.NUMCENS}>
+          {socio.Apellidos}, {socio.Nombre}
+        </LinkSocio>
+      </td>
+
+      <td className="px-4 py-3">
+      {socio["FECHA de NACIMIENTO"]
+  ? new Date(socio["FECHA de NACIMIENTO"]).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
+  : "-"}
+      </td>
+
+      <td className="px-4 py-3">{socio.Comision || "-"}</td>
+
+      <td className="px-4 py-3">
+        {abreviarAntiguedad(socio.Antiguedad_Calculada)}
+      </td>
+    </tr>
+  ))
+) : listado === "CUOTAS" ? (
+
     cuotasFiltradas.map((cuota) => (
       <tr key={cuota.IDCuotaSocio} className="border-t border-zinc-200 hover:bg-red-50">
         <td className="px-4 py-3 text-zinc-600">{cuota.NUMCENS}</td>
@@ -722,23 +767,7 @@ const sociosMostrados = sociosBase
   ) : (
     sociosMostrados.map((socio) => (
       <tr key={socio.NUMCENS} className="border-t border-zinc-200 hover:bg-red-50">
-        {listado === "LOTERIA" ? (
-          <>
-            <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-            <td className="px-4 py-3 font-medium text-zinc-900">
-  <LinkSocio numcens={socio.NUMCENS}>
-    {socio.Apellidos}, {socio.Nombre}
-  </LinkSocio>
-  </td>
-<td className="px-4 py-3 text-xs text-zinc-500">
-  {tipoCuotaSocio(socio.NUMCENS)}
-</td>
-<td className="px-4 py-3 text-right">{socio.PapeletasFalla || 0}</td>
-            <td className="px-4 py-3 text-right">{socio.PapeletasVirgen || 0}</td>
-            <td className="px-4 py-3 text-right">{socio.PapeletasNavidad || 0}</td>
-            <td className="px-4 py-3 text-right">{socio.PapeletasNino || 0}</td>
-          </>
-        ) : listado === "BANDA" ? (
+        {listado === "BANDA" ? (
           <>
             <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
             <td className="px-4 py-3 font-medium text-zinc-900">
@@ -769,16 +798,6 @@ const sociosMostrados = sociosBase
 </tbody>
       </table>
     </div>
-    {listado === "LOTERIA" && (
-  <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-3">
-    <div className="flex flex-wrap gap-6 text-sm font-semibold">
-      <span>Falla: {totalFalla}</span>
-      <span>Virgen: {totalVirgen}</span>
-      <span>Navidad: {totalNavidad}</span>
-      <span>Niño: {totalNino}</span>
-    </div>
-  </div>
-)}
   </section>
 )}
 

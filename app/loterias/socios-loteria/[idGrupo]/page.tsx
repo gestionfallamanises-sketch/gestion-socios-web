@@ -94,30 +94,25 @@ export default function GrupoLoteriaPage() {
         IDSorteo: sorteo.ID,
         FechaSorteo: sorteo.FechaSorteo,
       
-        PapeletasFalla:
-          fila?.PapeletasFalla ?? Number(grupoActual.PapeletasFalla || 0),
-      
-        PapeletasVirgen:
-          fila?.PapeletasVirgen ?? Number(grupoActual.PapeletasVirgen || 0),
-      
-        ImporteFalla:
-          fila?.ImporteFalla ??
-          Number(grupoActual.PapeletasFalla || 0) *
-            Number(sorteo.ImportePapeletaFalla || 0),
-      
-        ImporteVirgen:
-          fila?.ImporteVirgen ??
-          Number(grupoActual.PapeletasVirgen || 0) *
-            Number(sorteo.ImportePapeletaVirgen || 0),
-      
-        ImportePagado: fila?.ImportePagado ?? 0,
-      
-        ImportePremio:
-          fila?.ImportePremio ??
-          Number(grupoActual.PapeletasFalla || 0) *
-            Number(sorteo.PremioFallaPorPapeleta || 0) +
-            Number(grupoActual.PapeletasVirgen || 0) *
-            Number(sorteo.PremioVirgenPorPapeleta || 0),
+        PapeletasFalla: Number(fila?.PapeletasFalla || 0),
+
+PapeletasVirgen: Number(fila?.PapeletasVirgen || 0),
+
+ImporteFalla: Number(fila?.ImporteFalla || 0),
+
+ImporteVirgen: Number(fila?.ImporteVirgen || 0),
+
+ImportePagado: Number(fila?.ImportePagado || 0),
+
+PapeletasPremioFalla: Number(fila?.PapeletasPremioFalla || 0),
+
+PapeletasPremioVirgen: Number(fila?.PapeletasPremioVirgen || 0),
+
+ImportePremio: Number(fila?.ImportePremio || 0),
+
+PremioEntregado: fila?.PremioEntregado ?? false,
+
+PagadoConfirmado: fila?.PagadoConfirmado ?? false,
       };
     });
   
@@ -166,6 +161,8 @@ export default function GrupoLoteriaPage() {
   >
     ← Volver a sorteos
   </button>
+
+  
 </div>
 
           <section className="mb-6 border border-zinc-200 bg-white p-6">
@@ -181,7 +178,12 @@ export default function GrupoLoteriaPage() {
   </div>
 
   <div className="text-right text-sm">
-    <div><strong>Socio:</strong> {grupo?.ResponsableNombre}</div>
+  <div>
+  <strong>Socio:</strong>{" "}
+  {grupo?.EsExterno
+    ? `EXT - ${grupo?.NombreExterno}`
+    : grupo?.ResponsableNombre}
+</div>
 <div><strong>Miembros:</strong> {grupo?.NumeroMiembros}</div>
 <div>
   <strong>Falla:</strong> {grupo?.PapeletasFalla}{" "}

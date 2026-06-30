@@ -4,6 +4,7 @@ import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import GrupoLoteriaModal from "@/app/components/GrupoLoteriaModal";
 
 export default function SociosLoteriaPage() {
     const router = useRouter();
@@ -25,8 +26,16 @@ const [gruposLoteria, setGruposLoteria] = useState<any[]>([]);
 const [grupoSeleccionado, setGrupoSeleccionado] = useState<any | null>(null);
 const [mostrarDetalle, setMostrarDetalle] = useState(false);
 const [sociosDetalle, setSociosDetalle] = useState<any[]>([]);
+const [ordenResponsable, setOrdenResponsable] = useState<"asc" | "desc">("asc");
 const [grupoEditando, setGrupoEditando] = useState<any | null>(null);
 const [numcensYaUsados, setNumcensYaUsados] = useState<number[]>([]);
+const [mostrarModalExterno, setMostrarModalExterno] = useState(false);
+const [nombreExterno, setNombreExterno] = useState("");
+const [telefonoExterno, setTelefonoExterno] = useState("");
+const [externoFalla, setExternoFalla] = useState(0);
+const [externoVirgen, setExternoVirgen] = useState(0);
+const [externoNavidad, setExternoNavidad] = useState(0);
+const [externoNino, setExternoNino] = useState(0);
 
 useEffect(() => {
     cargarSocios();
@@ -113,10 +122,17 @@ useEffect(() => {
     return `${socio.Apellidos || ""}, ${socio.Nombre || ""} · NUMCENS ${socio.NUMCENS}`;
   }
   
+  function normalizarTexto(texto: string) {
+    return texto
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+
   function sociosFiltrados(texto: string) {
     if (!texto.trim()) return [];
   
-    const busqueda = texto.toLowerCase().trim();
+    const busqueda = normalizarTexto(texto.trim());
   
     return socios
       .filter((socio) => {
@@ -131,8 +147,13 @@ useEffect(() => {
 
 if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
   
-        const nombreCompleto = `${socio.Apellidos || ""} ${socio.Nombre || ""}`.toLowerCase();
-        const nombreInvertido = `${socio.Nombre || ""} ${socio.Apellidos || ""}`.toLowerCase();
+const nombreCompleto = normalizarTexto(
+  `${socio.Apellidos || ""} ${socio.Nombre || ""}`
+);
+
+const nombreInvertido = normalizarTexto(
+  `${socio.Nombre || ""} ${socio.Apellidos || ""}`
+);
         const numcens = String(socio.NUMCENS || "");
   
         return (
@@ -315,6 +336,42 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
     cargarNumcensYaUsados();
   }
 
+  async function guardarExterno() {
+    if (!nombreExterno.trim()) {
+      alert("Escribe el nombre del responsable externo.");
+      return;
+    }
+  
+    const { error } = await (supabase as any)
+      .from("SOCIOS_LOTERIA")
+      .insert({
+        EsExterno: true,
+        NombreExterno: nombreExterno.trim(),
+        TelefonoExterno: telefonoExterno.trim() || null,
+        Ejercicio: 2027,
+        PapeletasFalla: externoFalla,
+PapeletasVirgen: externoVirgen,
+PapeletasNavidad: externoNavidad,
+PapeletasNino: externoNino,
+        Observaciones: "Responsable externo",
+      });
+  
+    if (error) {
+      alert("Error creando externo: " + error.message);
+      return;
+    }
+  
+    setNombreExterno("");
+    setTelefonoExterno("");
+    setMostrarModalExterno(false);
+    setExternoFalla(0);
+setExternoVirgen(0);
+setExternoNavidad(0);
+setExternoNino(0);
+  
+await cargarGruposLoteria();
+  }
+
   async function cargarGruposLoteria() {
     const { data: grupos, error } = await (supabase as any)
       .from("SOCIOS_LOTERIA")
@@ -328,18 +385,28 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
     }
   
     const numcensResponsables = (grupos || [])
-      .map((grupo: any) => grupo.NUMCENS_Responsable)
-      .filter(Boolean);
-  
-    const { data: sociosResponsables, error: errorSocios } = await (supabase as any)
-      .from("SOCIOS")
-      .select("NUMCENS, Nombre, Apellidos")
-      .in("NUMCENS", numcensResponsables);
-  
-    if (errorSocios) {
-      alert(errorSocios.message);
-      return;
-    }
+  .filter(
+    (grupo: any) =>
+      grupo.NUMCENS_Responsable !== null &&
+      grupo.NUMCENS_Responsable !== undefined
+  )
+  .map((grupo: any) => Number(grupo.NUMCENS_Responsable));
+
+let sociosResponsables: any[] = [];
+
+if (numcensResponsables.length > 0) {
+  const { data, error: errorSocios } = await (supabase as any)
+    .from("SOCIOS")
+    .select("NUMCENS, Nombre, Apellidos")
+    .in("NUMCENS", numcensResponsables);
+
+  if (errorSocios) {
+    alert(errorSocios.message);
+    return;
+  }
+
+  sociosResponsables = data || [];
+}
   
     const gruposConNombre = (grupos || []).map((grupo: any) => {
       const responsable = (sociosResponsables || []).find(
@@ -349,9 +416,19 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
   
       return {
         ...grupo,
-        ResponsableNombre: responsable
+        ResponsableNombre: grupo.EsExterno
+  ? `EXT - ${grupo.NombreExterno || "Externo"}`
+  : responsable
   ? `${responsable.NUMCENS} - ${responsable.Apellidos}, ${responsable.Nombre}`
   : grupo.NUMCENS_Responsable,
+ResponsableOrden: grupo.EsExterno
+  ? grupo.NombreExterno || ""
+  : responsable
+  ? `${responsable.Apellidos || ""} ${responsable.Nombre || ""}`
+  : "",
+        ResponsableOrden: responsable
+          ? `${responsable.Apellidos || ""} ${responsable.Nombre || ""}`
+          : "",
       };
     });
   
@@ -461,6 +538,8 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
     setMostrarModal(true);
   }
 
+  const totalResponsables = gruposLoteria.length;
+
   const totalMiembros = gruposLoteria.reduce(
     (sum, g) => sum + Number(g.NumeroMiembros || 0),
     0
@@ -485,6 +564,22 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
     (sum, g) => sum + Number(g.PapeletasNino || 0),
     0
   );
+
+  const gruposLoteriaOrdenados = [...gruposLoteria].sort((a, b) => {
+    const nombreA = (a.ResponsableOrden || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  
+    const nombreB = (b.ResponsableOrden || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  
+    return ordenResponsable === "asc"
+      ? nombreA.localeCompare(nombreB)
+      : nombreB.localeCompare(nombreA);
+  });
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -514,12 +609,37 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
       </p>
     </div>
 
+    <div className="flex gap-2">
     <button
-      onClick={() => setMostrarModal(true)}
-      className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-    >
-      + Nuevo grupo
-    </button>
+  onClick={() => router.push("/loterias/socios-loteria/imprimir")}
+  title="Imprimir"
+  className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+>
+  🖨️
+</button>
+
+<button
+  onClick={() => router.push("/loterias/socios-loteria/excel")}
+  title="Exportar Excel"
+  className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+>
+  📗
+</button>
+
+  <button
+    onClick={() => setMostrarModalExterno(true)}
+    className="bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+  >
+    + Externo
+  </button>
+
+  <button
+    onClick={() => setMostrarModal(true)}
+    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+  >
+    + Nuevo grupo
+  </button>
+</div>
   </div>
 </section>
 
@@ -531,6 +651,11 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
   </h2>
 
   <div className="flex flex-wrap justify-end gap-2 text-xs">
+  <span className="text-zinc-600">Responsables</span>
+<span className="bg-white px-2 py-1 font-semibold">
+  {totalResponsables}
+</span>
+    
     <span className="text-zinc-600">Miembros</span>
     <span className="bg-white px-2 py-1 font-semibold">{totalMiembros}</span>
 
@@ -554,7 +679,18 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
 
                 <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
                   <tr>
-                    <th className="px-4 py-3">Responsable</th>
+                  <th className="px-4 py-3 text-left">
+  <button
+    type="button"
+    onClick={() =>
+      setOrdenResponsable(ordenResponsable === "asc" ? "desc" : "asc")
+    }
+    className="flex items-center gap-1 text-xs font-semibold uppercase text-zinc-600"
+  >
+    Responsable
+    <span>{ordenResponsable === "asc" ? "↑" : "↓"}</span>
+  </button>
+</th>
                     <th className="px-4 py-3 text-center">Miembros</th>
                     <th className="px-4 py-3 text-center">Falla</th>
                     <th className="px-4 py-3 text-center">Virgen</th>
@@ -572,7 +708,7 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
       </td>
     </tr>
   ) : (
-    gruposLoteria.map((grupo) => (
+    gruposLoteriaOrdenados.map((grupo) => (
       <tr key={grupo.ID} className="border-t border-zinc-200 hover:bg-red-50">
         <td
   className="cursor-pointer px-4 py-3 font-medium text-red-900 hover:underline"
@@ -618,268 +754,125 @@ if (yaUsadoEnOtroGrupo && !grupoEditando) return false;
 
         </div>
 
-        {mostrarModal && (
+<GrupoLoteriaModal
+  mostrarModal={mostrarModal}
+  grupoEditando={grupoEditando}
+
+  busquedaResponsable={busquedaResponsable}
+  setBusquedaResponsable={setBusquedaResponsable}
+
+  responsableSeleccionado={responsableSeleccionado}
+  setResponsableSeleccionado={setResponsableSeleccionado}
+
+  sociosFiltrados={sociosFiltrados}
+  textoSocio={textoSocio}
+  sociosIncluidos={sociosIncluidos}
+setSociosIncluidos={setSociosIncluidos}
+
+busquedaSocio={busquedaSocio}
+setBusquedaSocio={setBusquedaSocio}
+
+agregarSocioIncluido={agregarSocioIncluido}
+quitarSocioIncluido={quitarSocioIncluido}
+
+papeletasFalla={papeletasFalla}
+setPapeletasFalla={setPapeletasFalla}
+
+papeletasVirgen={papeletasVirgen}
+setPapeletasVirgen={setPapeletasVirgen}
+
+papeletasNavidad={papeletasNavidad}
+setPapeletasNavidad={setPapeletasNavidad}
+
+papeletasNino={papeletasNino}
+setPapeletasNino={setPapeletasNino}
+
+observaciones={observaciones}
+setObservaciones={setObservaciones}
+
+limpiarFormulario={limpiarFormulario}
+
+setGrupoEditando={setGrupoEditando}
+setMostrarModal={setMostrarModal}
+
+guardarGrupoLoteria={guardarGrupoLoteria}
+/>
+
+{mostrarModalExterno && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-    <div className="w-full max-w-2xl border border-zinc-200 bg-white shadow-xl">
+    <div className="w-full max-w-md border border-zinc-200 bg-white shadow-xl">
 
       <div className="border-b border-zinc-200 px-6 py-4">
         <h2 className="text-lg font-semibold">
-        {grupoEditando ? "Editar grupo de lotería" : "Nuevo grupo de lotería"}
+          Nuevo responsable externo
         </h2>
       </div>
 
-      <div className="space-y-5 p-6">
+      <div className="space-y-4 p-6">
 
-      <div>
-  <label className="mb-1 block text-sm font-medium text-zinc-700">
-    Responsable
-  </label>
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Nombre
+          </label>
 
-  <input
-    type="text"
-    value={busquedaResponsable}
-    onChange={(e) => {
-      setBusquedaResponsable(e.target.value);
-      setResponsableSeleccionado(null);
-    }}
-    placeholder="Buscar socio responsable..."
-    className="w-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
-  />
-
-  {busquedaResponsable && !responsableSeleccionado && (
-    <div className="mt-1 max-h-40 overflow-y-auto border border-zinc-200 bg-white">
-      {sociosFiltrados(busquedaResponsable).map((socio) => (
-        <button
-          key={socio.NUMCENS}
-          type="button"
-          onClick={() => {
-            setResponsableSeleccionado(socio);
-            setBusquedaResponsable(textoSocio(socio));
-          
-            const yaIncluido = sociosIncluidos.some(
-              (s) => Number(s.NUMCENS) === Number(socio.NUMCENS)
-            );
-          
-            if (!yaIncluido) {
-              setSociosIncluidos([...sociosIncluidos, socio]);
-            }
-          }}
-          className="block w-full px-3 py-2 text-left text-sm hover:bg-red-50"
-        >
-          {textoSocio(socio)}
-          {socio.ConLoteria ? (
-            <span className="ml-2 text-xs text-green-700">Con lotería</span>
-          ) : (
-            <span className="ml-2 text-xs text-zinc-400">Sin lotería</span>
-          )}
-        </button>
-      ))}
-    </div>
-  )}
-</div>
-
-<div>
-  <label className="mb-1 block text-sm font-medium text-zinc-700">
-    Socios incluidos
-  </label>
-
-  <input
-    type="text"
-    value={busquedaSocio}
-    onChange={(e) => setBusquedaSocio(e.target.value)}
-    placeholder="Buscar socio para añadir..."
-    className="w-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
-  />
-
-  {busquedaSocio && (
-    <div className="mt-1 max-h-40 overflow-y-auto border border-zinc-200 bg-white">
-      {sociosFiltrados(busquedaSocio).map((socio) => (
-        <button
-          key={socio.NUMCENS}
-          type="button"
-          onClick={() => agregarSocioIncluido(socio)}
-          className="block w-full px-3 py-2 text-left text-sm hover:bg-red-50"
-        >
-          {textoSocio(socio)}
-          {socio.ConLoteria ? (
-            <span className="ml-2 text-xs text-green-700">Con lotería</span>
-          ) : (
-            <span className="ml-2 text-xs text-zinc-400">Sin lotería</span>
-          )}
-        </button>
-      ))}
-    </div>
-  )}
-
-  {sociosIncluidos.length === 0 ? (
-    <div className="mt-3 border border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-500">
-      Todavía no hay socios añadidos.
-    </div>
-  ) : (
-    <div className="mt-3 divide-y divide-zinc-200 border border-zinc-200">
-      {sociosIncluidos.map((socio) => (
-        <div
-          key={socio.NUMCENS}
-          className="flex items-center justify-between px-3 py-2 text-sm"
-        >
-          <span>
-            {textoSocio(socio)}
-            {socio.ConLoteria ? (
-              <span className="ml-2 text-xs text-green-700">Con lotería</span>
-            ) : (
-              <span className="ml-2 text-xs text-zinc-400">Sin lotería</span>
-            )}
-          </span>
-
-          {Number(socio.NUMCENS) !== Number(responsableSeleccionado?.NUMCENS) ? (
-  <button
-    type="button"
-    onClick={() => quitarSocioIncluido(socio.NUMCENS)}
-    className="text-xs font-medium text-red-900 hover:underline"
-  >
-    Quitar
-  </button>
-) : (
-  <span className="text-xs text-zinc-400">
-    Responsable
-  </span>
-)}
+          <input
+            value={nombreExterno}
+            onChange={(e) => setNombreExterno(e.target.value)}
+            className="w-full border border-zinc-300 px-3 py-2"
+          />
         </div>
-      ))}
-    </div>
-  )}
-</div>
 
-<div className="grid grid-cols-2 gap-2 md:grid-cols-7">
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Miembros
-      </label>
-      <input
-  type="number"
-  value={sociosIncluidos?.length ?? 0}
-  readOnly
-  className="w-full border border-zinc-300 bg-zinc-100 px-2 py-1 text-sm text-zinc-600"
-/>
-    </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Teléfono
+          </label>
 
-    <div>
-  <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-    Con lotería
-  </label>
+          <input
+            value={telefonoExterno}
+            onChange={(e) => setTelefonoExterno(e.target.value)}
+            className="w-full border border-zinc-300 px-3 py-2"
+          />
+        </div>
 
-  <input
-    type="number"
-    value={
-      sociosIncluidos.filter(
-        (socio) => socio.ConLoteria === true
-      ).length
-    }
-    readOnly
-    className="w-full border border-zinc-300 bg-zinc-100 px-2 py-1 text-sm text-zinc-600"
-  />
-</div>
-
-    <div>
-  <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-    Sin lotería
-  </label>
-
-  <input
-    type="number"
-    value={
-      sociosIncluidos.filter(
-        (socio) => socio.ConLoteria === false
-      ).length
-    }
-    readOnly
-    className="w-full border border-zinc-300 bg-zinc-100 px-2 py-1 text-sm text-zinc-600"
-  />
-</div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Falla
-      </label>
-      <input
-  type="number"
-  value={papeletasFalla}
-  onChange={(e) => setPapeletasFalla(Number(e.target.value))}
-  className="w-full border border-zinc-300 px-2 py-1 text-sm"
-/>
-    </div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Virgen
-      </label>
-      <input
-  type="number"
-  value={papeletasVirgen}
-  onChange={(e) => setPapeletasVirgen(Number(e.target.value))}
-  className="w-full border border-zinc-300 px-2 py-1 text-sm"
-/>
-    </div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Navidad
-      </label>
-      <input
-  type="number"
-  value={papeletasNavidad}
-  onChange={(e) => setPapeletasNavidad(Number(e.target.value))}
-  className="w-full border border-zinc-300 px-2 py-1 text-sm"
-/>
-    </div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Niño
-      </label>
-      <input
-  type="number"
-  value={papeletasNino}
-  onChange={(e) => setPapeletasNino(Number(e.target.value))}
-  className="w-full border border-zinc-300 px-2 py-1 text-sm"
-/>
-    </div>
+        <div className="grid grid-cols-2 gap-3">
+  <div>
+    <label className="mb-1 block text-sm font-medium">Falla</label>
+    <input type="number" value={externoFalla} onChange={(e) => setExternoFalla(Number(e.target.value))} className="w-full border border-zinc-300 px-3 py-2" />
   </div>
 
   <div>
-    <label className="mb-1 block text-sm font-medium text-zinc-700">
-      Observaciones
-    </label>
-
-    <textarea
-  rows={3}
-  value={observaciones}
-  onChange={(e) => setObservaciones(e.target.value)}
-  className="w-full border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-red-900"
-/>
+    <label className="mb-1 block text-sm font-medium">Virgen</label>
+    <input type="number" value={externoVirgen} onChange={(e) => setExternoVirgen(Number(e.target.value))} className="w-full border border-zinc-300 px-3 py-2" />
   </div>
 
+  <div>
+    <label className="mb-1 block text-sm font-medium">Navidad</label>
+    <input type="number" value={externoNavidad} onChange={(e) => setExternoNavidad(Number(e.target.value))} className="w-full border border-zinc-300 px-3 py-2" />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-sm font-medium">Niño</label>
+    <input type="number" value={externoNino} onChange={(e) => setExternoNino(Number(e.target.value))} className="w-full border border-zinc-300 px-3 py-2" />
+  </div>
 </div>
+
+      </div>
 
       <div className="flex justify-end gap-2 border-t border-zinc-200 px-6 py-4">
 
         <button
-          onClick={() => {
-            limpiarFormulario();
-            setGrupoEditando(null);
-            setMostrarModal(false);
-          }}
-          className="bg-zinc-300 px-4 py-2 text-sm"
+          onClick={() => setMostrarModalExterno(false)}
+          className="border border-zinc-300 px-4 py-2"
         >
           Cancelar
         </button>
 
         <button
-  onClick={guardarGrupoLoteria}
-  className="bg-red-900 px-4 py-2 text-sm text-white hover:bg-red-950"
->
-  Guardar
-</button>
+          onClick={guardarExterno}
+          className="bg-red-900 px-4 py-2 text-white"
+        >
+          Guardar
+        </button>
 
       </div>
 

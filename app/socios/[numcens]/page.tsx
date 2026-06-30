@@ -136,6 +136,43 @@ const textoPagador =
         socioPagador?.Apellidos || ""
       }, ${socioPagador?.Nombre || ""}`;
 
+      // Buscar si el socio pertenece a algún grupo de lotería
+const { data: detalleLoteria } = await supabase
+.from("SOCIOS_LOTERIA_DETALLE")
+.select("IDSocioLoteria")
+.eq("NUMCENS", socioAny.NUMCENS)
+.maybeSingle();
+
+let grupoLoteria: any = null;
+
+if (detalleLoteria) {
+const { data } = await supabase
+  .from("SOCIOS_LOTERIA")
+  .select("*")
+  .eq("ID", detalleLoteria.IDSocioLoteria)
+  .maybeSingle();
+
+grupoLoteria = data;
+}
+
+let responsableLoteria: any = null;
+
+if (grupoLoteria?.NUMCENS_Responsable) {
+  const { data } = await supabase
+    .from("SOCIOS")
+    .select("NUMCENS, Nombre, Apellidos")
+    .eq("NUMCENS", grupoLoteria.NUMCENS_Responsable)
+    .maybeSingle();
+
+  responsableLoteria = data;
+}
+
+const textoResponsableLoteria = grupoLoteria
+  ? grupoLoteria.EsExterno
+    ? "Externo"
+    : grupoLoteria.NUMCENS_Responsable
+  : "-";
+
   function cuotaMiembro(numcensMiembro: number) {
     return (cuotasFamilia as any[])?.find(
       (c) =>
@@ -254,23 +291,46 @@ const textoPagador =
 </div>
 </section>
 
-<section className="mb-8 border border-zinc-200 bg-white">
-  <div className="bg-zinc-100 px-4 py-3">
-    <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-      Configuración socio
-    </h2>
+<section className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  <div className="border border-zinc-200 bg-white">
+    <div className="bg-zinc-100 px-4 py-3">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+        Configuración socio
+      </h2>
+    </div>
+
+    <div className="grid grid-cols-2 lg:grid-cols-4">
+      <Bloque label="Comisión" value={socioAny.Comision} />
+      <Bloque label="Sexo" value={socioAny.SEXE} />
+      <Bloque label="Banda" value={socioAny.EsBanda ? "Sí" : "No"} />
+      <Bloque label="Cargo" value={socioAny.CARREG} />
+    </div>
   </div>
 
-  <div className="grid grid-cols-2   lg:grid-cols-9">
-    <Bloque label="Comisión" value={socioAny.Comision} />
-    <Bloque label="Sexo" value={socioAny.SEXE} />
-    <Bloque label="Banda" value={socioAny.EsBanda ? "Sí" : "No"} />
-    <Bloque label="Cargo" value={socioAny.CARREG} />
-    <Bloque label="Lotería" value={socioAny.ConLoteria ? "Sí" : "No"} />
-    <Bloque label="Falla" value={socioAny.PapeletasFalla || 0} />
-    <Bloque label="Virgen" value={socioAny.PapeletasVirgen || 0} />
-    <Bloque label="Navidad" value={socioAny.PapeletasNavidad || 0} />
-    <Bloque label="Niño" value={socioAny.PapeletasNino || 0} />
+  <div className="border border-zinc-200 bg-white">
+  <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
+  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+    Lotería
+  </h2>
+
+  {grupoLoteria && (
+    <Link
+      href={`/loterias/socios-loteria/${grupoLoteria.ID}`}
+      className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
+    >
+      Gestionar lotería
+    </Link>
+  )}
+</div>
+
+    <div className="grid grid-cols-2 lg:grid-cols-6">
+      <Bloque label="Lotería" value={socioAny.ConLoteria ? "Sí" : "No"} />
+      <Bloque label="Resp." value={textoResponsableLoteria} />
+      <Bloque label="Falla" value={grupoLoteria?.PapeletasFalla || 0} />
+<Bloque label="Virgen" value={grupoLoteria?.PapeletasVirgen || 0} />
+<Bloque label="Navidad" value={grupoLoteria?.PapeletasNavidad || 0} />
+<Bloque label="Niño" value={grupoLoteria?.PapeletasNino || 0} />
+    </div>
   </div>
 </section>
 

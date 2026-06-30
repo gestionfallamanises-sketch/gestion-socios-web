@@ -31,6 +31,13 @@ const [sorteoEditando, setSorteoEditando] = useState<any | null>(null);
 const [premioFallaPorPapeleta, setPremioFallaPorPapeleta] = useState(0);
 const [premioVirgenPorPapeleta, setPremioVirgenPorPapeleta] = useState(0);
 
+const [totalFalla, setTotalFalla] = useState(0);
+const [totalVirgen, setTotalVirgen] = useState(0);
+
+const [modalPos, setModalPos] = useState({ x: 160, y: 80 });
+const [arrastrandoModal, setArrastrandoModal] = useState(false);
+const [offsetModal, setOffsetModal] = useState({ x: 0, y: 0 });
+
 function euros(valor: number) {
     return new Intl.NumberFormat("es-ES", {
       minimumFractionDigits: 2,
@@ -38,19 +45,86 @@ function euros(valor: number) {
     }).format(Number(valor || 0)) + " €";
   }
 
-  const importeJugadoFalla = decimosFalla * precioDecimoFalla;
-const recaudacionMaxFalla = papeletasFalla * importePapeletaFalla;
-const papeletasVendidasFalla = papeletasFalla - sobrantesFalla;
-const beneficioRealFalla = papeletasVendidasFalla * beneficioFalla;
+  const precioPapeletaVentaFalla =
+  importePapeletaFalla + beneficioFalla;
 
-const importeJugadoVirgen = decimosVirgen * precioDecimoVirgen;
-const recaudacionMaxVirgen = papeletasVirgen * importePapeletaVirgen;
-const papeletasVendidasVirgen = papeletasVirgen - sobrantesVirgen;
-const beneficioRealVirgen = papeletasVendidasVirgen * beneficioVirgen;
+const importePagoAdministracionFalla =
+  decimosFalla * precioDecimoFalla;
+
+const papeletasEmitidasFalla =
+  importePapeletaFalla > 0
+    ? Math.floor(importePagoAdministracionFalla / importePapeletaFalla)
+    : 0;
+
+  const restoSueltoFalla =
+  importePagoAdministracionFalla -
+  papeletasEmitidasFalla * importePapeletaFalla;
+
+
+const papeletasSociosFalla = papeletasFalla;
+
+const papeletasSobrantesFalla =
+  Math.max(0, papeletasEmitidasFalla - papeletasSociosFalla);
+
+  const jugadoFalla =
+  papeletasSobrantesFalla * importePapeletaFalla +
+  restoSueltoFalla; 
+
+const recaudacionSociosFalla =
+  papeletasSociosFalla * precioPapeletaVentaFalla;
+
+const importeJugadoSociosFalla =
+  papeletasSociosFalla * importePapeletaFalla;
+
+const beneficioSociosFalla =
+  papeletasSociosFalla * beneficioFalla;
+
+const beneficioPremioFalla =
+  papeletasSobrantesFalla * premioFallaPorPapeleta;
+
+
+
+  const precioPapeletaVentaVirgen =
+  importePapeletaVirgen + beneficioVirgen;
+
+const importePagoAdministracionVirgen =
+  decimosVirgen * precioDecimoVirgen;
+
+const papeletasEmitidasVirgen =
+  importePapeletaVirgen > 0
+    ? Math.floor(importePagoAdministracionVirgen / importePapeletaVirgen)
+    : 0;
+
+  const restoSueltoVirgen =
+  importePagoAdministracionVirgen -
+  papeletasEmitidasVirgen * importePapeletaVirgen;
+
+
+const papeletasSociosVirgen = papeletasVirgen;
+
+const papeletasSobrantesVirgen =
+  Math.max(0, papeletasEmitidasVirgen - papeletasSociosVirgen);
+
+  const jugadoVirgen =
+  papeletasSobrantesVirgen * importePapeletaVirgen +
+  restoSueltoVirgen; 
+
+const recaudacionSociosVirgen =
+  papeletasSociosVirgen * precioPapeletaVentaVirgen;
+
+const importeJugadoSociosVirgen =
+  papeletasSociosVirgen * importePapeletaVirgen;
+
+const beneficioSociosVirgen =
+  papeletasSociosVirgen * beneficioVirgen;
+
+const beneficioPremioVirgen =
+  papeletasSobrantesVirgen * premioVirgenPorPapeleta;
 
 useEffect(() => {
     cargarSorteos();
   }, []);
+
 
   async function guardarSorteo() {
     if (!fechaSorteo) {
@@ -122,7 +196,61 @@ setMostrarModal(false);
     setSorteos(data || []);
   }
 
-  function editarSorteo(sorteo: any) {
+  async function cargarTotalesSociosLoteria() {
+    const { data, error } = await (supabase as any)
+      .from("SOCIOS_LOTERIA")
+      .select("PapeletasFalla, PapeletasVirgen");
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    const totalF = (data || []).reduce(
+      (sum: number, grupo: any) => sum + Number(grupo.PapeletasFalla || 0),
+      0
+    );
+  
+    const totalV = (data || []).reduce(
+      (sum: number, grupo: any) => sum + Number(grupo.PapeletasVirgen || 0),
+      0
+    );
+  
+    setTotalFalla(totalF);
+    setTotalVirgen(totalV);
+  
+    setPapeletasFalla(totalF);
+    setPapeletasVirgen(totalV);
+  }
+
+  async function cargarTotalesSorteo(idSorteo: number) {
+    const { data, error } = await (supabase as any)
+      .from("LOTERIA_SORTEOS_GRUPOS")
+      .select("PapeletasFalla, PapeletasVirgen")
+      .eq("IDSorteo", idSorteo);
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    const totalFalla = (data || []).reduce(
+      (sum: number, fila: any) =>
+        sum + Number(fila.PapeletasFalla || 0),
+      0
+    );
+  
+    const totalVirgen = (data || []).reduce(
+      (sum: number, fila: any) =>
+        sum + Number(fila.PapeletasVirgen || 0),
+      0
+    );
+  
+    setPapeletasFalla(totalFalla);
+    setPapeletasVirgen(totalVirgen);
+  }
+
+  async function editarSorteo(sorteo: any) {
     setSorteoEditando(sorteo);
     setFechaSorteo(sorteo.FechaSorteo || "");
   
@@ -144,6 +272,8 @@ setMostrarModal(false);
     setBeneficioVirgen(Number(sorteo.BeneficioVirgen || 0));
     setPremioVirgenPorPapeleta(Number(sorteo.PremioVirgenPorPapeleta || 0));
   
+    await cargarTotalesSociosLoteria();
+    
     setMostrarModal(true);
   }
 
@@ -186,8 +316,8 @@ setMostrarModal(false);
     setPrecioDecimoFalla(0);
     setPapeletasFalla(0);
     setSobrantesFalla(0);
-    setImportePapeletaFalla(0);
-    setBeneficioFalla(0);
+    setImportePapeletaFalla(1.6);
+    setBeneficioFalla(0.4);
     setPremioFallaPorPapeleta(0);
   
     setNumeroVirgen("");
@@ -195,8 +325,8 @@ setMostrarModal(false);
     setPrecioDecimoVirgen(0);
     setPapeletasVirgen(0);
     setSobrantesVirgen(0);
-    setImportePapeletaVirgen(0);
-    setBeneficioVirgen(0);
+    setImportePapeletaVirgen(1.6);
+    setBeneficioVirgen(0.4);
     setPremioVirgenPorPapeleta(0);
   }
 
@@ -208,6 +338,10 @@ setMostrarModal(false);
     const anio = d.getFullYear();
   
     return `${dia}/${mes}/${anio}`;
+  }
+
+  function imprimirListadoSorteos() {
+    router.push("/loterias/sorteos/imprimir")
   }
 
   return (
@@ -238,15 +372,34 @@ setMostrarModal(false);
       </p>
     </div>
 
-    <button
-      onClick={() => {
-        limpiarFormularioSorteo();
-        setMostrarModal(true);
-      }}
-      className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-    >
-      + Nuevo sorteo
-    </button>
+    
+
+    <div className="flex gap-2">
+  <button
+  onClick={() => router.push("/loterias/sorteos/imprimir")}
+  className="bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+>
+  Imprimir
+</button>
+
+<button
+  onClick={() => router.push("/loterias/sorteos/excel")}
+  className="bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+>
+  Excel
+</button>
+
+  <button
+    onClick={async () => {
+      limpiarFormularioSorteo();
+      await cargarTotalesSociosLoteria();
+      setMostrarModal(true);
+    }}
+    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+  >
+    + Nuevo sorteo
+  </button>
+</div>
   </div>
 </section>
 
@@ -271,35 +424,27 @@ setMostrarModal(false);
   <table className="min-w-full divide-y divide-zinc-200">
     <thead className="bg-zinc-100">
       <tr>
-        <th className="px-4 py-2 text-left text-xs font-semibold uppercase">
-          Fecha
-        </th>
-
-        <th className="px-4 py-2 text-left text-xs font-semibold uppercase">
-          Falla
-        </th>
-
-        <th className="px-4 py-2 text-right text-xs font-semibold uppercase">
-  Pap. Falla
-</th>
-
-<th className="px-4 py-2 text-right text-xs font-semibold uppercase">
-  Déc. Falla
+      <th className="px-4 py-2 text-left text-xs font-semibold uppercase">
+  Fecha
 </th>
 
 <th className="px-4 py-2 text-left text-xs font-semibold uppercase">
-          Virgen
-        </th>
-
-<th className="px-4 py-2 text-right text-xs font-semibold uppercase">
-  Pap. Virgen
+  Falla
 </th>
 
 <th className="px-4 py-2 text-right text-xs font-semibold uppercase">
-  Déc. Virgen
+  Déc. F
 </th>
 
-        <th className="px-4 py-2 text-center text-xs font-semibold uppercase">
+<th className="px-4 py-2 text-left text-xs font-semibold uppercase">
+  Virgen
+</th>
+
+<th className="px-4 py-2 text-right text-xs font-semibold uppercase">
+  Déc. V
+</th>
+
+<th className="px-4 py-2 text-center text-xs font-semibold uppercase">
   Acciones
 </th>
       </tr>
@@ -325,10 +470,6 @@ setMostrarModal(false);
           </td>
 
           <td className="px-4 py-2 text-right text-sm">
-  {Number(sorteo.ImportePapeletaFalla || 0).toFixed(2)} €
-</td>
-
-<td className="px-4 py-2 text-right text-sm">
   {Number(sorteo.PrecioDecimoFalla || 0).toFixed(2)} €
 </td>
 
@@ -336,38 +477,70 @@ setMostrarModal(false);
             {sorteo.NumeroVirgen}
           </td>
 
-<td className="px-4 py-2 text-right text-sm">
-  {Number(sorteo.ImportePapeletaVirgen || 0).toFixed(2)} €
-</td>
-
-<td className="px-4 py-2 text-right text-sm">
+          <td className="px-4 py-2 text-right text-sm">
   {Number(sorteo.PrecioDecimoVirgen || 0).toFixed(2)} €
 </td>
 
 
-          <td className="px-4 py-2 text-center">
-          <div className="flex justify-center gap-3">
+<td className="px-4 py-2 text-center">
+  <div className="flex justify-center gap-2">
 
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      editarSorteo(sorteo);
-    }}
-    className="text-sm font-medium text-red-900 hover:underline"
-  >
-    Editar sorteo
-  </button>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        router.push(`/loterias/sorteos/${sorteo.ID}`);
+      }}
+      title="Ver líneas de socios"
+      className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+    >
+      👥
+    </button>
 
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      eliminarSorteo(sorteo.ID);
-    }}
-    className="text-sm font-medium text-red-700 hover:underline"
-  >
-    Eliminar
-  </button>
-</div>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        editarSorteo(sorteo);
+      }}
+      title="Editar sorteo"
+      className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+    >
+      ✏️
+    </button>
+
+    <button
+  onClick={(e) => {
+    e.stopPropagation();
+    router.push(`/loterias/sorteos/${sorteo.ID}/imprimir`);
+  }}
+  title="Imprimir ficha"
+  className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+>
+  🖨️
+</button>
+
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        alert("Pendiente exportar Excel");
+      }}
+      title="Exportar Excel"
+      className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+    >
+      📗
+    </button>
+
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        eliminarSorteo(sorteo.ID);
+      }}
+      title="Eliminar"
+      className="rounded bg-red-100 px-2 py-1 text-sm hover:bg-red-200"
+    >
+      🗑️
+    </button>
+
+  </div>
 </td>
         </tr>
       ))}
@@ -378,26 +551,57 @@ setMostrarModal(false);
         </div>
 
         {mostrarModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="w-full max-w-4xl border border-zinc-200 bg-white shadow-xl">
-            <div className="border-b border-zinc-200 px-6 py-4">
-  <h2 className="text-lg font-semibold">
-    {sorteoEditando ? "Editar sorteo" : "Nuevo sorteo"}
-  </h2>
+          <div
+          className="fixed inset-0 z-50 bg-black/40"
+          onMouseMove={(e) => {
+            if (!arrastrandoModal) return;
+        
+            setModalPos({
+              x: e.clientX - offsetModal.x,
+              y: e.clientY - offsetModal.y,
+            });
+          }}
+          onMouseUp={() => setArrastrandoModal(false)}
+        >
+          <div
+            className="absolute w-full max-w-6xl border border-zinc-200 bg-white shadow-xl"
+            style={{
+              left: modalPos.x,
+              top: modalPos.y,
+            }}
+          >
+            <div
+  className="cursor-move border-b border-zinc-200 px-6 py-3"
+  onMouseDown={(e) => {
+    setArrastrandoModal(true);
+    setOffsetModal({
+      x: e.clientX - modalPos.x,
+      y: e.clientY - modalPos.y,
+    });
+  }}
+>
+  <div className="flex items-center justify-between gap-4">
+    <h2 className="text-lg font-semibold">
+      {sorteoEditando ? "Editar sorteo" : "Nuevo sorteo"}
+    </h2>
+
+    <div className="flex items-center gap-2">
+      <label className="text-sm font-medium text-zinc-700">
+        Fecha
+      </label>
+
+      <input
+        type="date"
+        value={fechaSorteo}
+        onChange={(e) => setFechaSorteo(e.target.value)}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="w-40 border border-zinc-300 px-2 py-1 text-sm"
+      />
+    </div>
+  </div>
 </div>
 
-              <div className="space-y-4 p-6">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-zinc-700">
-                    Fecha del sorteo
-                  </label>
-                  <input
-  type="date"
-  value={fechaSorteo}
-  onChange={(e) => setFechaSorteo(e.target.value)}
-  className="w-full border border-zinc-300 px-3 py-2 text-sm"
-/>
-                </div>
+              <div className="space-y-3 p-4">
 
                 <div className="grid grid-cols-2 gap-6">
 
@@ -421,85 +625,104 @@ setMostrarModal(false);
   {/* CANTIDADES */}
 
   <div className="flex items-center justify-between">
-    <label className="text-sm">Nº Décimos</label>
+  <label className="text-sm">Nº Décimos</label>
+  <input
+    type="number"
+    value={decimosFalla || 0}
+    onChange={(e) => setDecimosFalla(Number(e.target.value))}
+    className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+  />
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Precio décimo</label>
+  <div className="flex items-center">
     <input
-  type="number"
-  value={decimosFalla || 0}
-  onChange={(e) => setDecimosFalla(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
+      type="number"
+      step="0.01"
+      value={precioDecimoFalla || 0}
+      onChange={(e) => setPrecioDecimoFalla(Number(e.target.value))}
+      className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+    />
+    <span className="ml-2 text-sm">€</span>
   </div>
+</div>
 
-  {/* IMPORTES */}
+<div className="flex items-center justify-between">
+  <label className="text-sm">Papeletas emitidas</label>
+  <input
+    type="number"
+    value={papeletasEmitidasFalla}
+readOnly
+    className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+  />
+</div>
 
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Precio décimo</label>
-
-    <div className="flex items-center">
+<div className="flex items-center justify-between">
+  <label className="text-sm">Precio papeleta venta</label>
+  <div className="flex items-center">
     <input
+      type="number"
+      step="0.01"
+      value={(importePapeletaFalla + beneficioFalla).toFixed(2)}
+      readOnly
+      className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+    />
+    <span className="ml-2 text-sm">€</span>
+  </div>
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Papeletas socios</label>
+  <input
+    type="number"
+    value={papeletasFalla || 0}
+    onChange={(e) => setPapeletasFalla(Number(e.target.value))}
+    className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+  />
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Importe jugado</label>
+  <div className="flex items-center">
+  <input
   type="number"
   step="0.01"
-  value={precioDecimoFalla || 0}
-  onChange={(e) => setPrecioDecimoFalla(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
-      <span className="ml-2 text-sm">€</span>
-    </div>
-  </div>
-
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Papeletas</label>
-    <input
-  type="number"
-  value={papeletasFalla || 0}
-  onChange={(e) => setPapeletasFalla(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
-  </div>
-
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Importe papeleta</label>
-
-    <div className="flex items-center">
-    <input
-  type="number"
-  step="0.01"
-  value={importePapeletaFalla || 0}
+  value={importePapeletaFalla}
   onChange={(e) => setImportePapeletaFalla(Number(e.target.value))}
   className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
 />
-      <span className="ml-2 text-sm">€</span>
-    </div>
+    <span className="ml-2 text-sm">€</span>
   </div>
+</div>
 
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Sobrantes</label>
+<div className="flex items-center justify-between">
+  <label className="text-sm">Papeletas sobrantes</label>
+  <input
+    type="number"
+    value={papeletasSobrantesFalla}
+readOnly
+    onChange={(e) => setSobrantesFalla(Number(e.target.value))}
+    className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+  />
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Beneficio papeleta</label>
+  <div className="flex items-center">
     <input
-  type="number"
-  value={sobrantesFalla || 0}
-  onChange={(e) => setSobrantesFalla(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
+      type="number"
+      step="0.01"
+      value={beneficioFalla || 0}
+      onChange={(e) => setBeneficioFalla(Number(e.target.value))}
+      className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+    />
+    <span className="ml-2 text-sm">€</span>
   </div>
+</div>
 
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Beneficio pap.</label>
-
-    <div className="flex items-center">
-    <input
-  type="number"
-  step="0.01"
-  value={beneficioFalla || 0}
-  onChange={(e) => setBeneficioFalla(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
-      <span className="ml-2 text-sm">€</span>
-    </div>
-  </div>
-
-  <div className="flex items-center justify-between">
-  <label className="text-sm">Premio pap.</label>
-
+<div className="flex items-center justify-between">
+  <label className="text-sm">Premio papeletas</label>
   <div className="flex items-center">
     <input
       type="number"
@@ -519,24 +742,44 @@ setMostrarModal(false);
 <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
 
   <div className="flex items-center justify-between">
-    <span>Importe jugado</span>
-    <span className="font-semibold">{euros(importeJugadoFalla)}</span>
+  <span>Recaudación socios</span>
+  <span className="font-semibold">{euros(recaudacionSociosFalla)}</span>
+</div>
+
+<div className="flex items-center justify-between">
+  <span>Pago administración</span>
+  <span className="font-semibold">
+    {euros(importePagoAdministracionFalla)}
+  </span>
+</div>
+
+<div className="flex items-center justify-between">
+  <span>Importe jugado socios</span>
+  <span className="font-semibold">{euros(importeJugadoSociosFalla)}</span>
+</div>
+
+<div className="flex items-center justify-between">
+  <div>
+    <div>Jugado falla</div>
+    <div className="text-xs text-zinc-500">
+      Sobrantes + resto sobrante
+    </div>
   </div>
 
-  <div className="flex items-center justify-between">
-    <span>Recaudación máx.</span>
-    <span className="font-semibold">{euros(recaudacionMaxFalla)}</span>
-  </div>
+  <span className="font-semibold">
+    {euros(jugadoFalla)}
+  </span>
+</div>
 
-  <div className="flex items-center justify-between">
-    <span>Papeletas vendidas</span>
-    <span className="font-semibold">{papeletasVendidasFalla}</span>
-  </div>
+<div className="flex items-center justify-between">
+  <span>Beneficio socios</span>
+  <span className="font-semibold">{euros(beneficioSociosFalla)}</span>
+</div>
 
-  <div className="flex items-center justify-between">
-    <span>Beneficio real</span>
-    <span className="font-semibold">{euros(beneficioRealFalla)}</span>
-  </div>
+<div className="flex items-center justify-between">
+  <span>Beneficio premio sobrantes</span>
+  <span className="font-semibold">{euros(beneficioPremioFalla)}</span>
+</div>
 
 </div>
 
@@ -562,85 +805,104 @@ setMostrarModal(false);
   {/* CANTIDADES */}
 
   <div className="flex items-center justify-between">
-    <label className="text-sm">Nº Décimos</label>
+  <label className="text-sm">Nº Décimos</label>
+  <input
+    type="number"
+    value={decimosVirgen || 0}
+    onChange={(e) => setDecimosVirgen(Number(e.target.value))}
+    className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+  />
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Precio décimo</label>
+  <div className="flex items-center">
     <input
-  type="number"
-  value={decimosVirgen || 0}
-  onChange={(e) => setDecimosVirgen(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
+      type="number"
+      step="0.01"
+      value={precioDecimoVirgen || 0}
+      onChange={(e) => setPrecioDecimoVirgen(Number(e.target.value))}
+      className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+    />
+    <span className="ml-2 text-sm">€</span>
   </div>
+</div>
 
-  {/* IMPORTES */}
+<div className="flex items-center justify-between">
+  <label className="text-sm">Papeletas emitidas</label>
+  <input
+    type="number"
+    value={papeletasEmitidasVirgen}
+readOnly
+    className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+  />
+</div>
 
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Precio décimo</label>
-
-    <div className="flex items-center">
+<div className="flex items-center justify-between">
+  <label className="text-sm">Precio papeleta venta</label>
+  <div className="flex items-center">
     <input
+      type="number"
+      step="0.01"
+      value={(importePapeletaVirgen + beneficioVirgen).toFixed(2)}
+      readOnly
+      className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+    />
+    <span className="ml-2 text-sm">€</span>
+  </div>
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Papeletas socios</label>
+  <input
+    type="number"
+    value={papeletasVirgen || 0}
+    onChange={(e) => setPapeletasVirgen(Number(e.target.value))}
+    className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+  />
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Importe jugado</label>
+  <div className="flex items-center">
+  <input
   type="number"
   step="0.01"
-  value={precioDecimoVirgen || 0}
-  onChange={(e) => setPrecioDecimoVirgen(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
-      <span className="ml-2 text-sm">€</span>
-    </div>
-  </div>
-
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Papeletas</label>
-    <input
-  type="number"
-  value={papeletasVirgen || 0}
-  onChange={(e) => setPapeletasVirgen(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
-  </div>
-
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Importe papeleta</label>
-
-    <div className="flex items-center">
-    <input
-  type="number"
-  step="0.01"
-  value={importePapeletaVirgen || 0}
+  value={importePapeletaVirgen}
   onChange={(e) => setImportePapeletaVirgen(Number(e.target.value))}
   className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
 />
-      <span className="ml-2 text-sm">€</span>
-    </div>
+    <span className="ml-2 text-sm">€</span>
   </div>
+</div>
 
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Sobrantes</label>
+<div className="flex items-center justify-between">
+  <label className="text-sm">Papeletas sobrantes</label>
+  <input
+    type="number"
+    value={papeletasSobrantesVirgen}
+readOnly
+    onChange={(e) => setSobrantesVirgen(Number(e.target.value))}
+    className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+  />
+</div>
+
+<div className="flex items-center justify-between">
+  <label className="text-sm">Beneficio papeleta</label>
+  <div className="flex items-center">
     <input
-  type="number"
-  value={sobrantesVirgen || 0}
-  onChange={(e) => setSobrantesVirgen(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
+      type="number"
+      step="0.01"
+      value={beneficioVirgen || 0}
+      onChange={(e) => setBeneficioVirgen(Number(e.target.value))}
+      className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
+    />
+    <span className="ml-2 text-sm">€</span>
   </div>
+</div>
 
-  <div className="flex items-center justify-between">
-    <label className="text-sm">Beneficio pap.</label>
-
-    <div className="flex items-center">
-    <input
-  type="number"
-  step="0.01"
-  value={beneficioVirgen || 0}
-  onChange={(e) => setBeneficioVirgen(Number(e.target.value))}
-  className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-/>
-      <span className="ml-2 text-sm">€</span>
-    </div>
-  </div>
-
-  <div className="flex items-center justify-between">
-  <label className="text-sm">Premio pap.</label>
-
+<div className="flex items-center justify-between">
+  <label className="text-sm">Premio papeletas</label>
   <div className="flex items-center">
     <input
       type="number"
@@ -660,32 +922,44 @@ setMostrarModal(false);
 <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
 
   <div className="flex items-center justify-between">
-    <span>Importe jugado</span>
-    <span className="font-semibold">
-  {euros(importeJugadoVirgen)}
-</span>
+  <span>Recaudación socios</span>
+  <span className="font-semibold">{euros(recaudacionSociosVirgen)}</span>
+</div>
+
+<div className="flex items-center justify-between">
+  <span>Pago administración</span>
+  <span className="font-semibold">
+    {euros(importePagoAdministracionVirgen)}
+  </span>
+</div>
+
+<div className="flex items-center justify-between">
+  <span>Importe jugado socios</span>
+  <span className="font-semibold">{euros(importeJugadoSociosVirgen)}</span>
+</div>
+
+<div className="flex items-center justify-between">
+  <div>
+    <div>Jugado falla</div>
+    <div className="text-xs text-zinc-500">
+      Sobrantes + resto sobrante
+    </div>
   </div>
 
-  <div className="flex items-center justify-between">
-    <span>Recaudación máx.</span>
-    <span className="font-semibold">
-  {euros(recaudacionMaxVirgen)}
-</span>
-  </div>
+  <span className="font-semibold">
+    {euros(jugadoVirgen)}
+  </span>
+</div>
 
-  <div className="flex items-center justify-between">
-    <span>Papeletas vendidas</span>
-    <span className="font-semibold">
-  {papeletasVendidasVirgen}
-</span>
-  </div>
+<div className="flex items-center justify-between">
+  <span>Beneficio socios</span>
+  <span className="font-semibold">{euros(beneficioSociosVirgen)}</span>
+</div>
 
-  <div className="flex items-center justify-between">
-    <span>Beneficio real</span>
-    <span className="font-semibold">
-  {euros(beneficioRealVirgen)}
-</span>
-  </div>
+<div className="flex items-center justify-between">
+  <span>Beneficio premio sobrantes</span>
+  <span className="font-semibold">{euros(beneficioPremioVirgen)}</span>
+</div>
 
 </div>
 
