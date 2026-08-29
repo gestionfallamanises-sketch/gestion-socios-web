@@ -851,7 +851,7 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
 
 <tbody className="divide-y divide-zinc-200 bg-white">
   {sorteos.map((sorteo) => {
-    const resumen = resumenesSorteos[sorteo.ID] || {
+    const resumen: any = resumenesSorteos[sorteo.ID] || {
       importeTotal: 0,
       cobrado: 0,
       pendienteCobro: 0,

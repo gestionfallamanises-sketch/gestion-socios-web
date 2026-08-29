@@ -453,7 +453,6 @@ const pendienteCobro = entregas.reduce((suma, fila) => {
       Papeletas: Number(fila.Papeletas || 0),
       Devueltas: Number(fila.Devueltas || 0),
       Serie: fila.Serie || "",
-      ImportePagado: totalPagadoEntrega(fila.ID),
       Observaciones: fila.Observaciones || "",
     });
   

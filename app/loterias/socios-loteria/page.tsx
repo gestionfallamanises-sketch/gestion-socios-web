@@ -433,10 +433,6 @@ ResponsableOrden: grupo.EsExterno
   : responsable
   ? `${responsable.Apellidos || ""} ${responsable.Nombre || ""}`
   : "",
-
-        ResponsableOrden: responsable
-          ? `${responsable.Apellidos || ""} ${responsable.Nombre || ""}`
-          : "",
       };
     });
   

@@ -140,7 +140,7 @@ const { data: sociosPagadores } =
 
 const sociosPagadoresAny = (sociosPagadores as any[]) || [];
 
-const remesaAgrupada = Object.values(
+const remesaAgrupada: any[] = Object.values(
   lineasAny.reduce((acc: any, linea: any) => {
     const clave = `${linea.IBAN}-${linea.TitularCuenta || ""}`;
 

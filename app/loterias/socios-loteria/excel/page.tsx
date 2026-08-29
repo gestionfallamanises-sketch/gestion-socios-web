@@ -69,10 +69,25 @@ export default function ExcelSociosLoteriaPage() {
       )
       .map(({ _orden, ...fila }: any) => fila);
 
-    const totalFalla = filas.reduce((sum, f) => sum + Number(f.Falla || 0), 0);
-    const totalVirgen = filas.reduce((sum, f) => sum + Number(f.Virgen || 0), 0);
-    const totalNavidad = filas.reduce((sum, f) => sum + Number(f.Navidad || 0), 0);
-    const totalNino = filas.reduce((sum, f) => sum + Number(f.Niño || 0), 0);
+      const totalFalla = filas.reduce(
+        (sum: number, f: any) => sum + Number(f.Falla || 0),
+        0
+      );
+      
+      const totalVirgen = filas.reduce(
+        (sum: number, f: any) => sum + Number(f.Virgen || 0),
+        0
+      );
+      
+      const totalNavidad = filas.reduce(
+        (sum: number, f: any) => sum + Number(f.Navidad || 0),
+        0
+      );
+      
+      const totalNino = filas.reduce(
+        (sum: number, f: any) => sum + Number(f.Niño || 0),
+        0
+      );
 
     filas.push({
       Responsable: "TOTAL",

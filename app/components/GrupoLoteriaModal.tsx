@@ -73,7 +73,7 @@ guardarGrupoLoteria,
 
   {busquedaResponsable && !responsableSeleccionado && (
     <div className="mt-1 max-h-40 overflow-y-auto border border-zinc-200 bg-white">
-      {sociosFiltrados(busquedaResponsable).map((socio) => (
+      {sociosFiltrados(busquedaResponsable).map((socio: any) => (
         <button
           key={socio.NUMCENS}
           type="button"
@@ -82,7 +82,7 @@ guardarGrupoLoteria,
             setBusquedaResponsable(textoSocio(socio));
           
             const yaIncluido = sociosIncluidos.some(
-              (s) => Number(s.NUMCENS) === Number(socio.NUMCENS)
+              (s: any) => Number(s.NUMCENS) === Number(socio.NUMCENS)
             );
           
             if (!yaIncluido) {
@@ -118,7 +118,7 @@ guardarGrupoLoteria,
 
   {busquedaSocio && (
     <div className="mt-1 max-h-40 overflow-y-auto border border-zinc-200 bg-white">
-      {sociosFiltrados(busquedaSocio).map((socio) => (
+      {sociosFiltrados(busquedaSocio).map((socio: any) => (
         <button
           key={socio.NUMCENS}
           type="button"
@@ -142,7 +142,7 @@ guardarGrupoLoteria,
     </div>
   ) : (
     <div className="mt-3 divide-y divide-zinc-200 border border-zinc-200">
-      {sociosIncluidos.map((socio) => (
+      {sociosIncluidos.map((socio: any) => (
         <div
           key={socio.NUMCENS}
           className="flex items-center justify-between px-3 py-2 text-sm"
@@ -197,7 +197,7 @@ guardarGrupoLoteria,
     type="number"
     value={
       sociosIncluidos.filter(
-        (socio) => socio.ConLoteria === true
+        (socio: any) => socio.ConLoteria === true
       ).length
     }
     readOnly
@@ -214,7 +214,7 @@ guardarGrupoLoteria,
     type="number"
     value={
       sociosIncluidos.filter(
-        (socio) => socio.ConLoteria === false
+        (socio: any) => socio.ConLoteria === false
       ).length
     }
     readOnly

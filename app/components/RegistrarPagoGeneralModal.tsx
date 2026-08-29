@@ -96,7 +96,7 @@ const diferencia =
       return;
     }
   
-    const ejercicioActivo = Number(ejercicioData?.Ejercicio || 0);
+    const ejercicioActivo = Number((ejercicioData as any)?.Ejercicio || 0);
   
     if (!ejercicioActivo) {
       alert("No se ha encontrado un ejercicio activo.");
