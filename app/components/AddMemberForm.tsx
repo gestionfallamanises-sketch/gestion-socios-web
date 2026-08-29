@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import React, { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { normalizarTexto } from "@/lib/texto";
 
 function normalizar(texto: string) {
-  return texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  return normalizarTexto(texto);
 }
 
 export default function AddMemberForm({
@@ -83,9 +81,35 @@ const socioElegido = socios.find((socio) => {
         })
         .eq("ID_Familia", idFamilia);
     }
-    await (supabase as any).rpc("generar_actualizar_cuotas_completo", {
-      p_ejercicio: 2027,
-    });
+    const { data: ejercicioData, error: errorEjercicio } = await supabase
+  .from("EJERCICIOS")
+  .select("Ejercicio")
+  .eq("Activo", true)
+  .maybeSingle();
+
+if (errorEjercicio) {
+  alert(errorEjercicio.message);
+  return;
+}
+
+const ejercicioActivo = Number(ejercicioData?.Ejercicio || 0);
+
+if (!ejercicioActivo) {
+  alert("No se ha encontrado un ejercicio activo.");
+  return;
+}
+
+const { error: errorCuotas } = await supabase.rpc(
+  "generar_actualizar_cuotas_completo",
+  {
+    p_ejercicio: ejercicioActivo,
+  }
+);
+
+if (errorCuotas) {
+  alert(errorCuotas.message);
+  return;
+}
     
     setLoading(false);
     setSeleccion("");

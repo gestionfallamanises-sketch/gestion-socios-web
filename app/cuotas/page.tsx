@@ -1,16 +1,17 @@
 "use client";
 
-import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useState } from "react";
-import Sidebar from "@/app/components/Sidebar";
-import GenerarCuotasButton from "@/app/components/GenerarCuotasButton";
-import RegistrarPagoGeneralButton from "@/app/components/RegistrarPagoGeneralButton";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { supabase } from "../../lib/supabaseClient";
+import Sidebar from "../components/Sidebar";
+import GenerarCuotasButton from "../components/GenerarCuotasButton";
+import RegistrarPagoGeneralButton from "../components/RegistrarPagoGeneralButton";
+import { normalizarTexto } from "@/lib/texto";
 
 export default function CuotasPage() {
   const [cuotas, setCuotas] = useState<any[]>([]);
   const [ejercicios, setEjercicios] = useState<any[]>([]);
-  const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState(2027);
+  const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
 
@@ -23,38 +24,54 @@ export default function CuotasPage() {
   }, [ejercicioSeleccionado]);
 
   async function cargarEjercicios() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("EJERCICIOS")
       .select("*")
       .order("Ejercicio", { ascending: false });
-
-    if (data) {
-      setEjercicios(data);
-
-      if (data.length > 0) {
-        setEjercicioSeleccionado((data as any[])[0].Ejercicio);
-      }
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    const listaEjercicios = (data || []) as any[];
+  
+    setEjercicios(listaEjercicios);
+  
+    const ejercicioActivo = listaEjercicios.find(
+      (ejercicio) => ejercicio.Activo === true
+    );
+  
+    if (ejercicioActivo) {
+      setEjercicioSeleccionado(Number(ejercicioActivo.Ejercicio));
+    } else if (listaEjercicios.length > 0) {
+      setEjercicioSeleccionado(Number(listaEjercicios[0].Ejercicio));
     }
   }
 
   async function cargarCuotas() {
-    const { data } = await supabase
+    if (!ejercicioSeleccionado) {
+      setCuotas([]);
+      return;
+    }
+  
+    const { data, error } = await supabase
       .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
       .eq("Ejercicio", ejercicioSeleccionado)
       .eq("EstadoSocio", "Activo")
       .order("Apellidos", { ascending: true });
   
-    if (data) {
-      setCuotas(data);
+    if (error) {
+      alert(error.message);
+      return;
     }
+  
+    setCuotas(data || []);
   }
   
-  function normalizarTexto(texto: string) {
-    return texto
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
+  function normalizar(texto: string) {
+    return normalizarTexto(texto);
   }
 
   const cuotasFiltradas = cuotas.filter((cuota) => {
@@ -115,32 +132,34 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
-  <select
-    value={ejercicioSeleccionado}
-    onChange={(e) =>
-      setEjercicioSeleccionado(Number(e.target.value))
-    }
-    className="border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
-  >
-    {ejercicios.length === 0 ? (
-      <option value={ejercicioSeleccionado}>
-        Ejercicio {ejercicioSeleccionado}
-      </option>
-    ) : (
-      ejercicios.map((ejercicio) => (
-        <option
-          key={ejercicio.Ejercicio}
-          value={ejercicio.Ejercicio}
-        >
-          Ejercicio {ejercicio.Ejercicio}
-        </option>
-      ))
-    )}
-  </select>
+                
+                <select
+  value={ejercicioSeleccionado ?? ""}
+  onChange={(e) =>
+    setEjercicioSeleccionado(
+      e.target.value ? Number(e.target.value) : null
+    )
+  }
+>
+  <option value="" disabled>
+    Selecciona un ejercicio
+  </option>
+
+  {ejercicios.map((ejercicio: any) => (
+    <option
+      key={ejercicio.Ejercicio}
+      value={ejercicio.Ejercicio}
+    >
+      {ejercicio.Ejercicio}
+    </option>
+  ))}
+</select>
 
   <RegistrarPagoGeneralButton />
 
+  {ejercicioSeleccionado !== null && (
   <GenerarCuotasButton ejercicio={ejercicioSeleccionado} />
+)}
 </div>
               </div>
             </div>

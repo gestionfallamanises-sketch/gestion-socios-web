@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import Sidebar from "@/app/components/Sidebar";
-import { supabase } from "@/lib/supabaseClient";
+import Sidebar from "../../../components/Sidebar";
+import { supabase } from "../../../../lib/supabaseClient";
 
 export default function EditarFamiliaPage() {
   const params = useParams();
@@ -37,23 +37,56 @@ export default function EditarFamiliaPage() {
     e: React.FormEvent
   ) {
     e.preventDefault();
-
+  
     setGuardando(true);
-
-    await (supabase as any)
+  
+    const { data: ejercicioData, error: errorEjercicio } =
+      await (supabase as any)
+        .from("EJERCICIOS")
+        .select("Ejercicio")
+        .eq("Activo", true)
+        .maybeSingle();
+  
+    if (errorEjercicio) {
+      alert(errorEjercicio.message);
+      setGuardando(false);
+      return;
+    }
+  
+    const ejercicioActivo = Number(ejercicioData?.Ejercicio || 0);
+  
+    if (!ejercicioActivo) {
+      alert("No se ha encontrado un ejercicio activo.");
+      setGuardando(false);
+      return;
+    }
+  
+    const { error: errorFamilia } = await (supabase as any)
       .from("FAMILIAS")
       .update({
         Nombre_Familia: nombre,
       })
       .eq("ID_Familia", Number(id));
-
-    await (supabase as any).rpc(
+  
+    if (errorFamilia) {
+      alert(errorFamilia.message);
+      setGuardando(false);
+      return;
+    }
+  
+    const { error: errorCuotas } = await (supabase as any).rpc(
       "generar_actualizar_cuotas_completo",
       {
-        p_ejercicio: 2027,
+        p_ejercicio: ejercicioActivo,
       }
     );
-
+  
+    if (errorCuotas) {
+      alert(errorCuotas.message);
+      setGuardando(false);
+      return;
+    }
+  
     router.push(`/familias/${id}`);
   }
 

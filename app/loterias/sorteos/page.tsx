@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import ResumenEconomicoSorteos from "@/app/loterias/componentes/ResumenEconomicoSorteos";
 
 export default function ControlSemanalPage() {
     const router = useRouter();
@@ -27,16 +28,101 @@ const [sobrantesVirgen, setSobrantesVirgen] = useState(0);
 const [importePapeletaVirgen, setImportePapeletaVirgen] = useState(0);
 const [beneficioVirgen, setBeneficioVirgen] = useState(0);
 const [sorteos, setSorteos] = useState<any[]>([]);
+
+const [resumenesSorteos, setResumenesSorteos] = useState<
+  Record<number, {
+    importeTotal: number;
+    pendienteCobro: number;
+    premioTotal: number;
+    premioPendiente: number;
+  }>
+>({});
+
 const [sorteoEditando, setSorteoEditando] = useState<any | null>(null);
+const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
+
 const [premioFallaPorPapeleta, setPremioFallaPorPapeleta] = useState(0);
 const [premioVirgenPorPapeleta, setPremioVirgenPorPapeleta] = useState(0);
 
 const [totalFalla, setTotalFalla] = useState(0);
 const [totalVirgen, setTotalVirgen] = useState(0);
 
+const [tipoSorteo, setTipoSorteo] = useState("SEMANAL");
+
 const [modalPos, setModalPos] = useState({ x: 160, y: 80 });
 const [arrastrandoModal, setArrastrandoModal] = useState(false);
 const [offsetModal, setOffsetModal] = useState({ x: 0, y: 0 });
+
+function calcularResumenEconomico(tipo: "Falla" | "Virgen") {
+  return sorteos.reduce(
+    (acc, sorteo) => {
+      if (tipo === "Virgen" && sorteo.TipoSorteo === "ESPECIAL") {
+        return acc;
+      }
+
+      const decimos = Number(sorteo[`Decimos${tipo}`] || 0);
+      const precioDecimo = Number(sorteo[`PrecioDecimo${tipo}`] || 0);
+      const importePapeleta = Number(sorteo[`ImportePapeleta${tipo}`] || 0);
+      const beneficioPapeleta = Number(sorteo[`Beneficio${tipo}`] || 0);
+      const papeletasSocios = Number(
+        sorteo[`PapeletasTotales${tipo}`] || 0
+      );
+
+      const pagoAdministracion = decimos * precioDecimo;
+
+      const papeletasEmitidas =
+        importePapeleta > 0
+          ? Math.floor(pagoAdministracion / importePapeleta)
+          : 0;
+
+      const sobrantes = Math.max(
+        0,
+        papeletasEmitidas - papeletasSocios
+      );
+
+      const recaudacion =
+        papeletasSocios * (importePapeleta + beneficioPapeleta);
+
+      const jugadoSocios =
+        papeletasSocios * importePapeleta;
+
+      const beneficioSocios =
+        papeletasSocios * beneficioPapeleta;
+
+      const jugadoSobrantes =
+        sobrantes * importePapeleta;
+
+      const beneficioSobrantes =
+        sobrantes * beneficioPapeleta;
+
+      return {
+        recaudacion: acc.recaudacion + recaudacion,
+        jugadoSocios: acc.jugadoSocios + jugadoSocios,
+        beneficioSocios:
+          acc.beneficioSocios + beneficioSocios,
+        pagoAdministracion:
+          acc.pagoAdministracion + pagoAdministracion,
+        jugadoSobrantes:
+          acc.jugadoSobrantes + jugadoSobrantes,
+        beneficioSobrantes:
+          acc.beneficioSobrantes + beneficioSobrantes,
+        beneficioTotal:
+          acc.beneficioTotal +
+          beneficioSocios +
+          beneficioSobrantes,
+      };
+    },
+    {
+      recaudacion: 0,
+      jugadoSocios: 0,
+      beneficioSocios: 0,
+      pagoAdministracion: 0,
+      jugadoSobrantes: 0,
+      beneficioSobrantes: 0,
+      beneficioTotal: 0,
+    }
+  );
+}
 
 function euros(valor: number) {
     return new Intl.NumberFormat("es-ES", {
@@ -121,26 +207,32 @@ const beneficioSociosVirgen =
 const beneficioPremioVirgen =
   papeletasSobrantesVirgen * premioVirgenPorPapeleta;
 
-useEffect(() => {
+  useEffect(() => {
     cargarSorteos();
   }, []);
 
 
   async function guardarSorteo() {
+    if (!ejercicioActivo) {
+      alert("No se ha encontrado un ejercicio activo.");
+      return;
+    }
+
     if (!fechaSorteo) {
       alert("Selecciona la fecha del sorteo.");
       return;
     }
   
     const datos = {
-      Ejercicio: 2027,
+      Ejercicio: ejercicioActivo,
       FechaSorteo: fechaSorteo,
+      TipoSorteo: tipoSorteo,
   
       NumeroFalla: numeroFalla,
       DecimosFalla: decimosFalla,
       PrecioDecimoFalla: precioDecimoFalla,
       PapeletasTotalesFalla: papeletasFalla,
-      SobrantesFalla: sobrantesFalla,
+      SobrantesFalla: papeletasSobrantesFalla,
       ImportePapeletaFalla: importePapeletaFalla,
       BeneficioFalla: beneficioFalla,
       PremioFallaPorPapeleta: premioFallaPorPapeleta,
@@ -149,7 +241,7 @@ useEffect(() => {
       DecimosVirgen: decimosVirgen,
       PrecioDecimoVirgen: precioDecimoVirgen,
       PapeletasTotalesVirgen: papeletasVirgen,
-      SobrantesVirgen: sobrantesVirgen,
+      SobrantesVirgen: papeletasSobrantesVirgen,
       ImportePapeletaVirgen: importePapeletaVirgen,
       BeneficioVirgen: beneficioVirgen,
       PremioVirgenPorPapeleta: premioVirgenPorPapeleta,
@@ -164,11 +256,93 @@ useEffect(() => {
         .from("LOTERIA_SORTEOS")
         .update(datos)
         .eq("ID", sorteoEditando.ID));
+    
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    
+      const { data: lineasSorteo, error: errorLineas } =
+        await (supabase as any)
+          .from("LOTERIA_SORTEOS_GRUPOS")
+          .select(`
+            ID,
+            PapeletasFalla,
+            PapeletasVirgen,
+            PapeletasPremioFalla,
+            PapeletasPremioVirgen,
+            PremioEntregado
+          `)
+          .eq("IDSorteo", sorteoEditando.ID);
+    
+      if (errorLineas) {
+        alert(
+          "El sorteo se ha actualizado, pero no se pudieron cargar sus líneas: " +
+            errorLineas.message
+        );
+        return;
+      }
+    
+      const actualizaciones = (lineasSorteo || []).map(
+        async (linea: any) => {
+          const papeletasPremioFalla =
+  Number(linea.PapeletasPremioFalla || 0) > 0
+    ? Number(linea.PapeletasPremioFalla)
+    : Number(linea.PapeletasFalla || 0);
+
+const papeletasPremioVirgen =
+  Number(linea.PapeletasPremioVirgen || 0) > 0
+    ? Number(linea.PapeletasPremioVirgen)
+    : Number(linea.PapeletasVirgen || 0);
+
+const nuevoImportePremio = Number(
+  (
+    papeletasPremioFalla *
+      Number(premioFallaPorPapeleta || 0) +
+    papeletasPremioVirgen *
+      Number(premioVirgenPorPapeleta || 0)
+  ).toFixed(2)
+);
+    
+          const { error: errorActualizarLinea } =
+            await (supabase as any)
+              .from("LOTERIA_SORTEOS_GRUPOS")
+              .update({
+                ImportePremio: nuevoImportePremio,
+                PremioEntregado: false,
+              })
+              .eq("ID", linea.ID);
+    
+          if (errorActualizarLinea) {
+            throw new Error(errorActualizarLinea.message);
+          }
+        }
+      );
+    
+      try {
+        await Promise.all(actualizaciones);
+      } catch (errorPremios: any) {
+        alert(
+          "El sorteo se ha actualizado, pero no se pudieron recalcular los premios: " +
+            errorPremios.message
+        );
+        return;
+      }
     } else {
-      ({ error } = await (supabase as any)
-        .from("LOTERIA_SORTEOS")
-        .insert(datos));
-    }
+
+        const { data: sorteoCreado, error: errorInsert } = await (supabase as any)
+          .from("LOTERIA_SORTEOS")
+          .insert(datos)
+          .select()
+          .single();
+      
+        if (errorInsert) {
+          alert(errorInsert.message);
+          return;
+        }
+      
+        await crearLineasSorteo(sorteoCreado);
+      }
   
     if (error) {
       alert(error.message);
@@ -182,45 +356,205 @@ limpiarFormularioSorteo();
 setMostrarModal(false);
   }
 
-  async function cargarSorteos() {
-    const { data, error } = await (supabase as any)
-      .from("LOTERIA_SORTEOS")
+  async function crearLineasSorteo(sorteo: any) {
+    const { data: grupos, error } = await (supabase as any)
+      .from("SOCIOS_LOTERIA")
       .select("*")
-      .order("FechaSorteo", { ascending: false });
+      .eq("Activo", true);
+  
+    if (error) {
+      alert("Sorteo creado, pero error creando líneas: " + error.message);
+      return;
+    }
+  
+    const lineas = (grupos || [])
+  .filter((grupo: any) =>
+    Number(grupo.PapeletasFalla || 0) > 0 ||
+    Number(grupo.PapeletasVirgen || 0) > 0
+  )
+  .map((grupo: any) => {
+
+      const precioVentaFalla =
+        Number(sorteo.ImportePapeletaFalla || 0) +
+        Number(sorteo.BeneficioFalla || 0);
+  
+      const precioVentaVirgen =
+        Number(sorteo.ImportePapeletaVirgen || 0) +
+        Number(sorteo.BeneficioVirgen || 0);
+  
+      return {
+        IDSorteo: sorteo.ID,
+        IDGrupoLoteria: grupo.ID,
+        PapeletasFalla: Number(grupo.PapeletasFalla || 0),
+        PapeletasVirgen: Number(grupo.PapeletasVirgen || 0),
+        ImporteFalla: Number((Number(grupo.PapeletasFalla || 0) * precioVentaFalla).toFixed(2)),
+        ImporteVirgen: Number((Number(grupo.PapeletasVirgen || 0) * precioVentaVirgen).toFixed(2)),
+        ImportePagado: 0,
+        ImportePremio: 0,
+        PremioEntregado: false,
+        PagadoConfirmado: false,
+        PapeletasPremioFalla: Number(grupo.PapeletasFalla || 0),
+        PapeletasPremioVirgen: Number(grupo.PapeletasVirgen || 0),
+      };
+    });
+  
+    if (lineas.length === 0) return;
+  
+    const { error: errorLineas } = await (supabase as any)
+      .from("LOTERIA_SORTEOS_GRUPOS")
+      .insert(lineas);
+  
+    if (errorLineas) {
+      alert("Sorteo creado, pero error creando líneas: " + errorLineas.message);
+    }
+  }
+
+  async function cargarSorteos() {
+
+    const { data: ejercicioData, error: errorEjercicio } =
+  await (supabase as any)
+    .from("EJERCICIOS")
+    .select("Ejercicio")
+    .eq("Activo", true)
+    .maybeSingle();
+
+if (errorEjercicio) {
+  console.error(errorEjercicio);
+}
+
+const ejercicioActual = Number(ejercicioData?.Ejercicio || 0);
+
+if (!ejercicioActual) {
+  alert("No se ha encontrado un ejercicio activo.");
+  setSorteos([]);
+  return;
+}
+
+setEjercicioActivo(ejercicioActual);
+
+const { data, error } = await (supabase as any)
+.from("LOTERIA_SORTEOS")
+.select("*")
+.eq("Ejercicio", ejercicioActual)
+.order("FechaSorteo", { ascending: false });
   
     if (error) {
       alert(error.message);
       return;
     }
+
+    const idsSorteos = (data || []).map((s: any) => s.ID);
   
+    let lineas: any[] = [];
+let errorLineas = null;
+
+if (idsSorteos.length > 0) {
+  const resultadoLineas = await (supabase as any)
+    .from("LOTERIA_SORTEOS_GRUPOS")
+    .select(`
+      IDSorteo,
+      ImporteFalla,
+      ImporteVirgen,
+      ImportePremio,
+      PagadoConfirmado,
+      PremioEntregado
+    `)
+    .in("IDSorteo", idsSorteos);
+
+  lineas = resultadoLineas.data || [];
+  errorLineas = resultadoLineas.error;
+}
+  
+    if (errorLineas) {
+      alert(errorLineas.message);
+      return;
+    }
+  
+    const resumenes: Record<
+      number,
+      {
+        importeTotal: number;
+        cobrado: number;
+        pendienteCobro: number;
+        premioTotal: number;
+        premioPendiente: number;
+        grupos: number;
+        gruposPagados: number;
+        gruposPendientes: number;
+      }
+    > = {};
+  
+    (lineas || []).forEach((l: any) => {
+      if (!resumenes[l.IDSorteo]) {
+        resumenes[l.IDSorteo] = {
+          importeTotal: 0,
+          cobrado: 0,
+          pendienteCobro: 0,
+          premioTotal: 0,
+          premioPendiente: 0,
+          grupos: 0,
+          gruposPagados: 0,
+          gruposPendientes: 0,
+        };
+      }
+  
+      const resumen = resumenes[l.IDSorteo];
+  
+      const importe =
+        Number(l.ImporteFalla || 0) +
+        Number(l.ImporteVirgen || 0);
+  
+        resumen.importeTotal += importe;
+
+        // Solo cuenta como grupo participante si realmente tiene papeletas
+        if (importe > 0) {
+          resumen.grupos++;
+        
+          if (l.PagadoConfirmado) {
+            resumen.cobrado += importe;
+            resumen.gruposPagados++;
+          } else {
+            resumen.pendienteCobro += importe;
+            resumen.gruposPendientes++;
+          }
+        }
+  
+      resumen.premioTotal += Number(l.ImportePremio || 0);
+  
+      if (!l.PremioEntregado) {
+        resumen.premioPendiente += Number(l.ImportePremio || 0);
+      }
+    });
+  
+    setResumenesSorteos(resumenes);
     setSorteos(data || []);
   }
 
-  async function cargarTotalesSociosLoteria() {
+  async function cargarTotalesLineasSorteo(idSorteo: number) {
     const { data, error } = await (supabase as any)
-      .from("SOCIOS_LOTERIA")
-      .select("PapeletasFalla, PapeletasVirgen");
+      .from("LOTERIA_SORTEOS_GRUPOS")
+      .select("PapeletasFalla, PapeletasVirgen")
+      .eq("IDSorteo", idSorteo);
   
     if (error) {
-      alert(error.message);
-      return;
+      alert("Error cargando totales del sorteo: " + error.message);
+      return {
+        falla: 0,
+        virgen: 0,
+      };
     }
   
-    const totalF = (data || []).reduce(
-      (sum: number, grupo: any) => sum + Number(grupo.PapeletasFalla || 0),
+    const falla = (data || []).reduce(
+      (sum: number, fila: any) => sum + Number(fila.PapeletasFalla || 0),
       0
     );
   
-    const totalV = (data || []).reduce(
-      (sum: number, grupo: any) => sum + Number(grupo.PapeletasVirgen || 0),
+    const virgen = (data || []).reduce(
+      (sum: number, fila: any) => sum + Number(fila.PapeletasVirgen || 0),
       0
     );
   
-    setTotalFalla(totalF);
-    setTotalVirgen(totalV);
-  
-    setPapeletasFalla(totalF);
-    setPapeletasVirgen(totalV);
+    return { falla, virgen };
   }
 
   async function cargarTotalesSorteo(idSorteo: number) {
@@ -250,14 +584,40 @@ setMostrarModal(false);
     setPapeletasVirgen(totalVirgen);
   }
 
+  async function cargarTotalesSociosLoteria() {
+    const { data, error } = await (supabase as any)
+      .from("SOCIOS_LOTERIA")
+      .select("PapeletasFalla, PapeletasVirgen")
+      .eq("Activo", true);
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    const totalF = (data || []).reduce(
+      (sum: number, grupo: any) => sum + Number(grupo.PapeletasFalla || 0),
+      0
+    );
+  
+    const totalV = (data || []).reduce(
+      (sum: number, grupo: any) => sum + Number(grupo.PapeletasVirgen || 0),
+      0
+    );
+  
+    setPapeletasFalla(totalF);
+    setPapeletasVirgen(totalV);
+  }
+
   async function editarSorteo(sorteo: any) {
+    const totalesLineas = await cargarTotalesLineasSorteo(sorteo.ID);
     setSorteoEditando(sorteo);
     setFechaSorteo(sorteo.FechaSorteo || "");
   
     setNumeroFalla(sorteo.NumeroFalla || "");
     setDecimosFalla(Number(sorteo.DecimosFalla || 0));
     setPrecioDecimoFalla(Number(sorteo.PrecioDecimoFalla || 0));
-    setPapeletasFalla(Number(sorteo.PapeletasTotalesFalla || 0));
+    setPapeletasFalla(totalesLineas.falla);
     setSobrantesFalla(Number(sorteo.SobrantesFalla || 0));
     setImportePapeletaFalla(Number(sorteo.ImportePapeletaFalla || 0));
     setBeneficioFalla(Number(sorteo.BeneficioFalla || 0));
@@ -266,13 +626,11 @@ setMostrarModal(false);
     setNumeroVirgen(sorteo.NumeroVirgen || "");
     setDecimosVirgen(Number(sorteo.DecimosVirgen || 0));
     setPrecioDecimoVirgen(Number(sorteo.PrecioDecimoVirgen || 0));
-    setPapeletasVirgen(Number(sorteo.PapeletasTotalesVirgen || 0));
+    setPapeletasVirgen(totalesLineas.virgen);
     setSobrantesVirgen(Number(sorteo.SobrantesVirgen || 0));
     setImportePapeletaVirgen(Number(sorteo.ImportePapeletaVirgen || 0));
     setBeneficioVirgen(Number(sorteo.BeneficioVirgen || 0));
     setPremioVirgenPorPapeleta(Number(sorteo.PremioVirgenPorPapeleta || 0));
-  
-    await cargarTotalesSociosLoteria();
     
     setMostrarModal(true);
   }
@@ -344,6 +702,9 @@ setMostrarModal(false);
     router.push("/loterias/sorteos/imprimir")
   }
 
+  const resumenFalla = calcularResumenEconomico("Falla");
+const resumenVirgen = calcularResumenEconomico("Virgen");
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -392,13 +753,34 @@ setMostrarModal(false);
   <button
     onClick={async () => {
       limpiarFormularioSorteo();
+    
+      setTipoSorteo("SEMANAL");
+    
       await cargarTotalesSociosLoteria();
+    
       setMostrarModal(true);
     }}
     className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
   >
-    + Nuevo sorteo
+    + Sorteo Semanal
   </button>
+
+  <button
+  onClick={async () => {
+    limpiarFormularioSorteo();
+
+    setTipoSorteo("ESPECIAL");
+
+    await cargarTotalesSociosLoteria();
+
+    setPapeletasVirgen(0);
+
+    setMostrarModal(true);
+  }}
+  className="bg-orange-700 px-4 py-2 text-sm font-medium text-white hover:bg-orange-800"
+>
+  + Especial
+</button>
 </div>
   </div>
 </section>
@@ -420,134 +802,330 @@ setMostrarModal(false);
   <div className="px-4 py-12 text-center text-sm text-zinc-500">
     Todavía no hay sorteos creados.
   </div>
+
 ) : (
-  <table className="min-w-full divide-y divide-zinc-200">
+
+  <>
+    <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <ResumenEconomicoSorteos
+        titulo="Falla"
+        resumen={resumenFalla}
+      />
+
+      <ResumenEconomicoSorteos
+        titulo="Virgen"
+        resumen={resumenVirgen}
+      />
+    </div>
+
+    <table className="min-w-full divide-y divide-zinc-200">
+
     <thead className="bg-zinc-100">
-      <tr>
-      <th className="px-4 py-2 text-left text-xs font-semibold uppercase">
-  Fecha
-</th>
+  <tr>
+    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
+      Fecha
+    </th>
 
-<th className="px-4 py-2 text-left text-xs font-semibold uppercase">
-  Falla
-</th>
+    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
+      Sorteo
+    </th>
 
-<th className="px-4 py-2 text-right text-xs font-semibold uppercase">
-  Déc. F
-</th>
+    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
+      Números
+    </th>
 
-<th className="px-4 py-2 text-left text-xs font-semibold uppercase">
-  Virgen
-</th>
+    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
+      Cobros
+    </th>
 
-<th className="px-4 py-2 text-right text-xs font-semibold uppercase">
-  Déc. V
-</th>
+    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
+      Premios
+    </th>
 
-<th className="px-4 py-2 text-center text-xs font-semibold uppercase">
-  Acciones
-</th>
-      </tr>
-    </thead>
+    <th className="px-4 py-3 text-center text-xs font-semibold uppercase">
+      Acciones
+    </th>
+  </tr>
 
-    <tbody className="divide-y divide-zinc-200 bg-white">
-      {sorteos.map((sorteo) => (
-        <tr
-  key={sorteo.ID}
-  className="hover:bg-zinc-50"
-  >
-          <td
-  className="cursor-pointer px-4 py-2 text-sm text-red-900 hover:underline"
-  onClick={() =>
-    router.push(`/loterias/sorteos/${sorteo.ID}`)
-  }
+</thead>
+
+<tbody className="divide-y divide-zinc-200 bg-white">
+  {sorteos.map((sorteo) => {
+    const resumen = resumenesSorteos[sorteo.ID] || {
+      importeTotal: 0,
+      cobrado: 0,
+      pendienteCobro: 0,
+      premioTotal: 0,
+      premioPendiente: 0,
+      grupos: 0,
+      gruposPagados: 0,
+      gruposPendientes: 0,
+    };
+    const premioFallaPorPapeleta = Number(
+      sorteo.PremioFallaPorPapeleta || 0
+    );
+    
+    const premioVirgenPorPapeleta = Number(
+      sorteo.PremioVirgenPorPapeleta || 0
+    );
+    
+    const hayPremio =
+      premioFallaPorPapeleta > 0 ||
+      premioVirgenPorPapeleta > 0;
+
+      const hayCobroPendiente =
+      Number(resumen.pendienteCobro || 0) > 0;
+    
+    const hayPremioPendiente =
+      Number(resumen.premioPendiente || 0) > 0;
+    
+    const sorteoCerrado =
+      !hayCobroPendiente && !hayPremioPendiente;
+
+    return (
+      <tr
+        key={sorteo.ID}
+        className="align-top hover:bg-zinc-50"
+      >
+        <td className="px-4 py-3">
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/loterias/sorteos/${sorteo.ID}`)
+            }
+            className="font-medium text-red-900 hover:underline"
+          >
+            {formatearFecha(sorteo.FechaSorteo)}
+          </button>
+
+          <div className="mt-1 text-xs text-zinc-500">
+            {sorteo.TipoSorteo === "ESPECIAL"
+              ? "Especial"
+              : "Semanal"}
+          </div>
+
+          <div
+  className={`mt-2 inline-block px-2 py-1 text-xs font-medium ${
+    sorteoCerrado
+      ? "bg-green-100 text-green-800"
+      : hayCobroPendiente && hayPremioPendiente
+      ? "bg-orange-100 text-orange-800"
+      : hayPremioPendiente
+      ? "bg-orange-100 text-orange-800"
+      : "bg-amber-100 text-amber-800"
+  }`}
 >
-  {formatearFecha(sorteo.FechaSorteo)}
+  {sorteoCerrado
+    ? "Cerrado"
+    : hayCobroPendiente && hayPremioPendiente
+    ? "Cobro y premio pendientes"
+    : hayPremioPendiente
+    ? "Premio pendiente"
+    : "Cobro pendiente"}
+</div>
 </td>
 
-          <td className="px-4 py-2 text-sm">
-            {sorteo.NumeroFalla}
-          </td>
+        <td className="px-4 py-3 text-sm">
+          <div>
+            <span className="text-zinc-500">Grupos:</span>{" "}
+            <span className="font-semibold">
+              {resumen.grupos}
+            </span>
+          </div>
 
-          <td className="px-4 py-2 text-right text-sm">
-  {Number(sorteo.PrecioDecimoFalla || 0).toFixed(2)} €
-</td>
+          <div className="mt-1 text-xs text-zinc-500">
+            Pagados: {resumen.gruposPagados}
+          </div>
 
-<td className="px-4 py-2 text-sm">
-            {sorteo.NumeroVirgen}
-          </td>
+          <div className="text-xs text-zinc-500">
+            Pendientes: {resumen.gruposPendientes}
+          </div>
+        </td>
 
-          <td className="px-4 py-2 text-right text-sm">
-  {Number(sorteo.PrecioDecimoVirgen || 0).toFixed(2)} €
-</td>
+        <td className="px-4 py-3 text-sm">
+          <div>
+            <span className="font-medium text-red-900">
+              Falla:
+            </span>{" "}
+            <span className="font-semibold">
+              {sorteo.NumeroFalla || "—"}
+            </span>
+          </div>
 
+          {sorteo.TipoSorteo !== "ESPECIAL" && (
+            <div className="mt-2">
+              <span className="font-medium text-blue-900">
+                Virgen:
+              </span>{" "}
+              <span className="font-semibold">
+                {sorteo.NumeroVirgen || "—"}
+              </span>
+            </div>
+          )}
+        </td>
 
-<td className="px-4 py-2 text-center">
-  <div className="flex justify-center gap-2">
+        <td className="px-4 py-3 text-sm">
+          <div className="flex justify-between gap-5">
+            <span className="text-zinc-500">Total:</span>
+            <span className="font-semibold">
+              {resumen.importeTotal.toFixed(2)} €
+            </span>
+          </div>
 
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        router.push(`/loterias/sorteos/${sorteo.ID}`);
-      }}
-      title="Ver líneas de socios"
-      className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
-    >
-      👥
-    </button>
+          <div className="mt-1 flex justify-between gap-5">
+            <span className="text-zinc-500">Cobrado:</span>
+            <span className="font-semibold text-green-700">
+              {resumen.cobrado.toFixed(2)} €
+            </span>
+          </div>
 
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        editarSorteo(sorteo);
-      }}
-      title="Editar sorteo"
-      className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
-    >
-      ✏️
-    </button>
+          <div className="mt-1 flex justify-between gap-5">
+            <span className="text-zinc-500">Pendiente:</span>
+            <span
+              className={`font-semibold ${
+                resumen.pendienteCobro > 0
+                  ? "text-red-700"
+                  : "text-zinc-700"
+              }`}
+            >
+              {resumen.pendienteCobro.toFixed(2)} €
+            </span>
+          </div>
+        </td>
 
-    <button
-  onClick={(e) => {
-    e.stopPropagation();
-    router.push(`/loterias/sorteos/${sorteo.ID}/imprimir`);
-  }}
-  title="Imprimir ficha"
-  className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+        <td className="px-4 py-3 text-sm">
+
+        <div
+  className={`mb-2 inline-block px-2 py-1 text-xs font-medium ${
+    !hayPremio
+      ? "bg-zinc-100 text-zinc-500"
+      : hayPremioPendiente
+      ? "bg-orange-100 text-orange-800"
+      : "bg-green-100 text-green-800"
+  }`}
 >
-  🖨️
-</button>
+  {!hayPremio
+    ? "Sin premio"
+    : hayPremioPendiente
+    ? "Premio pendiente"
+    : "Premio entregado"}
+</div>
 
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        alert("Pendiente exportar Excel");
-      }}
-      title="Exportar Excel"
-      className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
-    >
-      📗
-    </button>
-
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        eliminarSorteo(sorteo.ID);
-      }}
-      title="Eliminar"
-      className="rounded bg-red-100 px-2 py-1 text-sm hover:bg-red-200"
-    >
-      🗑️
-    </button>
-
+{premioFallaPorPapeleta > 0 && (
+  <div className="mb-1 flex justify-between gap-5 text-xs">
+    <span className="text-zinc-500">Falla / papeleta:</span>
+    <span className="font-semibold">
+      {premioFallaPorPapeleta.toFixed(2)} €
+    </span>
   </div>
-</td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
 )}
-          </section>
+
+{sorteo.TipoSorteo !== "ESPECIAL" &&
+  premioVirgenPorPapeleta > 0 && (
+    <div className="mb-2 flex justify-between gap-5 text-xs">
+      <span className="text-zinc-500">Virgen / papeleta:</span>
+      <span className="font-semibold">
+        {premioVirgenPorPapeleta.toFixed(2)} €
+      </span>
+    </div>
+  )}
+          <div className="flex justify-between gap-5">
+            <span className="text-zinc-500">Total:</span>
+            <span className="font-semibold">
+              {resumen.premioTotal.toFixed(2)} €
+            </span>
+          </div>
+
+          <div className="mt-1 flex justify-between gap-5">
+            <span className="text-zinc-500">
+              Sin entregar:
+            </span>
+
+            <span
+              className={`font-semibold ${
+                resumen.premioPendiente > 0
+                  ? "text-red-700"
+                  : "text-zinc-700"
+              }`}
+            >
+              {resumen.premioPendiente.toFixed(2)} €
+            </span>
+          </div>
+
+          <div className="mt-1 flex justify-between gap-5">
+            <span className="text-zinc-500">
+              Entregado:
+            </span>
+
+            <span className="font-semibold text-green-700">
+              {(
+                resumen.premioTotal -
+                resumen.premioPendiente
+              ).toFixed(2)}{" "}
+              €
+            </span>
+          </div>
+        </td>
+
+        <td className="px-4 py-3">
+          <div className="flex justify-center gap-2">
+            <button
+              onClick={() =>
+                router.push(`/loterias/sorteos/${sorteo.ID}`)
+              }
+              title="Ver líneas de socios"
+              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+            >
+              👥
+            </button>
+
+            <button
+              onClick={() => editarSorteo(sorteo)}
+              title="Editar sorteo"
+              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+            >
+              ✏️
+            </button>
+
+            <button
+              onClick={() =>
+                router.push(
+                  `/loterias/sorteos/${sorteo.ID}/imprimir`
+                )
+              }
+              title="Imprimir ficha"
+              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+            >
+              🖨️
+            </button>
+
+            <button
+              onClick={() =>
+                alert("Pendiente exportar este sorteo a Excel")
+              }
+              title="Exportar este sorteo"
+              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+            >
+              📗
+            </button>
+
+            <button
+              onClick={() => eliminarSorteo(sorteo.ID)}
+              title="Eliminar"
+              className="rounded bg-red-100 px-2 py-1 text-sm hover:bg-red-200"
+            >
+              🗑️
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
+</table>
+</>
+)}
+</section>
         </div>
 
         {mostrarModal && (
@@ -675,11 +1253,11 @@ readOnly
 <div className="flex items-center justify-between">
   <label className="text-sm">Papeletas socios</label>
   <input
-    type="number"
-    value={papeletasFalla || 0}
-    onChange={(e) => setPapeletasFalla(Number(e.target.value))}
-    className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-  />
+  type="number"
+  value={papeletasFalla || 0}
+  readOnly
+  className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+/>
 </div>
 
 <div className="flex items-center justify-between">
@@ -855,11 +1433,11 @@ readOnly
 <div className="flex items-center justify-between">
   <label className="text-sm">Papeletas socios</label>
   <input
-    type="number"
-    value={papeletasVirgen || 0}
-    onChange={(e) => setPapeletasVirgen(Number(e.target.value))}
-    className="w-24 border border-zinc-300 px-2 py-1 text-right text-sm"
-  />
+  type="number"
+  value={papeletasVirgen || 0}
+  readOnly
+  className="w-24 border border-zinc-300 bg-zinc-100 px-2 py-1 text-right text-sm"
+/>
 </div>
 
 <div className="flex items-center justify-between">

@@ -1,6 +1,7 @@
 "use client";
 
-import { supabase } from "@/lib/supabaseClient";
+import React from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function RemoveMemberButton({
   numcens,
@@ -26,11 +27,37 @@ export default function RemoveMemberButton({
       return;
     }
 
-    await (supabase as any).rpc("generar_actualizar_cuotas_completo", {
-      p_ejercicio: 2027,
-    });
-    
-    window.location.reload();
+    const { data: ejercicioData, error: errorEjercicio } = await supabase
+  .from("EJERCICIOS")
+  .select("Ejercicio")
+  .eq("Activo", true)
+  .maybeSingle();
+
+if (errorEjercicio) {
+  alert(errorEjercicio.message);
+  return;
+}
+
+const ejercicioActivo = Number(ejercicioData?.Ejercicio || 0);
+
+if (!ejercicioActivo) {
+  alert("No se ha encontrado un ejercicio activo.");
+  return;
+}
+
+const { error: errorCuotas } = await (supabase as any).rpc(
+  "generar_actualizar_cuotas_completo",
+  {
+    p_ejercicio: ejercicioActivo,
+  }
+);
+
+if (errorCuotas) {
+  alert(errorCuotas.message);
+  return;
+}
+
+window.location.reload();
   }
 
   return (

@@ -1,7 +1,8 @@
+import React from "react";
 import Link from "next/link";
-import Sidebar from "@/app/components/Sidebar";
-import { supabase } from "@/lib/supabaseClient";
-import GenerarCuotasButton from "@/app/components/GenerarCuotasButton";
+import Sidebar from "../../components/Sidebar";
+import { supabase } from "../../../lib/supabaseClient";
+import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 
 export default async function SocioPage({
   params,
@@ -10,6 +11,16 @@ export default async function SocioPage({
   params: Promise<{ numcens: string }>;
   searchParams: Promise<{ fromFamilia?: string }>;
 }) {
+  
+  const { data: ejercicioActivoData } = await supabase
+  .from("EJERCICIOS")
+  .select("Ejercicio")
+  .eq("Activo", true)
+  .maybeSingle();
+
+  const ejercicioActivo =
+  (ejercicioActivoData as any)?.Ejercicio ?? null;
+
   const { numcens } = await params;
   const { fromFamilia } = await searchParams;
 
@@ -73,6 +84,11 @@ export default async function SocioPage({
     .limit(1)
     .maybeSingle();
 
+    const ejercicioParaCuota =
+  (cuotaActual as any)?.Ejercicio ??
+  (ejercicioActivoData as any)?.Ejercicio ??
+  null;
+
     const { data: resumenCuotaActual } = (cuotaActual as any)?.IDCuotaSocio
   ? await (supabase as any)
       .from("VISTA_CUOTAS_RESUMEN")
@@ -132,9 +148,9 @@ const textoPagador =
     : !formaPagoAny?.NUMCENS_Pagador ||
       Number(formaPagoAny.NUMCENS_Pagador) === Number((socio as any).NUMCENS)
     ? "Mismo socio"
-    : `${socioPagador?.NUMCENS || ""} · ${
-        socioPagador?.Apellidos || ""
-      }, ${socioPagador?.Nombre || ""}`;
+    : `${(socioPagador as any)?.NUMCENS || ""} · ${
+  (socioPagador as any)?.Apellidos || ""
+}, ${(socioPagador as any)?.Nombre || ""}`;
 
       // Buscar si el socio pertenece a algún grupo de lotería
 const { data: detalleLoteria } = await supabase
@@ -143,13 +159,15 @@ const { data: detalleLoteria } = await supabase
 .eq("NUMCENS", socioAny.NUMCENS)
 .maybeSingle();
 
+const detalleLoteriaAny = detalleLoteria as any;
+
 let grupoLoteria: any = null;
 
 if (detalleLoteria) {
 const { data } = await supabase
   .from("SOCIOS_LOTERIA")
   .select("*")
-  .eq("ID", detalleLoteria.IDSocioLoteria)
+  .eq("ID", detalleLoteriaAny?.IDSocioLoteria)
   .maybeSingle();
 
 grupoLoteria = data;
@@ -514,7 +532,7 @@ const textoResponsableLoteria = grupoLoteria
 <div className="flex items-center gap-3">
 {socioAny.Estado?.toLowerCase() !== "baja" && (
   <GenerarCuotasButton
-    ejercicio={(cuotaActual as any)?.Ejercicio || 2027}
+  ejercicio={ejercicioParaCuota}
   />
 )}
 

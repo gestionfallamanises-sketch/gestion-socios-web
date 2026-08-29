@@ -3,12 +3,10 @@
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import * as XLSX from "xlsx";
+import { normalizarTexto } from "@/lib/texto";
 
-function normalizarTexto(texto: string) {
-  return texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+function normalizar(texto: string) {
+  return normalizarTexto(texto);
 }
 
 export default function ExcelSociosLoteriaPage() {

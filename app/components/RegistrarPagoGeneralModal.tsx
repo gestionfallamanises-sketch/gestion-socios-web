@@ -16,6 +16,7 @@ export default function RegistrarPagoGeneralModal({
 const [pagadoresEncontrados, setPagadoresEncontrados] = useState<any[]>([]);
   const [sociosPagador, setSociosPagador] = useState<any[]>([]);
   const [cargandoSocios, setCargandoSocios] = useState(false);
+
   const [importeTotal, setImporteTotal] = useState("");
   const [aplicaciones, setAplicaciones] = useState<
     Record<number, { seleccionado: boolean; importe: number }>
@@ -25,6 +26,7 @@ const [sociosEncontrados, setSociosEncontrados] = useState<any[]>([]);
 const [socioSeleccionado, setSocioSeleccionado] = useState<any | null>(null);
 const [importeSocio, setImporteSocio] = useState("");
 const [observacionesSocio, setObservacionesSocio] = useState("");
+
 
   const totalAplicado = Object.entries(aplicaciones)
   .filter(([, valor]) => valor.seleccionado)
@@ -83,10 +85,28 @@ const diferencia =
       return;
     }
   
+    const { data: ejercicioData, error: errorEjercicio } = await supabase
+      .from("EJERCICIOS")
+      .select("Ejercicio")
+      .eq("Activo", true)
+      .maybeSingle();
+  
+    if (errorEjercicio) {
+      alert(errorEjercicio.message);
+      return;
+    }
+  
+    const ejercicioActivo = Number(ejercicioData?.Ejercicio || 0);
+  
+    if (!ejercicioActivo) {
+      alert("No se ha encontrado un ejercicio activo.");
+      return;
+    }
+  
     const { data, error } = await supabase
-    .from("VISTA_CUOTAS_RESUMEN")
+      .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
-      .eq("Ejercicio", 2027)
+      .eq("Ejercicio", ejercicioActivo)
       .or(
         `Nombre.ilike.%${texto}%,Apellidos.ilike.%${texto}%,NUMCENS.eq.${Number(texto) || -1}`
       )

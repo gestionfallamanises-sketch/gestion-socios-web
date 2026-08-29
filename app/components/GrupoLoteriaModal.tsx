@@ -228,8 +228,9 @@ guardarGrupoLoteria,
       </label>
       <input
   type="number"
+  min={0}
   value={papeletasFalla}
-  onChange={(e) => setPapeletasFalla(Number(e.target.value))}
+  onChange={(e) => setPapeletasFalla(Math.max(0, Number(e.target.value)))}
   className="w-full border border-zinc-300 px-2 py-1 text-sm"
 />
     </div>
@@ -240,8 +241,9 @@ guardarGrupoLoteria,
       </label>
       <input
   type="number"
+  min={0}
   value={papeletasVirgen}
-  onChange={(e) => setPapeletasVirgen(Number(e.target.value))}
+  onChange={(e) => setPapeletasVirgen(Math.max(0, Number(e.target.value)))}
   className="w-full border border-zinc-300 px-2 py-1 text-sm"
 />
     </div>
@@ -252,8 +254,9 @@ guardarGrupoLoteria,
       </label>
       <input
   type="number"
+  min={0}
   value={papeletasNavidad}
-  onChange={(e) => setPapeletasNavidad(Number(e.target.value))}
+  onChange={(e) => setPapeletasNavidad(Math.max(0, Number(e.target.value)))}
   className="w-full border border-zinc-300 px-2 py-1 text-sm"
 />
     </div>
@@ -264,8 +267,9 @@ guardarGrupoLoteria,
       </label>
       <input
   type="number"
+  min={0}
   value={papeletasNino}
-  onChange={(e) => setPapeletasNino(Number(e.target.value))}
+  onChange={(e) => setPapeletasNino(Math.max(0, Number(e.target.value)))}
   className="w-full border border-zinc-300 px-2 py-1 text-sm"
 />
     </div>

@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { normalizarTexto } from "@/lib/texto";
 
-function normalizarTexto(texto: string) {
-  return texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+function normalizar(texto: string) {
+  return normalizarTexto(texto);
 }
 
 export default function ImprimirSociosLoteriaPage() {

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import Sidebar from "../../../components/Sidebar";
-import { supabase } from "../../../../lib/supabase";
-import ConfirmModal from "@/app/components/ConfirmModal";
 import { useHotkeys } from "react-hotkeys-hook";
+
+import Sidebar from "../../../components/Sidebar";
+import ConfirmModal from "../../../components/ConfirmModal";
+import { supabase } from "../../../../lib/supabase";
 
 function limpiarNif(nif: string) {
   return nif.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
@@ -35,6 +36,7 @@ const [pagador, setPagador] = useState("");
 const [pagadorOriginal, setPagadorOriginal] = useState<number | null>(null);
 const [busquedaPagador, setBusquedaPagador] = useState("");
 const [socios, setSocios] = useState<any[]>([]);
+const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
 const [pagadoresExtra, setPagadoresExtra] = useState<any[]>([
   {
     TitularCuenta: "",
@@ -66,9 +68,7 @@ useHotkeys(
     e.preventDefault();
 
     if (!guardando && !isBaja) {
-      document
-        .getElementById("form-editar-socio")
-        ?.requestSubmit();
+      (document.getElementById("form-editar-socio") as HTMLFormElement | null)?.requestSubmit();
     }
   },
   {
@@ -97,6 +97,14 @@ useEffect(() => {
  
 useEffect(() => {
     async function cargarSocio() {
+      const { data: ejercicio } = await supabase
+      .from("EJERCICIOS")
+      .select("Ejercicio")
+      .eq("Activo", true)
+      .maybeSingle();
+
+    setEjercicioActivo(ejercicio?.Ejercicio ?? null);
+
       const { data, error } = await supabase
   .from("SOCIOS")
   .select(`
@@ -978,16 +986,20 @@ router.push(`/socios/${numcens}`);
   </div>
 
   <div>
-    <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
-      Referencia mandato
-    </label>
+  <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+    Referencia mandato
+  </label>
 
-    <input
-      value={`${pagador || socio?.NUMCENS}-2027`}
-      disabled
-      className="w-full border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-600"
-    />
-  </div>
+  <input
+    value={
+      ejercicioActivo
+        ? `${pagador || socio?.NUMCENS}-${ejercicioActivo}`
+        : ""
+    }
+    disabled
+    className="w-full border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-600"
+  />
+</div>
 
 </div>
 
@@ -1105,23 +1117,25 @@ router.push(`/socios/${numcens}`);
   Cancelar
 </button>
     
-            <button
-              type="button"
-              onClick={() => {
-                setAplicarASociosPagados(true);
-                setModalSociosPagados(false);
-                setContinuarGuardado(true);
-              
-                setTimeout(() => {
-                  document
-                    .getElementById("form-editar-socio")
-                    ?.requestSubmit();
-                }, 0);
-              }}
-              className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-            >
-              Aplicar a seleccionados
-            </button>
+<button
+  type="button"
+  onClick={() => {
+    setAplicarASociosPagados(true);
+    setModalSociosPagados(false);
+    setContinuarGuardado(true);
+
+    setTimeout(() => {
+      (
+        document.getElementById(
+          "form-editar-socio"
+        ) as HTMLFormElement | null
+      )?.requestSubmit();
+    });
+  }}
+  className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+>
+  Aplicar a seleccionados
+</button>
           </div>
         </div>
       </div>

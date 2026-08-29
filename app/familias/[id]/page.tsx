@@ -1,10 +1,13 @@
+import React from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+
+import { supabase } from "../../../lib/supabaseClient";
+
 import AddMemberForm from "../../components/AddMemberForm";
 import MakeTitularButton from "../../components/MakeTitularButton";
 import RemoveMemberButton from "../../components/RemoveMemberButton";
 import TrasladarFamiliaButton from "../../components/TrasladarFamiliaButton";
-import GenerarCuotasButton from "@/app/components/GenerarCuotasButton";
+import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 
 export default async function FamiliaPage({
   params,
@@ -12,6 +15,16 @@ export default async function FamiliaPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  const { data: ejercicioActivoData } = await supabase
+  .from("EJERCICIOS")
+  .select("Ejercicio")
+  .eq("Activo", true)
+  .maybeSingle();
+
+const ejercicioActivo =
+  (ejercicioActivoData as any)?.Ejercicio ?? null;
+
 
   const { data: familia, error } = await supabase
   .from("FAMILIAS")
@@ -27,21 +40,27 @@ const { data: miembros } = await supabase
   .eq("ID_Familia", Number(id))
   .order("Apellidos", { ascending: true });
 
+  const miembrosAny = (miembros || []) as any[];
+
   const { data: titular } = await supabase
     .from("SOCIOS")
     .select("*")
     .eq("NUMCENS", (familia as any)?.Titular_NUMCENS)
     .single();
 
+    const titularAny = titular as any;
+
     const { data: datosBancoTitular } = titular
   ? await supabase
       .from("DATOS_BANCARIOS")
       .select("IBAN")
-      .eq("NUMCENS", titular.NUMCENS)
+      .eq("NUMCENS", titularAny?.NUMCENS)
       .maybeSingle()
   : { data: null };
 
-  const numsFamilia = miembros?.map((s) => s.NUMCENS) || [];
+  const datosBancoTitularAny = datosBancoTitular as any;
+
+  const numsFamilia = miembrosAny?.map((s) => s.NUMCENS) || [];
 
   const { data: formasPagoFamilia } =
   numsFamilia.length > 0
@@ -58,6 +77,8 @@ const { data: miembros } = await supabase
         .in("NUMCENS", numsFamilia)
         .eq("Activo", true)
     : { data: [] };
+
+    const formasPagoFamiliaAny = (formasPagoFamilia || []) as any[];
   
   const { data: cuotasFamilia } =
     numsFamilia.length > 0
@@ -68,13 +89,15 @@ const { data: miembros } = await supabase
           .order("Ejercicio", { ascending: false })
       : { data: [] };
 
+      const cuotasFamiliaAny = (cuotasFamilia || []) as any[];
+
   const ejercicioActual =
     cuotasFamilia && cuotasFamilia.length > 0
-      ? cuotasFamilia[0].Ejercicio
+      ? cuotasFamiliaAny[0].Ejercicio
       : null;
 
   const cuotasActuales =
-    cuotasFamilia?.filter(
+    cuotasFamiliaAny?.filter(
       (c) => Number(c.Ejercicio) === Number(ejercicioActual)
     ) || [];
 
@@ -89,6 +112,8 @@ const { data: plazosFamilia } =
         .in("IDCuotaSocio", idsCuotasActuales)
     : { data: [] };
 
+    const plazosFamiliaAny = (plazosFamilia ?? []) as any[];
+
   function cuotaSocio(numcens: number) {
     return cuotasActuales.find(
       (c) => Number(c.NUMCENS) === Number(numcens)
@@ -96,10 +121,11 @@ const { data: plazosFamilia } =
   }
 
   const totalPapeletas =
-    miembros?.reduce(
-      (total, socio) => total + Number(socio.NumPapeletas || 0),
-      0
-    ) || 0;
+  miembrosAny.reduce(
+    (total: number, socio: any) =>
+      total + Number(socio.NumPapeletas || 0),
+    0
+  );
 
   const totalCuotas = cuotasActuales.reduce(
     (total, cuota) => total + Number(cuota.Importe || 0),
@@ -149,6 +175,8 @@ const totalPendiente =
     );
   }
 
+  const ejercicioParaGenerar = ejercicioActual ?? ejercicioActivo;
+  
   return (
     <div className="min-h-screen bg-zinc-100 p-8">
       <main className="mx-auto max-w-7xl">
@@ -164,17 +192,17 @@ const totalPendiente =
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-zinc-900">
-                  {familia.Nombre_Familia || "Familia sin nombre"}
+                  {familiaAny.Nombre_Familia || "Familia sin nombre"}
                 </h1>
 
                 <p className="mt-2 text-sm text-zinc-600">
-                  ID familia {familia.ID_Familia} · {miembros?.length || 0} miembros ·{" "}
+                  ID familia {familiaAny.ID_Familia} · {miembros?.length || 0} miembros ·{" "}
                   {totalPapeletas} papeletas
                 </p>
               </div>
 
               <Link
-                href={`/familias/${familia.ID_Familia}/editar`}
+                href={`/familias/${familiaAny.ID_Familia}/editar`}
                 className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
               >
                 Editar familia
@@ -197,16 +225,33 @@ const totalPendiente =
           </div>
 
           <div className="grid grid-cols-1 text-sm md:grid-cols-5">
-  <Bloque
-    label="Titular"
-    value={titular ? `${titular.Nombre} ${titular.Apellidos}` : "-"}
-  />
-  <Bloque label="Teléfono" value={titular?.["Teléfono 1"] || "-"} />
-  <Bloque label="Dirección" value={titular?.Dirección || "-"} />
-  <Bloque label="Población" value={titular?.Poblacion || titular?.Ciudad || "-"} />
-  <Bloque
+          <Bloque
+  label="Titular"
+  value={
+    titularAny
+      ? `${titularAny.Nombre} ${titularAny.Apellidos}`
+      : "-"
+  }
+/>
+
+<Bloque
+  label="Teléfono"
+  value={titularAny?.["Teléfono 1"] || "-"}
+/>
+
+<Bloque
+  label="Dirección"
+  value={titularAny?.Dirección || "-"}
+/>
+
+<Bloque
+  label="Población"
+  value={titularAny?.Poblacion || titularAny?.Ciudad || "-"}
+/>
+
+<Bloque
   label="Cuenta"
-  value={datosBancoTitular?.IBAN || "-"}
+  value={datosBancoTitularAny?.IBAN || "-"}
 />
 </div>
         </section>
@@ -249,13 +294,13 @@ const totalPendiente =
                 </thead>
 
                 <tbody>
-  {miembros.map((socio) => {
+  {miembrosAny.map((socio) => {
     const cuota = cuotaSocio(socio.NUMCENS);
 
     const plazosCuota =
-      plazosFamilia?.filter(
-        (p) => Number(p.IDCuotaSocio) === Number(cuota?.IDCuotaSocio)
-      ) || [];
+  plazosFamiliaAny.filter(
+    (p: any) => Number(p.IDCuotaSocio) === Number(cuota?.IDCuotaSocio)
+  );
 
     return (
       <tr
@@ -266,7 +311,7 @@ const totalPendiente =
 
         <td className="px-4 py-3">
           <Link
-            href={`/socios/${socio.NUMCENS}?fromFamilia=${familia.ID_Familia}`}
+            href={`/socios/${socio.NUMCENS}?fromFamilia=${familiaAny.ID_Familia}`}
             className="font-medium text-zinc-900 hover:text-red-900 hover:underline"
           >
             {socio.Nombre} {socio.Apellidos}
@@ -283,13 +328,13 @@ const totalPendiente =
 
         <td className="px-4 py-3 text-zinc-600">
   {(() => {
-    const formaPago = formasPagoFamilia?.find(
+    const formaPago = formasPagoFamiliaAny.find(
       (fp) =>
         Number(fp.NUMCENS) === Number(socio.NUMCENS) &&
         fp.Activo === true
     );
 
-    return familia.Titular_NUMCENS || "-";
+    return familiaAny.Titular_NUMCENS || "-";
   })()}
 </td>
 
@@ -298,7 +343,7 @@ const totalPendiente =
         </td>
 
         <td className="px-4 py-3 text-right">
-          {String(socio.NUMCENS) === String(familia.Titular_NUMCENS) ? (
+          {String(socio.NUMCENS) === String(familiaAny?.Titular_NUMCENS) ? (
             <span className="bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
               Titular
             </span>
@@ -335,12 +380,15 @@ const totalPendiente =
             </div>
 
             <div className="flex items-center gap-3">
+ 
+  {(ejercicioActual ?? ejercicioActivo) !== null && (
   <GenerarCuotasButton
-    ejercicio={ejercicioActual || 2027}
+    ejercicio={ejercicioActual ?? ejercicioActivo!}
   />
+)}
 
   <Link
-    href={"/familias/" + familia.ID_Familia + "/cuotas"}
+    href={"/familias/" + familiaAny?.ID_Familia + "/cuotas"}
     className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
   >
     Ver detalle económico
@@ -380,19 +428,21 @@ const totalPendiente =
     </td>
   </tr>
 ) : (
-  cuotasActuales.map((cuota) => {
-    const plazosCuota =
-      plazosFamilia?.filter(
-        (p) => Number(p.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
-      ) || [];
-
+  cuotasActuales.map((cuota: any) => {
+    const plazosCuota = plazosFamiliaAny.filter(
+      (p: any) =>
+        Number(p.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
+    );
+  
     const pagadoCuota = plazosCuota.reduce(
-      (total, plazo) => total + Number(plazo.ImportePagado || 0),
+      (total: number, plazo: any) =>
+        total + Number(plazo.ImportePagado || 0),
       0
     );
-
+  
     const pendienteCuota = plazosCuota.reduce(
-      (total, plazo) => total + Number(plazo.Pendiente || 0),
+      (total: number, plazo: any) =>
+        total + Number(plazo.Pendiente || 0),
       0
     );
 

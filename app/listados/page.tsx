@@ -424,7 +424,7 @@ const sociosMostrados = sociosBase
 
           <section className="mb-4 flex flex-wrap gap-2 print:hidden">
           <BotonListado
-  titulo="Socios activos"
+  titulo="Antigüedad activos"
   activo={listado === "ACTIVOS"}
   onClick={() => setListado("ACTIVOS")}
 />

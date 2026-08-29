@@ -3,12 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizarTexto } from "@/lib/texto";
 
 function normalizar(texto: string) {
-  return texto
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+  return normalizarTexto(texto);
 }
 
 export default function TrasladarFamiliaButton({

@@ -4,6 +4,8 @@ import { useParams, useRouter } from "next/navigation";
 import Sidebar from "@/app/components/Sidebar";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import GrupoLoteriaModal from "@/app/components/GrupoLoteriaModal";
+import { normalizarTexto } from "@/lib/texto";
 
 export default function GrupoLoteriaPage() {
   const params = useParams();
@@ -11,10 +13,25 @@ export default function GrupoLoteriaPage() {
   const [grupo, setGrupo] = useState<any>(null);
   const [sorteos, setSorteos] = useState<any[]>([]);
   const [filas, setFilas] = useState<any[]>([]);
+  const [mostrarModal, setMostrarModal] = useState(false);
+const [grupoEditando, setGrupoEditando] = useState<any>(null);
 
-  useEffect(() => {
-    cargarGrupo();
-  }, []);
+const [socios, setSocios] = useState<any[]>([]);
+const [busquedaResponsable, setBusquedaResponsable] = useState("");
+const [responsableSeleccionado, setResponsableSeleccionado] = useState<any>(null);
+const [sociosIncluidos, setSociosIncluidos] = useState<any[]>([]);
+const [busquedaSocio, setBusquedaSocio] = useState("");
+
+const [papeletasFalla, setPapeletasFalla] = useState(0);
+const [papeletasVirgen, setPapeletasVirgen] = useState(0);
+const [papeletasNavidad, setPapeletasNavidad] = useState(0);
+const [papeletasNino, setPapeletasNino] = useState(0);
+const [observaciones, setObservaciones] = useState("");
+
+useEffect(() => {
+  cargarSocios();
+  cargarGrupo();
+}, []);
   
   async function cargarGrupo() {
     const { data, error } = await (supabase as any)
@@ -28,19 +45,223 @@ export default function GrupoLoteriaPage() {
       return;
     }
   
-    const { data: socioData } = await (supabase as any)
-      .from("SOCIOS")
-      .select("NUMCENS, Apellidos, Nombre")
-      .eq("NUMCENS", Number(data.NUMCENS_Responsable))
-      .maybeSingle();
+    let socioData: any = null;
   
-    setGrupo({
+    if (data.NUMCENS_Responsable) {
+      const { data: socio } = await (supabase as any)
+        .from("SOCIOS")
+        .select("NUMCENS, Apellidos, Nombre, ConLoteria")
+        .eq("NUMCENS", Number(data.NUMCENS_Responsable))
+        .maybeSingle();
+  
+      socioData = socio;
+    }
+  
+    const grupoConNombre = {
       ...data,
-      ResponsableNombre: socioData
+      ResponsableNombre: data.EsExterno
+        ? `EXT - ${data.NombreExterno || "Externo"}`
+        : socioData
         ? `${data.NUMCENS_Responsable} - ${socioData.Apellidos}, ${socioData.Nombre}`
         : String(data.NUMCENS_Responsable),
-    });
+    };
+  
+    setGrupo(grupoConNombre);
+    setGrupoEditando(grupoConNombre);
+  
+    await cargarSociosIncluidos(data, socioData);
     cargarSorteos(data);
+  }
+
+  async function abrirEditarGrupo() {
+    await cargarGrupo();
+    setMostrarModal(true);
+  }
+
+  async function cargarSocios() {
+    const { data, error } = await (supabase as any)
+      .from("SOCIOS")
+      .select("*")
+      .eq("Estado", "Activo")
+      .order("Apellidos");
+  
+    if (error) {
+      alert("Error cargando socios: " + error.message);
+      return;
+    }
+  
+    setSocios(data || []);
+  }
+
+
+  async function guardarGrupoLoteria() {
+    if (!grupoEditando) {
+      alert("No hay grupo seleccionado.");
+      return;
+    }
+  
+    if (!responsableSeleccionado && !grupoEditando.EsExterno) {
+      alert("Selecciona un responsable.");
+      return;
+    }
+  
+    const numcensResponsable = grupoEditando.EsExterno
+      ? null
+      : responsableSeleccionado?.NUMCENS || grupoEditando.NUMCENS_Responsable;
+  
+    const { error: errorUpdate } = await (supabase as any)
+      .from("SOCIOS_LOTERIA")
+      .update({
+        NUMCENS_Responsable: numcensResponsable,
+        NumeroMiembros: sociosIncluidos.length,
+        PapeletasFalla: papeletasFalla,
+        PapeletasVirgen: papeletasVirgen,
+        PapeletasNavidad: papeletasNavidad,
+        PapeletasNino: papeletasNino,
+        Observaciones: observaciones || null,
+      })
+      .eq("ID", grupoEditando.ID);
+  
+    if (errorUpdate) {
+      alert(errorUpdate.message);
+      return;
+    }
+  
+    await (supabase as any)
+      .from("SOCIOS_LOTERIA_DETALLE")
+      .delete()
+      .eq("IDSocioLoteria", grupoEditando.ID);
+  
+    if (sociosIncluidos.length > 0) {
+      const detalles = sociosIncluidos.map((socio) => ({
+        IDSocioLoteria: grupoEditando.ID,
+        NUMCENS: socio.NUMCENS,
+      }));
+  
+      const { error: errorDetalle } = await (supabase as any)
+        .from("SOCIOS_LOTERIA_DETALLE")
+        .insert(detalles);
+  
+      if (errorDetalle) {
+        alert(errorDetalle.message);
+        return;
+      }
+    }
+  
+    setMostrarModal(false);
+    await cargarGrupo();
+  }
+  
+  function textoSocio(socio: any) {
+    return `${socio.Apellidos || ""}, ${socio.Nombre || ""} · NUMCENS ${socio.NUMCENS}`;
+  }
+  
+  function normalizar(texto: string) {
+    return normalizarTexto(texto);
+  }
+  
+  function sociosFiltrados(texto: string) {
+    if (!texto.trim()) return [];
+  
+    const busqueda = normalizarTexto(texto.trim());
+  
+    return socios
+      .filter((socio) => {
+        const yaIncluido = sociosIncluidos.some(
+          (s) => Number(s.NUMCENS) === Number(socio.NUMCENS)
+        );
+  
+        if (yaIncluido) return false;
+  
+        const nombreCompleto = normalizarTexto(
+          `${socio.Apellidos || ""} ${socio.Nombre || ""}`
+        );
+  
+        const nombreInvertido = normalizarTexto(
+          `${socio.Nombre || ""} ${socio.Apellidos || ""}`
+        );
+  
+        const numcens = String(socio.NUMCENS || "");
+  
+        return (
+          nombreCompleto.includes(busqueda) ||
+          nombreInvertido.includes(busqueda) ||
+          numcens.includes(busqueda)
+        );
+      })
+      .slice(0, 30);
+  }
+  
+  function agregarSocioIncluido(socio: any) {
+    const yaExiste = sociosIncluidos.some(
+      (s) => Number(s.NUMCENS) === Number(socio.NUMCENS)
+    );
+  
+    if (yaExiste) {
+      setBusquedaSocio("");
+      return;
+    }
+  
+    setSociosIncluidos([...sociosIncluidos, socio]);
+    setBusquedaSocio("");
+  }
+  
+  function quitarSocioIncluido(numcens: number) {
+    setSociosIncluidos(
+      sociosIncluidos.filter(
+        (socio) => Number(socio.NUMCENS) !== Number(numcens)
+      )
+    );
+  }
+  
+  function limpiarFormulario() {
+    setBusquedaResponsable("");
+    setResponsableSeleccionado(null);
+    setBusquedaSocio("");
+    setSociosIncluidos([]);
+    setPapeletasFalla(0);
+    setPapeletasVirgen(0);
+    setPapeletasNavidad(0);
+    setPapeletasNino(0);
+    setObservaciones("");
+  }
+
+  async function cargarSociosIncluidos(grupo: any, responsable: any) {
+    const { data, error } = await (supabase as any)
+      .from("SOCIOS_LOTERIA_DETALLE")
+      .select("NUMCENS")
+      .eq("IDSocioLoteria", grupo.ID);
+  
+    if (error) {
+      alert("Error cargando socios: " + error.message);
+      return;
+    }
+  
+    const numeros = (data || []).map((x: any) => Number(x.NUMCENS));
+  
+    if (numeros.length === 0) {
+      setSociosIncluidos([]);
+    } else {
+      const { data: sociosData } = await (supabase as any)
+        .from("SOCIOS")
+        .select("*")
+        .in("NUMCENS", numeros);
+  
+      setSociosIncluidos(sociosData || []);
+    }
+  
+    if (responsable) {
+      setResponsableSeleccionado(responsable);
+      setBusquedaResponsable(
+        `${responsable.Apellidos}, ${responsable.Nombre}`
+      );
+    }
+  
+    setPapeletasFalla(Number(grupo.PapeletasFalla || 0));
+    setPapeletasVirgen(Number(grupo.PapeletasVirgen || 0));
+    setPapeletasNavidad(Number(grupo.PapeletasNavidad || 0));
+    setPapeletasNino(Number(grupo.PapeletasNino || 0));
+    setObservaciones(grupo.Observaciones || "");
   }
 
   async function cargarSorteos(grupoActual: any) {
@@ -96,17 +317,28 @@ export default function GrupoLoteriaPage() {
       
         PapeletasFalla: Number(fila?.PapeletasFalla || 0),
 
-PapeletasVirgen: Number(fila?.PapeletasVirgen || 0),
+        PapeletasVirgen:
+        sorteo.TipoSorteo === "ESPECIAL"
+          ? 0
+          : Number(fila?.PapeletasVirgen || 0),
+      
 
 ImporteFalla: Number(fila?.ImporteFalla || 0),
 
-ImporteVirgen: Number(fila?.ImporteVirgen || 0),
+ImporteVirgen:
+        sorteo.TipoSorteo === "ESPECIAL"
+          ? 0
+          : Number(fila?.ImporteVirgen || 0),
+
 
 ImportePagado: Number(fila?.ImportePagado || 0),
 
 PapeletasPremioFalla: Number(fila?.PapeletasPremioFalla || 0),
 
-PapeletasPremioVirgen: Number(fila?.PapeletasPremioVirgen || 0),
+PapeletasPremioVirgen:
+  sorteo.TipoSorteo === "ESPECIAL"
+    ? 0
+    : Number(fila?.PapeletasPremioVirgen || 0),
 
 ImportePremio: Number(fila?.ImportePremio || 0),
 
@@ -161,6 +393,13 @@ PagadoConfirmado: fila?.PagadoConfirmado ?? false,
   >
     ← Volver a sorteos
   </button>
+
+  <button
+  onClick={abrirEditarGrupo}
+  className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+>
+  Editar grupo
+</button>
 
   
 </div>
@@ -298,6 +537,37 @@ Importe<br />Virgen
           </section>
 
         </div>
+
+        <GrupoLoteriaModal
+  mostrarModal={mostrarModal}
+  grupoEditando={grupoEditando}
+  busquedaResponsable={busquedaResponsable}
+  setBusquedaResponsable={setBusquedaResponsable}
+  responsableSeleccionado={responsableSeleccionado}
+  setResponsableSeleccionado={setResponsableSeleccionado}
+  sociosFiltrados={sociosFiltrados}
+  textoSocio={textoSocio}
+  sociosIncluidos={sociosIncluidos}
+  setSociosIncluidos={setSociosIncluidos}
+  busquedaSocio={busquedaSocio}
+  setBusquedaSocio={setBusquedaSocio}
+  agregarSocioIncluido={agregarSocioIncluido}
+  quitarSocioIncluido={quitarSocioIncluido}
+  papeletasFalla={papeletasFalla}
+  setPapeletasFalla={setPapeletasFalla}
+  papeletasVirgen={papeletasVirgen}
+  setPapeletasVirgen={setPapeletasVirgen}
+  papeletasNavidad={papeletasNavidad}
+  setPapeletasNavidad={setPapeletasNavidad}
+  papeletasNino={papeletasNino}
+  setPapeletasNino={setPapeletasNino}
+  observaciones={observaciones}
+  setObservaciones={setObservaciones}
+  limpiarFormulario={limpiarFormulario}
+  setGrupoEditando={setGrupoEditando}
+  setMostrarModal={setMostrarModal}
+  guardarGrupoLoteria={guardarGrupoLoteria}
+/>
       </main>
     </div>
   );

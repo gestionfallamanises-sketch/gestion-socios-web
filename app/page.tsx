@@ -4,6 +4,7 @@ import Link from "next/link";
 import Sidebar from "./components/Sidebar";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizarTexto } from "@/lib/texto";
 
 export default function Home() {
   const [socios, setSocios] = useState<any[]>([]);
@@ -29,10 +30,7 @@ export default function Home() {
   }, []);
 
   function normalizar(texto: string) {
-    return texto
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
+    return normalizarTexto(texto);
   }
 
   const sociosFiltrados = socios.filter((socio) =>

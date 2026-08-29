@@ -54,7 +54,9 @@ export default function ImprimirSorteoPage() {
 
       <div className="grid grid-cols-2 gap-6">
         <Bloque titulo="Falla" sorteo={sorteo} tipo="Falla" />
-        <Bloque titulo="Virgen" sorteo={sorteo} tipo="Virgen" />
+        {sorteo?.TipoSorteo !== "ESPECIAL" && (
+  <Bloque titulo="Virgen" sorteo={sorteo} tipo="Virgen" />
+)}
       </div>
 
       <style jsx global>{`

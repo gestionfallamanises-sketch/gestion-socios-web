@@ -40,9 +40,21 @@ export default function LoteriasPage() {
 
             <TarjetaModulo
               titulo="Sorteos"
-              descripcion="Falla, Virgen, Navidad y Niño."
+              descripcion="Control semanal Falla y Virgen."
               href="/loterias/sorteos"
             />
+
+<TarjetaModulo
+  titulo="Navidad"
+  descripcion="Configuración, entregas, pagos y devoluciones."
+  href="/loterias/navidad"
+/>
+
+<TarjetaModulo
+  titulo="Niño"
+  descripcion="Configuración, entregas, pagos y devoluciones."
+  href="/loterias/nino"
+/>
 
 <TarjetaModulo
   titulo="Informes"

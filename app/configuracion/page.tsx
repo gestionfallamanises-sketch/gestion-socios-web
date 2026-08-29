@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Sidebar from "@/app/components/Sidebar";
-import { supabase } from "@/lib/supabaseClient";
+import React, { useEffect, useState } from "react";
+import Sidebar from "../components/Sidebar";
+import { supabase } from "../../lib/supabaseClient";
 
 export default function ConfiguracionPage() {
   const [ejercicios, setEjercicios] = useState<any[]>([]);
   const [tarifas, setTarifas] = useState<any[]>([]);
   const [nuevoEjercicio, setNuevoEjercicio] = useState("");
-  const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState(2027);
+  const [ejercicioSeleccionado, setEjercicioSeleccionado] =
+  useState<number | null>(null);
   const [editandoTarifas, setEditandoTarifas] = useState(false);
   const [numcensEspecial, setNumcensEspecial] = useState("");
   const [socios, setSocios] = useState<any[]>([]);
@@ -37,18 +38,29 @@ const [busquedaSocioCargo, setBusquedaSocioCargo] = useState("");
       const activo = (data as any[]).find((e) => e.Activo);
   
       setEjercicioSeleccionado(
-        activo?.Ejercicio || (data as any[])[0].Ejercicio
+        activo?.Ejercicio ?? (data as any[])[0].Ejercicio
       );
     }
   }
 
   async function cargarTarifas() {
-    const { data } = await supabase
+    if (ejercicioSeleccionado === null) {
+      setTarifas([]);
+      return;
+    }
+  
+    const { data, error } = await supabase
       .from("TIPOS_CUOTA")
       .select("*")
       .eq("Ejercicio", ejercicioSeleccionado)
       .order("CodigoCuota", { ascending: true });
-
+  
+    if (error) {
+      alert(error.message);
+      setTarifas([]);
+      return;
+    }
+  
     setTarifas(data || []);
   }
 
@@ -298,15 +310,20 @@ const { error } = await (supabase as any)
 
               <div className="flex flex-wrap items-center gap-3">
 
-  <select
-    value={ejercicioSeleccionado}
-    onChange={(e) =>
-      setEjercicioSeleccionado(
-        Number(e.target.value)
+              <select
+  value={ejercicioSeleccionado ?? ""}
+  onChange={(e) =>
+    setEjercicioSeleccionado(
+      e.target.value ? Number(e.target.value) : null
       )
     }
     className="border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
   >
+
+<option value="" disabled>
+  Selecciona un ejercicio
+</option>
+
     {ejercicios.map((ejercicio) => (
       <option
         key={ejercicio.Ejercicio}

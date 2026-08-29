@@ -9,6 +9,7 @@ import EditarFechaVencimientoInput from "@/app/components/EditarFechaVencimiento
 import MarcarReciboAgrupadoDevueltoButton from "@/app/components/MarcarReciboAgrupadoDevueltoButton";
 import AnularReciboAgrupadoDevueltoButton from "@/app/components/AnularReciboAgrupadoDevueltoButton";
 import AgregarLineasRemesaButton from "@/app/components/AgregarLineasRemesaButton";
+import { normalizarTexto } from "@/lib/texto";
 
 export default async function RemesaDetallePage({
   params,
@@ -102,11 +103,8 @@ lineasAny.sort((a, b) => {
   return textoA.localeCompare(textoB, "es");
 });
 
-function normalizarTexto(texto: string) {
-  return texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+function normalizar(texto: string) {
+  return normalizarTexto(texto);
 }
 
 const lineasFiltradas = textoBusqueda

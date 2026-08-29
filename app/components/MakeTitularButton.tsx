@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { supabase } from "../../lib/supabase";
-import ConfirmModal from "@/app/components/ConfirmModal";
+import ConfirmModal from "./ConfirmModal";
 
 export default function MakeTitularButton({
   idFamilia,
@@ -38,7 +38,9 @@ export default function MakeTitularButton({
       return;
     }
   
-    const numsSocios = (sociosFamilia || []).map((s: any) => s.NUMCENS);
+    const numsSocios = (sociosFamilia || []).map(
+      (s: any) => s.NUMCENS
+    );
   
     if (numsSocios.length > 0) {
       const { error: errorPagadores } = await supabase
@@ -55,9 +57,38 @@ export default function MakeTitularButton({
       }
     }
   
-    await supabase.rpc("generar_actualizar_cuotas_completo", {
-      p_ejercicio: 2027,
-    });
+    const { data: ejercicioData, error: errorEjercicio } =
+      await supabase
+        .from("EJERCICIOS")
+        .select("Ejercicio")
+        .eq("Activo", true)
+        .maybeSingle();
+  
+    if (errorEjercicio) {
+      alert(errorEjercicio.message);
+      return;
+    }
+  
+    const ejercicioActivo = Number(
+      ejercicioData?.Ejercicio || 0
+    );
+  
+    if (!ejercicioActivo) {
+      alert("No se ha encontrado un ejercicio activo.");
+      return;
+    }
+  
+    const { error: errorCuotas } = await supabase.rpc(
+      "generar_actualizar_cuotas_completo",
+      {
+        p_ejercicio: ejercicioActivo,
+      }
+    );
+  
+    if (errorCuotas) {
+      alert(errorCuotas.message);
+      return;
+    }
   
     window.location.reload();
   }

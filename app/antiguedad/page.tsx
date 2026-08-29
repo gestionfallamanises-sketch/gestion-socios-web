@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../../lib/supabase";
@@ -140,7 +140,7 @@ export default function ListadosPage() {
 
       <main className="min-w-0 flex-1 p-8 print:p-0">
         <div className="mx-auto max-w-7xl print:max-w-none">
-          <style jsx global>{`
+          <style>{`
             @media print {
               .no-print {
                 display: none !important;

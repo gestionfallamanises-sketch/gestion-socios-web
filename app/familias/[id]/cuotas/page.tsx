@@ -192,11 +192,15 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
   
       const grupos = Object.values(
         pendientes.reduce((acc: any, plazo: any) => {
-          const importe = Number(plazo.Pendiente || 0).toFixed(2);
+          const importeCuota = Number(
+            plazo.Importe || plazo.ImportePlazo || 0
+          );
+          
+          const importe = importeCuota.toFixed(2);
   
           if (!acc[importe]) {
             acc[importe] = {
-              importe: Number(plazo.Pendiente || 0),
+              importe: importeCuota,
               cantidad: 0,
             };
           }

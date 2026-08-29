@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import GrupoLoteriaModal from "@/app/components/GrupoLoteriaModal";
+import { normalizarTexto } from "@/lib/texto";
 
 export default function SociosLoteriaPage() {
     const router = useRouter();
@@ -122,11 +123,8 @@ useEffect(() => {
     return `${socio.Apellidos || ""}, ${socio.Nombre || ""} · NUMCENS ${socio.NUMCENS}`;
   }
   
-  function normalizarTexto(texto: string) {
-    return texto
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
+  function normalizar(texto: string) {
+    return normalizarTexto(texto);
   }
 
   function sociosFiltrados(texto: string) {
@@ -234,12 +232,12 @@ const nombreInvertido = normalizarTexto(
       return;
     }
   
-    if (!responsableSeleccionado) {
+    if (!responsableSeleccionado && !grupoEditando) {
       alert("Selecciona un responsable.");
       return;
     }
   
-    if (sociosIncluidos.length === 0) {
+    if (sociosIncluidos.length === 0 && !grupoEditando) {
       alert("Añade al menos un socio.");
       return;
     }
@@ -248,7 +246,9 @@ const nombreInvertido = normalizarTexto(
         const { error: errorUpdate } = await (supabase as any)
           .from("SOCIOS_LOTERIA")
           .update({
-            NUMCENS_Responsable: responsableSeleccionado.NUMCENS,
+            NUMCENS_Responsable: grupoEditando?.EsExterno
+  ? null
+  : responsableSeleccionado?.NUMCENS || grupoEditando?.NUMCENS_Responsable,
             NumeroMiembros: sociosIncluidos.length,
             PapeletasFalla: papeletasFalla,
             PapeletasVirgen: papeletasVirgen,
@@ -348,7 +348,7 @@ const nombreInvertido = normalizarTexto(
         EsExterno: true,
         NombreExterno: nombreExterno.trim(),
         TelefonoExterno: telefonoExterno.trim() || null,
-        Ejercicio: 2027,
+        Ejercicio: ejercicioActivo,
         PapeletasFalla: externoFalla,
 PapeletasVirgen: externoVirgen,
 PapeletasNavidad: externoNavidad,
@@ -417,15 +417,23 @@ if (numcensResponsables.length > 0) {
       return {
         ...grupo,
         ResponsableNombre: grupo.EsExterno
-  ? `EXT - ${grupo.NombreExterno || "Externo"}`
+  ? `${grupo.NombreExterno || "Externo"}`
   : responsable
-  ? `${responsable.NUMCENS} - ${responsable.Apellidos}, ${responsable.Nombre}`
+  ? `${responsable.Apellidos}, ${responsable.Nombre}`
   : grupo.NUMCENS_Responsable,
+
+  ResponsableExtra: grupo.EsExterno
+  ? "EXT"
+  : responsable
+  ? String(responsable.NUMCENS)
+  : "",
+
 ResponsableOrden: grupo.EsExterno
   ? grupo.NombreExterno || ""
   : responsable
   ? `${responsable.Apellidos || ""} ${responsable.Nombre || ""}`
   : "",
+
         ResponsableOrden: responsable
           ? `${responsable.Apellidos || ""} ${responsable.Nombre || ""}`
           : "",
@@ -566,15 +574,9 @@ ResponsableOrden: grupo.EsExterno
   );
 
   const gruposLoteriaOrdenados = [...gruposLoteria].sort((a, b) => {
-    const nombreA = (a.ResponsableOrden || "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-  
-    const nombreB = (b.ResponsableOrden || "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+    const nombreA = normalizarTexto(a.ResponsableOrden || "");
+
+const nombreB = normalizarTexto(b.ResponsableOrden || "");
   
     return ordenResponsable === "asc"
       ? nombreA.localeCompare(nombreB)
@@ -717,8 +719,15 @@ ResponsableOrden: grupo.EsExterno
   }
 >
   {grupo.ResponsableNombre}
+{grupo.ResponsableExtra && (
+  <span className="ml-2 text-xs text-zinc-400">
+    {grupo.ResponsableExtra}
+  </span>
+)}
 </td>
-        <td className="px-4 py-3 text-center">{grupo.NumeroMiembros}</td>
+<td className="px-4 py-3 text-center">
+  {grupo.EsExterno ? 1 : grupo.NumeroMiembros}
+</td>
         <td className="px-4 py-3 text-center">{grupo.PapeletasFalla}</td>
         <td className="px-4 py-3 text-center">{grupo.PapeletasVirgen}</td>
         <td className="px-4 py-3 text-center">{grupo.PapeletasNavidad}</td>

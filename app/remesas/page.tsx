@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Sidebar from "@/app/components/Sidebar";
-import { supabase } from "@/lib/supabaseClient";
+import React, { useEffect, useState } from "react";
+import Sidebar from "../components/Sidebar";
+import { supabase } from "../../lib/supabaseClient";
 
 function formatearFecha(fecha: string | null) {
   if (!fecha) return "-";
@@ -14,18 +14,19 @@ function formatearFecha(fecha: string | null) {
 export default function RemesasPage() {
   const [remesas, setRemesas] = useState<any[]>([]);
   const [ejercicios, setEjercicios] = useState<any[]>([]);
-  const [ejercicio, setEjercicio] = useState(2027);
+  const [ejercicio, setEjercicio] = useState<number | null>(null);
   const [numeroPlazo, setNumeroPlazo] = useState(1);
   const [loading, setLoading] = useState(false);
   const [fechaVencimiento, setFechaVencimiento] = useState("");
 
   useEffect(() => {
     cargarEjercicios();
-    cargarRemesas();
   }, []);
 
   useEffect(() => {
-    cargarRemesas();
+    if (ejercicio !== null) {
+      cargarRemesas();
+    }
   }, [ejercicio]);
 
   useEffect(() => {
@@ -46,9 +47,14 @@ export default function RemesasPage() {
     setEjercicios(data || []);
 
     if (data && data.length > 0) {
-      const dataAny = (data as any[]) || [];
-const activo = dataAny.find((e) => e.Activo);
-setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
+      const dataAny = data as any[];
+      const activo = dataAny.find((e: any) => e.Activo);
+    
+      setEjercicio(
+        activo?.Ejercicio ?? dataAny[0]?.Ejercicio ?? null
+      );
+    } else {
+      setEjercicio(null);
     }
   }
 
@@ -67,6 +73,11 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
   }
 
   async function generarRemesa() {
+    if (ejercicio === null) {
+      alert("No hay ningún ejercicio seleccionado.");
+      return;
+    }
+
     if (!fechaVencimiento) {
       alert("Selecciona una fecha de vencimiento para la remesa.");
       return;
@@ -238,16 +249,24 @@ setEjercicio(activo?.Ejercicio || dataAny[0].Ejercicio);
                 </label>
 
                 <select
-                  value={ejercicio}
-                  onChange={(e) => setEjercicio(Number(e.target.value))}
-                  className="w-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
-                >
-                  {ejercicios.map((e) => (
-                    <option key={e.Ejercicio} value={e.Ejercicio}>
-                      Ejercicio {e.Ejercicio}
-                    </option>
-                  ))}
-                </select>
+  value={ejercicio ?? ""}
+  onChange={(e) =>
+    setEjercicio(
+      e.target.value ? Number(e.target.value) : null
+    )
+  }
+  className="w-full border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-red-900"
+>
+  <option value="" disabled>
+    Selecciona un ejercicio
+  </option>
+
+  {ejercicios.map((e: any) => (
+    <option key={e.Ejercicio} value={e.Ejercicio}>
+      Ejercicio {e.Ejercicio}
+    </option>
+  ))}
+</select>
               </div>
 
               <div>

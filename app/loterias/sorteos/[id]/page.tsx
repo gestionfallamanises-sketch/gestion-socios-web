@@ -4,12 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabase";
+import { normalizarTexto } from "@/lib/texto";
 
-function normalizarTexto(texto: string) {
-  return texto
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+function normalizar(texto: string) {
+  return normalizarTexto(texto);
 }
 
 export default function SorteoDetallePage() {
@@ -123,10 +121,16 @@ sociosData = data || [];
         ...grupo,
       
         NombreCompleto: grupo.EsExterno
-  ? `EXT - ${grupo.NombreExterno || "Externo"}`
+  ? grupo.NombreExterno || "Externo"
   : socio
-  ? `${grupo.NUMCENS_Responsable} - ${socio.Apellidos}, ${socio.Nombre}`
-  : String(grupo.NUMCENS_Responsable),
+  ? `${socio.Apellidos}, ${socio.Nombre}`
+  : "",
+
+ResponsableExtra: grupo.EsExterno
+  ? "EXT"
+  : socio
+  ? String(grupo.NUMCENS_Responsable)
+  : "",
 
 ResponsableOrden: grupo.EsExterno
   ? grupo.NombreExterno || ""
@@ -134,51 +138,30 @@ ResponsableOrden: grupo.EsExterno
   ? `${socio.Apellidos || ""} ${socio.Nombre || ""}`
   : "",
       
-          PapeletasFalla:
-  Number(movimiento?.PapeletasFalla || 0) > 0
-    ? Number(movimiento.PapeletasFalla)
+  PapeletasFalla:
+  movimiento
+    ? Number(movimiento.PapeletasFalla || 0)
     : Number(grupo.PapeletasFalla || 0),
 
-    ImporteFalla:
-  Number(movimiento?.ImporteFalla || 0) > 0
-    ? Number(movimiento.ImporteFalla)
-    : Number(
-        (
-          Number(movimiento?.PapeletasFalla || grupo.PapeletasFalla || 0) *
-          (
-            Number(sorteoData.ImportePapeletaFalla || 0) +
-            Number(sorteoData.BeneficioFalla || 0)
-          )
-        ).toFixed(2)
-      ),
-              PapeletasVirgen:
-              Number(movimiento?.PapeletasVirgen || 0) > 0
-                ? Number(movimiento.PapeletasVirgen)
-                : Number(grupo.PapeletasVirgen || 0),
+    ImporteFalla: Number(movimiento?.ImporteFalla || 0),
+
+      PapeletasVirgen:
+      movimiento
+        ? Number(movimiento.PapeletasVirgen || 0)
+        : Number(grupo.PapeletasVirgen || 0),
           
-                ImporteVirgen:
-  Number(movimiento?.ImporteVirgen || 0) > 0
-    ? Number(movimiento.ImporteVirgen)
-    : Number(
-        (
-          Number(movimiento?.PapeletasVirgen || grupo.PapeletasVirgen || 0) *
-          (
-            Number(sorteoData.ImportePapeletaVirgen || 0) +
-            Number(sorteoData.BeneficioVirgen || 0)
-          )
-        ).toFixed(2)
-      ),
+        ImporteVirgen: Number(movimiento?.ImporteFalla || 0),
           
           ImportePagado: movimiento?.ImportePagado ?? 0,
 
           PapeletasPremioFalla:
   Number(sorteoData.PremioFallaPorPapeleta || 0) > 0
-    ? Number(movimiento?.PapeletasPremioFalla || grupo.PapeletasFalla || 0)
+    ? Number(movimiento?.PapeletasPremioFalla || 0)
     : 0,
 
-PapeletasPremioVirgen:
+    PapeletasPremioVirgen:
   Number(sorteoData.PremioVirgenPorPapeleta || 0) > 0
-    ? Number(movimiento?.PapeletasPremioVirgen || grupo.PapeletasVirgen || 0)
+    ? Number(movimiento?.PapeletasPremioVirgen || 0)
     : 0,
           
           ImportePremio:
@@ -206,61 +189,56 @@ IDGrupoLoteria: movimiento?.IDGrupoLoteria ?? grupo.ID,
     );
   }
 
-  function actualizarGrupo(index: number, campo: string, valor: any) {
+  function actualizarGrupo(idGrupo: number, campo: string, valor: any) {
     setGrupos((prev) => {
-      const nuevos = prev.map((grupo, i) => {
-        if (i !== index) return grupo;
+      const nuevos = prev.map((grupo) => {
+        const idActual = Number(grupo.IDGrupoLoteria || grupo.ID);
+  
+        if (idActual !== Number(idGrupo)) return grupo;
   
         const actualizado = {
           ...grupo,
           [campo]: valor,
         };
   
+        const precioVentaFalla =
+          Number(sorteo?.ImportePapeletaFalla || 0) +
+          Number(sorteo?.BeneficioFalla || 0);
+  
+        const precioVentaVirgen =
+          Number(sorteo?.ImportePapeletaVirgen || 0) +
+          Number(sorteo?.BeneficioVirgen || 0);
+  
         if (campo === "PapeletasFalla") {
           actualizado.ImporteFalla =
-            Number(valor || 0) * Number(sorteo?.ImportePapeletaFalla || 0);
-  
-          actualizado.ImportePremio =
-            Number(valor || 0) * Number(sorteo?.PremioFallaPorPapeleta || 0) +
-            Number(actualizado.PapeletasVirgen || 0) *
-              Number(sorteo?.PremioVirgenPorPapeleta || 0);
+            Number(valor || 0) * precioVentaFalla;
         }
   
         if (campo === "PapeletasVirgen") {
           actualizado.ImporteVirgen =
-            Number(valor || 0) * Number(sorteo?.ImportePapeletaVirgen || 0);
-  
-            actualizado.ImportePremio =
-  Number(actualizado.PapeletasPremioFalla || 0) *
-    Number(sorteo?.PremioFallaPorPapeleta || 0) +
-  Number(actualizado.PapeletasPremioVirgen || 0) *
-    Number(sorteo?.PremioVirgenPorPapeleta || 0);
+            Number(valor || 0) * precioVentaVirgen;
         }
   
         if (
           campo === "PapeletasPremioFalla" ||
-          campo === "PapeletasPremioVirgen"
+          campo === "PapeletasPremioVirgen" ||
+          campo === "PapeletasFalla" ||
+          campo === "PapeletasVirgen"
         ) {
           actualizado.ImportePremio =
-            Number(
-              campo === "PapeletasPremioFalla"
-                ? valor
-                : actualizado.PapeletasPremioFalla || 0
-            ) *
+            Number(actualizado.PapeletasPremioFalla || 0) *
               Number(sorteo?.PremioFallaPorPapeleta || 0) +
-            Number(
-              campo === "PapeletasPremioVirgen"
-                ? valor
-                : actualizado.PapeletasPremioVirgen || 0
-            ) *
+            Number(actualizado.PapeletasPremioVirgen || 0) *
               Number(sorteo?.PremioVirgenPorPapeleta || 0);
         }
-
+  
         guardarGrupo(actualizado, false);
   
         return actualizado;
       });
   
+      actualizarTotalesSorteoPadre(nuevos);
+
       return nuevos;
     });
   }
@@ -327,6 +305,7 @@ IDGrupoLoteria: movimiento?.IDGrupoLoteria ?? grupo.ID,
     }
   }
 
+  
   const totalPapFalla = grupos.reduce(
     (sum, g) => sum + Number(g.PapeletasFalla || 0),
     0
@@ -372,6 +351,26 @@ IDGrupoLoteria: movimiento?.IDGrupoLoteria ?? grupo.ID,
     (g) => Number(g.ImportePremio || 0) > 0
   );
 
+  async function actualizarTotalesSorteoPadre(gruposActualizados: any[]) {
+    const totalFalla = gruposActualizados.reduce(
+      (sum, g) => sum + Number(g.PapeletasFalla || 0),
+      0
+    );
+  
+    const totalVirgen = gruposActualizados.reduce(
+      (sum, g) => sum + Number(g.PapeletasVirgen || 0),
+      0
+    );
+  
+    await (supabase as any)
+      .from("LOTERIA_SORTEOS")
+      .update({
+        PapeletasTotalesFalla: totalFalla,
+        PapeletasTotalesVirgen: totalVirgen,
+      })
+      .eq("ID", Number(params.id));
+  }
+
   async function marcarTodosPagados(valor: boolean) {
     const nuevos = grupos.map((g) => ({
       ...g,
@@ -394,6 +393,13 @@ IDGrupoLoteria: movimiento?.IDGrupoLoteria ?? grupo.ID,
   
     await Promise.all(nuevos.map((g) => guardarGrupo(g, false)));
 alert("Cambios guardados");
+  }
+
+  function formatearFecha(fecha: string | null) {
+    if (!fecha) return "—";
+  
+    const [year, month, day] = fecha.split("-");
+    return `${day}/${month}/${year}`;
   }
 
   return (
@@ -433,7 +439,7 @@ alert("Cambios guardados");
     Fecha
   </span>
   <span className="ml-2 font-semibold">
-    {sorteo.FechaSorteo}
+    {formatearFecha(sorteo.FechaSorteo)}
   </span>
 </div>
 
@@ -487,11 +493,17 @@ alert("Cambios guardados");
     <span className="text-zinc-600">Imp_F</span>
     <span className="bg-white px-2 py-1 font-semibold">{totalImpFalla.toFixed(2)} €</span>
 
-    <span className="text-zinc-600">Pap_V</span>
+    {sorteo?.TipoSorteo !== "ESPECIAL" && (
+  <>
+    <span>Pap_V</span>
     <span className="bg-white px-2 py-1 font-semibold">{totalPapVirgen}</span>
 
-    <span className="text-zinc-600">Imp_V</span>
-    <span className="bg-white px-2 py-1 font-semibold">{totalImpVirgen.toFixed(2)} €</span>
+    <span>Imp_V</span>
+    <span className="bg-white px-2 py-1 font-semibold">
+      {totalImpVirgen.toFixed(2)} €
+    </span>
+  </>
+)}
 
     <span className="text-zinc-600">Total</span>
 <span className="bg-white px-2 py-1 font-semibold">
@@ -520,11 +532,30 @@ alert("Cambios guardados");
 
               <thead className="bg-zinc-50">
                 <tr>
-                <th className="w-96 px-4 py-2 text-left text-xs font-semibold uppercase">Responsable</th>
-<th className="px-2 py-2 text-center text-xs font-semibold uppercase">Pap_F</th>
-<th className="px-2 py-2 text-right text-xs font-semibold uppercase">Imp_F</th>
-<th className="px-2 py-2 text-center text-xs font-semibold uppercase">Pap_V</th>
-<th className="px-2 py-2 text-right text-xs font-semibold uppercase">Imp_V</th>
+                <th className="w-96 px-4 py-2 text-left text-xs font-semibold uppercase">
+  Responsable
+</th>
+
+<th className="px-2 py-2 text-center text-xs font-semibold uppercase">
+  Pap_F
+</th>
+
+<th className="px-2 py-2 text-right text-xs font-semibold uppercase">
+  Imp_F
+</th>
+
+{sorteo?.TipoSorteo !== "ESPECIAL" && (
+  <>
+    <th className="px-2 py-2 text-center text-xs font-semibold uppercase">
+      Pap_V
+    </th>
+
+    <th className="px-2 py-2 text-right text-xs font-semibold uppercase">
+      Imp_V
+    </th>
+  </>
+)}
+
 <th className="px-2 py-2 text-right text-xs font-semibold uppercase">
   Total
   <input
@@ -534,17 +565,26 @@ alert("Cambios guardados");
     onChange={(e) => marcarTodosPagados(e.target.checked)}
   />
 </th>
-<th className="px-2 py-2 text-center text-xs font-semibold uppercase">Prem_F</th>
-<th className="px-2 py-2 text-center text-xs font-semibold uppercase">Prem_V</th>
+
+<th className="px-2 py-2 text-center text-xs font-semibold uppercase">
+  Prem_F
+</th>
+
+{sorteo?.TipoSorteo !== "ESPECIAL" && (
+  <th className="px-2 py-2 text-center text-xs font-semibold uppercase">
+    Prem_V
+  </th>
+)}
+
 <th className="px-2 py-2 text-right text-xs font-semibold uppercase">
   Premio
   <input
-  type="checkbox"
-  disabled={!hayPremios}
-  title="Marcar todos los premios como entregados"
-  className="ml-2"
-  onChange={(e) => marcarTodosPremios(e.target.checked)}
-/>
+    type="checkbox"
+    disabled={!hayPremios}
+    title="Marcar todos los premios como entregados"
+    className="ml-2"
+    onChange={(e) => marcarTodosPremios(e.target.checked)}
+  />
 </th>
 <th className="px-2 py-2 text-right text-xs font-semibold uppercase">Saldo</th>
                 </tr>
@@ -557,20 +597,29 @@ alert("Cambios guardados");
     return (
       <tr key={grupo.ID}>
         <td
-  className="w-[220px] max-w-[220px] cursor-pointer px-4 py-2 text-sm text-red-900 hover:underline"
-  onClick={() =>
-    router.push(`/loterias/socios-loteria/${grupo.ID}`)
-  }
->
-  {grupo.NombreCompleto}
-</td>
+          className="w-[220px] max-w-[220px] cursor-pointer px-4 py-2 text-sm text-red-900 hover:underline"
+          onClick={() =>
+            router.push(`/loterias/socios-loteria/${grupo.ID}`)
+          }
+        >
+          {grupo.NombreCompleto}
+          {grupo.ResponsableExtra && (
+            <span className="ml-2 text-xs text-zinc-400">
+              {grupo.ResponsableExtra}
+            </span>
+          )}
+        </td>
 
         <td className="px-4 py-2 text-right text-sm">
           <input
             type="number"
             value={grupo.PapeletasFalla || 0}
             onChange={(e) =>
-              actualizarGrupo(index, "PapeletasFalla", Number(e.target.value))
+              actualizarGrupo(
+                Number(grupo.IDGrupoLoteria || grupo.ID),
+                "PapeletasFalla",
+                Number(e.target.value)
+              )
             }
             className="w-12 bg-transparent text-right text-sm focus:outline-none"
           />
@@ -581,122 +630,157 @@ alert("Cambios guardados");
             type="text"
             value={Number(grupo.ImporteFalla || 0).toFixed(2)}
             onChange={(e) =>
-              actualizarGrupo(index, "ImporteFalla", Number(e.target.value))
+              actualizarGrupo(
+                Number(grupo.IDGrupoLoteria || grupo.ID),
+                "ImporteFalla",
+                Number(e.target.value)
+              )
             }
             className="w-10 bg-transparent text-right text-sm focus:outline-none"
           />
           <span className="ml-1 text-xs text-zinc-500">€</span>
         </td>
 
-        <td className="px-4 py-2 text-right text-sm">
-          <input
-            type="number"
-            value={grupo.PapeletasVirgen || 0}
-            onChange={(e) =>
-              actualizarGrupo(index, "PapeletasVirgen", Number(e.target.value))
-            }
-            className="w-12 bg-transparent text-right text-sm focus:outline-none"
-          />
-        </td>
+        {sorteo?.TipoSorteo !== "ESPECIAL" && (
+          <>
+            <td className="px-4 py-2 text-right text-sm">
+              <input
+                type="number"
+                value={grupo.PapeletasVirgen || 0}
+                onChange={(e) =>
+                  actualizarGrupo(
+                    Number(grupo.IDGrupoLoteria || grupo.ID),
+                    "PapeletasVirgen",
+                    Number(e.target.value)
+                  )
+                }
+                className="w-12 bg-transparent text-right text-sm focus:outline-none"
+              />
+            </td>
 
-        <td className="px-2 py-2 text-right text-sm whitespace-nowrap">
-          <input
-            type="text"
-            value={Number(grupo.ImporteVirgen || 0).toFixed(2)}
-            onChange={(e) =>
-              actualizarGrupo(index, "ImporteVirgen", Number(e.target.value))
-            }
-            className="w-10 bg-transparent text-right text-sm focus:outline-none"
-          />
-          <span className="ml-1 text-xs text-zinc-500">€</span>
-        </td>
+            <td className="px-2 py-2 text-right text-sm whitespace-nowrap">
+              <input
+                type="text"
+                value={Number(grupo.ImporteVirgen || 0).toFixed(2)}
+                onChange={(e) =>
+                  actualizarGrupo(
+                    Number(grupo.IDGrupoLoteria || grupo.ID),
+                    "ImporteVirgen",
+                    Number(e.target.value)
+                  )
+                }
+                className="w-10 bg-transparent text-right text-sm focus:outline-none"
+              />
+              <span className="ml-1 text-xs text-zinc-500">€</span>
+            </td>
+          </>
+        )}
 
         <td className="w-26 px-2 py-2 text-right text-sm whitespace-nowrap">
-  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-    <span>
-      {(Number(grupo.ImporteFalla || 0) + Number(grupo.ImporteVirgen || 0)).toFixed(2)} €
-    </span>
+          <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+            <span>
+              {(
+                Number(grupo.ImporteFalla || 0) +
+                Number(grupo.ImporteVirgen || 0)
+              ).toFixed(2)}{" "}
+              €
+            </span>
 
-    <label title="Pagado" className="flex cursor-pointer items-center gap-1 text-xs text-zinc-500">
-      
-      <input
-        type="checkbox"
-        checked={grupo.PagadoConfirmado || false}
-        onChange={(e) =>
-          actualizarGrupo(index, "PagadoConfirmado", e.target.checked)
-        }
-      />
-    </label>
-  </div>
-</td>
+            <label
+              title="Pagado"
+              className="flex cursor-pointer items-center gap-1 text-xs text-zinc-500"
+            >
+              <input
+                type="checkbox"
+                checked={grupo.PagadoConfirmado || false}
+                onChange={(e) =>
+                  actualizarGrupo(
+                    Number(grupo.IDGrupoLoteria || grupo.ID),
+                    "PagadoConfirmado",
+                    e.target.checked
+                  )
+                }
+              />
+            </label>
+          </div>
+        </td>
 
-<td className="w-9 px-2 py-2 text-right text-sm">
-  <input
-    type="number"
-    disabled={Number(sorteo?.PremioFallaPorPapeleta || 0) <= 0}
-    value={grupo.PapeletasPremioFalla || 0}
-    onChange={(e) =>
-      actualizarGrupo(
-        index,
-        "PapeletasPremioFalla",
-        Number(e.target.value)
-      )
-    }
-    className="w-9 bg-transparent text-right text-sm focus:outline-none"
-  />
-</td>
+        <td className="w-9 px-2 py-2 text-right text-sm">
+          <input
+            type="number"
+            disabled={Number(sorteo?.PremioFallaPorPapeleta || 0) <= 0}
+            value={grupo.PapeletasPremioFalla || 0}
+            onChange={(e) =>
+              actualizarGrupo(
+                Number(grupo.IDGrupoLoteria || grupo.ID),
+                "PapeletasPremioFalla",
+                Number(e.target.value)
+              )
+            }
+            className="w-9 bg-transparent text-right text-sm focus:outline-none"
+          />
+        </td>
 
-<td className="w-9 px-2 py-2 text-right text-sm">
-  <input
-    type="number"
-    disabled={Number(sorteo?.PremioVirgenPorPapeleta || 0) <= 0}
-    value={grupo.PapeletasPremioVirgen || 0}
-    onChange={(e) =>
-      actualizarGrupo(
-        index,
-        "PapeletasPremioVirgen",
-        Number(e.target.value)
-      )
-    }
-    className="w-7 bg-transparent text-right text-sm focus:outline-none"
-  />
-</td>
+        {sorteo?.TipoSorteo !== "ESPECIAL" && (
+          <td className="w-9 px-2 py-2 text-right text-sm">
+            <input
+              type="number"
+              disabled={Number(sorteo?.PremioVirgenPorPapeleta || 0) <= 0}
+              value={grupo.PapeletasPremioVirgen || 0}
+              onChange={(e) =>
+                actualizarGrupo(
+                  Number(grupo.IDGrupoLoteria || grupo.ID),
+                  "PapeletasPremioVirgen",
+                  Number(e.target.value)
+                )
+              }
+              className="w-7 bg-transparent text-right text-sm focus:outline-none"
+            />
+          </td>
+        )}
 
-<td className="w-16 px-2 py-2 text-right text-sm whitespace-nowrap">
-  <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-    <input
-      type="text"
-      value={Number(grupo.ImportePremio || 0).toFixed(2)}
-      onChange={(e) =>
-        actualizarGrupo(index, "ImportePremio", Number(e.target.value))
-      }
-      className="w-7 bg-transparent text-right text-sm focus:outline-none"
-    />
-    <span className="text-xs text-zinc-500">€</span>
+        <td className="w-16 px-2 py-2 text-right text-sm whitespace-nowrap">
+          <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+            <input
+              type="text"
+              value={Number(grupo.ImportePremio || 0).toFixed(2)}
+              onChange={(e) =>
+                actualizarGrupo(
+                  Number(grupo.IDGrupoLoteria || grupo.ID),
+                  "ImportePremio",
+                  Number(e.target.value)
+                )
+              }
+              className="w-7 bg-transparent text-right text-sm focus:outline-none"
+            />
+            <span className="text-xs text-zinc-500">€</span>
 
-    <label
-  title="Entregado"
-  className={`flex items-center gap-1 text-xs ${
-    Number(grupo.ImportePremio || 0) <= 0
-      ? "cursor-not-allowed text-zinc-300"
-      : "cursor-pointer text-zinc-500"
-  }`}
->
-  
-    <input
-  type="checkbox"
-  disabled={Number(grupo.ImportePremio || 0) <= 0}
-  checked={grupo.PremioEntregado || false}
-  onChange={(e) =>
-    actualizarGrupo(index, "PremioEntregado", e.target.checked)
-  }
-/>
-    </label>
-  </div>
-</td>
+            <label
+              title="Entregado"
+              className={`flex items-center gap-1 text-xs ${
+                Number(grupo.ImportePremio || 0) <= 0
+                  ? "cursor-not-allowed text-zinc-300"
+                  : "cursor-pointer text-zinc-500"
+              }`}
+            >
+              <input
+                type="checkbox"
+                disabled={Number(grupo.ImportePremio || 0) <= 0}
+                checked={grupo.PremioEntregado || false}
+                onChange={(e) =>
+                  actualizarGrupo(
+                    Number(grupo.IDGrupoLoteria || grupo.ID),
+                    "PremioEntregado",
+                    e.target.checked
+                  )
+                }
+              />
+            </label>
+          </div>
+        </td>
 
-<td
-  className={`px-2 py-2 text-right text-sm font-semibold whitespace-nowrap ${
+        <td
+          className={`px-2 py-2 text-right text-sm font-semibold whitespace-nowrap ${
             pendiente > 0
               ? "text-red-700"
               : pendiente < 0
@@ -706,7 +790,6 @@ alert("Cambios guardados");
         >
           {pendiente.toFixed(2)} €
         </td>
-
       </tr>
     );
   })}
