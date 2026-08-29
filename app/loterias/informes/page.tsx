@@ -10,6 +10,8 @@ export default function InformesLoteriaPage() {
 
   const [sorteos, setSorteos] = useState<any[]>([]);
   const [grupos, setGrupos] = useState<any[]>([]);
+  const [fechaDesde, setFechaDesde] = useState("");
+const [fechaHasta, setFechaHasta] = useState("");
 
   useEffect(() => {
     cargarDatos();
@@ -20,22 +22,51 @@ export default function InformesLoteriaPage() {
   }
 
   async function cargarDatos() {
-    const { data: sorteosData, error: errorSorteos } = await (supabase as any)
+    let consultaSorteos = (supabase as any)
       .from("LOTERIA_SORTEOS")
       .select("*")
-      .order("FechaSorteo", { ascending: false })
-      .limit(8);
+      .order("FechaSorteo", { ascending: true });
+  
+    if (fechaDesde) {
+      consultaSorteos = consultaSorteos.gte(
+        "FechaSorteo",
+        fechaDesde
+      );
+    }
+  
+    if (fechaHasta) {
+      consultaSorteos = consultaSorteos.lte(
+        "FechaSorteo",
+        fechaHasta
+      );
+    }
+  
+    if (!fechaDesde && !fechaHasta) {
+      consultaSorteos = consultaSorteos.limit(8);
+    }
+  
+    const {
+      data: sorteosData,
+      error: errorSorteos,
+    } = await consultaSorteos;
+  
+    if (errorSorteos) {
+      alert("Error cargando sorteos: " + errorSorteos.message);
+      return;
+    }
 
-      let sorteosMostrar = [...(sorteosData || [])];
+    let sorteosMostrar = [...(sorteosData || [])];
 
+    if (!fechaDesde && !fechaHasta) {
       while (sorteosMostrar.length < 8) {
         sorteosMostrar.push({
           ID: `vacio-${sorteosMostrar.length}`,
           FechaSorteo: "",
         });
       }
-      
-      setSorteos(sorteosMostrar);
+    }
+    
+    setSorteos(sorteosMostrar);
 
     const { data: gruposData, error: errorGrupos } = await (supabase as any)
       .from("SOCIOS_LOTERIA")
@@ -53,29 +84,43 @@ export default function InformesLoteriaPage() {
       return;
     }
 
-    const numcensResponsables = gruposData.map(
-      (g: any) => g.NUMCENS_Responsable
-    );
+    const { data: sociosData, error: errorSocios } =
+  await (supabase as any)
+    .from("SOCIOS")
+    .select("NUMCENS, Apellidos, Nombre");
 
-    const { data: sociosData } = await (supabase as any)
-      .from("SOCIOS")
-      .select("NUMCENS, Apellidos, Nombre")
-      .in("NUMCENS", numcensResponsables);
+if (errorSocios) {
+  alert("Error cargando socios: " + errorSocios.message);
+  return;
+}
 
-    const gruposConNombre = gruposData.map((grupo: any) => {
-      const socio = sociosData?.find(
-        (s: any) => Number(s.NUMCENS) === Number(grupo.NUMCENS_Responsable)
-      );
+const gruposConNombre = gruposData.map((grupo: any) => {
+  const socio = sociosData?.find(
+    (s: any) =>
+      String(s.NUMCENS).trim() ===
+      String(grupo.NUMCENS_Responsable).trim()
+  );
 
-      return {
-        ...grupo,
-        NombreCompleto: socio
-          ? `${grupo.NUMCENS_Responsable} - ${socio.Apellidos}, ${socio.Nombre}`
-          : String(grupo.NUMCENS_Responsable),
-      };
-    });
+  const nombre = socio
+    ? `${socio.Apellidos}, ${socio.Nombre}`
+    : grupo.NombreExterno || "";
 
-    setGrupos(gruposConNombre);
+  return {
+    ...grupo,
+    NombreRepresentante: nombre,
+    NumeroSocio: socio ? grupo.NUMCENS_Responsable : null,
+  };
+});
+
+gruposConNombre.sort((a: any, b: any) =>
+  String(a.NombreRepresentante || "").localeCompare(
+    String(b.NombreRepresentante || ""),
+    "es",
+    { sensitivity: "base" }
+  )
+);
+
+setGrupos(gruposConNombre);
   }
 
   function formatearFecha(fecha: string) {
@@ -112,6 +157,44 @@ export default function InformesLoteriaPage() {
     <p className="mt-2 text-sm text-zinc-600">
       Hoja semanal imprimible de responsables y sorteos.
     </p>
+
+    <div className="mt-4 flex items-end gap-3">
+
+  <div>
+    <label className="mb-1 block text-xs font-medium text-zinc-600">
+      Desde
+    </label>
+
+    <input
+      type="date"
+      value={fechaDesde}
+      onChange={(e) => setFechaDesde(e.target.value)}
+      className="border border-zinc-300 px-3 py-2 text-sm"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-xs font-medium text-zinc-600">
+      Hasta
+    </label>
+
+    <input
+      type="date"
+      value={fechaHasta}
+      onChange={(e) => setFechaHasta(e.target.value)}
+      className="border border-zinc-300 px-3 py-2 text-sm"
+    />
+  </div>
+
+  <button
+    type="button"
+    onClick={cargarDatos}
+    className="bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+  >
+    Aplicar periodo
+  </button>
+
+</div>
   </div>
 
   <div className="flex gap-2">
@@ -204,7 +287,13 @@ export default function InformesLoteriaPage() {
       </td>
 
       <td className="border border-zinc-400 px-2 py-1 text-sm font-medium">
-  {grupo.NombreCompleto}
+  {grupo.NombreRepresentante}
+
+  {grupo.NumeroSocio && (
+    <span className="ml-2 text-[10px] font-normal text-zinc-400">
+      {grupo.NumeroSocio}
+    </span>
+  )}
 </td>
 
       {sorteos.map((sorteo) => (

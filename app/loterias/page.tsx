@@ -58,7 +58,7 @@ export default function LoteriasPage() {
 
 <TarjetaModulo
   titulo="Informes"
-  descripcion="Listados, filtros, impresión y exportaciones."
+  descripcion="Hoja semanal lotería."
   href="/loterias/informes"
 />
 
