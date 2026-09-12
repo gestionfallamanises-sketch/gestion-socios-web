@@ -1,8 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function Sidebar() {
+
+  const router = useRouter();
+
+async function cerrarSesion() {
+  await supabase.auth.signOut();
+  router.push("/login");
+}
+
   return (
     <aside className="sticky top-0 h-screen w-56 overflow-y-auto bg-zinc-500 p-6 text-white">
       <h2 className="mb-8 text-2xl font-bold">
@@ -59,6 +69,14 @@ export default function Sidebar() {
           Configuración
         </Link>
       </nav>
+
+      <button
+  type="button"
+  onClick={cerrarSesion}
+  className="mt-8 w-full rounded-lg bg-zinc-600 px-4 py-2 text-left hover:bg-zinc-700"
+>
+  Cerrar sesión
+</button>
     </aside>
   );
 }

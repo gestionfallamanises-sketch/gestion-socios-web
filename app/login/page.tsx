@@ -18,17 +18,42 @@ export default function LoginPage() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-
+    
     if (error) {
       setError("Usuario o contraseña incorrectos");
       return;
     }
-
-    router.push("/");
+    
+    const userId = data.user?.id;
+    
+    if (!userId) {
+      setError("No se ha podido identificar el usuario");
+      return;
+    }
+    
+    const { data: perfil, error: errorPerfil } = await supabase
+      .from("PERFILES_USUARIO")
+      .select("Rol")
+      .eq("UserID", userId)
+      .maybeSingle();
+    
+    if (errorPerfil || !perfil) {
+      setError("Este usuario no tiene un perfil asignado");
+      return;
+    }
+    
+    const rol = (perfil as any).Rol;
+    
+    if (rol === "loterias") {
+      router.push("/loterias");
+    } else {
+      router.push("/");
+    }
+    
     router.refresh();
   }
 

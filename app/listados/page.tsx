@@ -274,6 +274,19 @@ const sociosMostrados = sociosBase
       );
     }
 
+    if (orden === "NACIMIENTO_ASC") {
+      const fechaA = a["FECHA de NACIMIENTO"] || "9999-12-31";
+      const fechaB = b["FECHA de NACIMIENTO"] || "9999-12-31";
+    
+      return fechaA.localeCompare(fechaB);
+    }
+    
+    if (orden === "NACIMIENTO_DESC") {
+      const fechaA = a["FECHA de NACIMIENTO"] || "";
+      const fechaB = b["FECHA de NACIMIENTO"] || "";
+    
+      return fechaB.localeCompare(fechaA);
+    }
     const nombreA = `${a.Apellidos || ""}, ${a.Nombre || ""}`.toLowerCase();
     const nombreB = `${b.Apellidos || ""}, ${b.Nombre || ""}`.toLowerCase();
     return nombreA.localeCompare(nombreB);
@@ -318,6 +331,15 @@ const sociosMostrados = sociosBase
       filas = sociosMostrados.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
         Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+        "Fecha nacimiento": socio["FECHA de NACIMIENTO"]
+          ? new Date(
+              `${socio["FECHA de NACIMIENTO"]}T00:00:00`
+            ).toLocaleDateString("es-ES", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })
+          : "",
         "Com/Sx": `${socio.Comision || "-"} / ${socio.SEXE || "-"}`,
         Antigüedad: abreviarAntiguedad(socio.Antiguedad_Calculada),
       }));
@@ -541,6 +563,19 @@ const sociosMostrados = sociosBase
       <FiltroButton active={orden === "ANTIGUEDAD_ASC"} onClick={() => setOrden("ANTIGUEDAD_ASC")}>
         Antigüedad -
       </FiltroButton>
+      <FiltroButton
+  active={orden === "NACIMIENTO_ASC"}
+  onClick={() => setOrden("NACIMIENTO_ASC")}
+>
+  Nacimiento +
+</FiltroButton>
+
+<FiltroButton
+  active={orden === "NACIMIENTO_DESC"}
+  onClick={() => setOrden("NACIMIENTO_DESC")}
+>
+  Nacimiento -
+</FiltroButton>
     </GrupoFiltro>
   </div>
 </div>
@@ -661,9 +696,10 @@ const sociosMostrados = sociosBase
     ) : (
       <>
         <th className="px-4 py-3">NUMCENS</th>
-        <th className="px-4 py-3">Socio</th>
-        <th className="px-4 py-3">Com/Sx</th>
-        <th className="px-4 py-3 text-right">Antigüedad</th>
+<th className="px-4 py-3">Socio</th>
+<th className="px-4 py-3">Fecha nacimiento</th>
+<th className="px-4 py-3">Com/Sx</th>
+<th className="px-4 py-3 text-right">Antigüedad</th>
       </>
     )}
   </tr>
@@ -785,6 +821,17 @@ const sociosMostrados = sociosBase
   <LinkSocio numcens={socio.NUMCENS}>
     {socio.Apellidos}, {socio.Nombre}
   </LinkSocio>
+</td>
+<td className="px-4 py-3 text-zinc-600">
+  {socio["FECHA de NACIMIENTO"]
+    ? new Date(
+        `${socio["FECHA de NACIMIENTO"]}T00:00:00`
+      ).toLocaleDateString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "-"}
 </td>
             <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"} / {socio.SEXE || "-"}</td>
             <td className="px-4 py-3 text-right font-medium">
