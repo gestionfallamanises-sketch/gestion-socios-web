@@ -57,10 +57,10 @@ const [sociosPagadosSeleccionados, setSociosPagadosSeleccionados] = useState<num
 const [aplicarASociosPagados, setAplicarASociosPagados] = useState(false);
 const [continuarGuardado, setContinuarGuardado] =
   useState(false);
-const [modalCambioCuota, setModalCambioCuota] = useState<{
-  campo: "EsBanda" | "ConLoteria";
-  valor: boolean;
-} | null>(null);
+  const [modalCambioCuota, setModalCambioCuota] = useState<{
+    campo: "EsBanda" | "ConLoteria" | "Comision";
+    valor: boolean | string;
+  } | null>(null);
 
 useHotkeys(
   "ctrl+s",
@@ -260,15 +260,7 @@ setSocios(listaSocios || []);
       Apellidos: item.SOCIOS?.Apellidos || "",
     }));
     
-    return [
-      {
-        NUMCENS: Number(numcens),
-        Nombre: socio?.Nombre || "",
-        Apellidos: socio?.Apellidos || "",
-        actual: true,
-      },
-      ...relacionados,
-    ];
+    return relacionados;
   }
 
   async function guardarCambios(e: React.FormEvent) {
@@ -708,12 +700,15 @@ router.push(`/socios/${numcens}`);
                   </label>
 
                   <select
-                    value={socio.Comision || ""}
-                    onChange={(e) =>
-                      cambiarCampo("Comision", e.target.value)
-                    }
-                    className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
-                  >
+  value={socio.Comision || ""}
+  onChange={(e) =>
+    setModalCambioCuota({
+      campo: "Comision",
+      valor: e.target.value,
+    })
+  }
+  className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+>
                     <option value="">-</option>
                     <option value="MAY">MAY</option>
                     <option value="INF">INF</option>
