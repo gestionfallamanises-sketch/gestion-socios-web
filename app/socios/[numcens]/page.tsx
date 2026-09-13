@@ -3,6 +3,7 @@ import Link from "next/link";
 import Sidebar from "../../components/Sidebar";
 import { supabase } from "../../../lib/supabaseClient";
 import GenerarCuotasButton from "../../components/GenerarCuotasButton";
+import HistorialSocioModal from "../../components/HistorialSocioModal";
 
 export default async function SocioPage({
   params,
@@ -597,12 +598,12 @@ const textoResponsableLoteria = grupoLoteria
       </p>
     </div>
 
-    <Link
-      href={"/socios/" + socioAny.NUMCENS + "/historial"}
-      className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-    >
-      Ver historial completo
-    </Link>
+    <HistorialSocioModal
+  numcens={Number(socioAny.NUMCENS)}
+  nombre={socioAny.Nombre || ""}
+  apellidos={socioAny.Apellidos || ""}
+  antiguedad={socioAny.Antiguedad_Calculada || null}
+/>
   </div>
 
   <div className="grid grid-cols-2 text-sm lg:grid-cols-4">
