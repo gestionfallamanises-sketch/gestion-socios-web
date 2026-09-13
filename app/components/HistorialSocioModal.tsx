@@ -174,7 +174,7 @@ export default function HistorialSocioModal({
     onClick={exportarHistorial}
     className="border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
   >
-    Exportar Excel
+    Excel
   </button>
 
   <button
