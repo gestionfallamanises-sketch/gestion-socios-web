@@ -338,6 +338,22 @@ CARREG: socio.CARREG,
       return;
     }
 
+    if (ejercicioActivo) {
+      const { error: errorHistorialCargo } = await supabase
+        .from("HISTORIAL_SOCIOS")
+        .update({
+          Cargo: socio.CARREG?.trim() || null,
+        })
+        .eq("NUMCENS", Number(numcens))
+        .eq("Ejercicio", ejercicioActivo);
+    
+      if (errorHistorialCargo) {
+        setGuardando(false);
+        setError(errorHistorialCargo.message);
+        return;
+      }
+    }
+
     const { data: bancoExistente, error: errorBancoBuscar } = await supabase
     .from("DATOS_BANCARIOS")
     .select("*")

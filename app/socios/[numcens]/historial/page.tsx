@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import PrintButton from "../../../components/PrintButton";
+import EditarCargoHistorial from "../../../components/EditarCargoHistorial";
 
 export default async function HistorialSocioPage({
   params,
@@ -10,16 +11,27 @@ export default async function HistorialSocioPage({
   const { numcens } = await params;
 
   const { data: socio } = await supabase
-  .from("SOCIOS_ANTIGUEDAD_CALCULADA")
+    .from("SOCIOS_ANTIGUEDAD_CALCULADA")
     .select("*")
     .eq("NUMCENS", Number(numcens))
     .single();
 
   const { data: historial } = await supabase
     .from("HISTORIAL_SOCIOS")
-    .select("ID, NUMCENS, Ejercicio, Fecha_Alta_Baja, Estado")
+    .select(
+      "ID, NUMCENS, Ejercicio, Fecha_Alta_Baja, Estado, Cargo, CategoriaCargo"
+    )
     .eq("NUMCENS", Number(numcens))
     .order("Ejercicio", { ascending: true });
+
+  const { data: ejercicioActivoData } = await supabase
+    .from("EJERCICIOS")
+    .select("Ejercicio")
+    .eq("Activo", true)
+    .maybeSingle();
+
+  const ejercicioActivo =
+    ejercicioActivoData?.Ejercicio ?? null;
 
   if (!socio) {
     return <div className="p-10">Socio no encontrado</div>;
@@ -78,10 +90,16 @@ export default async function HistorialSocioPage({
         ) : (
           <section className="border border-zinc-200 bg-white">
             <div className="grid grid-cols-1 lg:grid-cols-2">
-              <HistorialTabla movimientos={izquierda} />
+              <HistorialTabla
+                movimientos={izquierda}
+                ejercicioActivo={ejercicioActivo}
+              />
 
               <div className="border-l border-zinc-200">
-                <HistorialTabla movimientos={derecha} />
+                <HistorialTabla
+                  movimientos={derecha}
+                  ejercicioActivo={ejercicioActivo}
+                />
               </div>
             </div>
           </section>
@@ -91,7 +109,13 @@ export default async function HistorialSocioPage({
   );
 }
 
-function HistorialTabla({ movimientos }: { movimientos: any[] }) {
+function HistorialTabla({
+  movimientos,
+  ejercicioActivo,
+}: {
+  movimientos: any[];
+  ejercicioActivo: number | null;
+}) {
   return (
     <table className="w-full text-sm">
       <thead className="bg-zinc-100 text-left text-xs uppercase text-zinc-600">
@@ -99,13 +123,16 @@ function HistorialTabla({ movimientos }: { movimientos: any[] }) {
           <th className="px-4 py-3">Ejercicio</th>
           <th className="px-4 py-3">Fecha</th>
           <th className="px-4 py-3">Estado</th>
+          <th className="px-4 py-3">Cargo</th>
         </tr>
       </thead>
 
       <tbody>
         {movimientos.map((movimiento) => (
           <tr key={movimiento.ID} className="border-t border-zinc-200">
-            <td className="px-4 py-3">{movimiento.Ejercicio || "-"}</td>
+            <td className="px-4 py-3">
+              {movimiento.Ejercicio || "-"}
+            </td>
 
             <td className="px-4 py-3">
               {movimiento.Fecha_Alta_Baja || "-"}
@@ -121,6 +148,17 @@ function HistorialTabla({ movimientos }: { movimientos: any[] }) {
               >
                 {movimiento.Estado || "-"}
               </span>
+            </td>
+
+            <td className="px-4 py-3">
+              <EditarCargoHistorial
+                id={movimiento.ID}
+                numcens={Number(movimiento.NUMCENS)}
+                ejercicio={Number(movimiento.Ejercicio)}
+                ejercicioActivo={ejercicioActivo}
+                cargoInicial={movimiento.Cargo}
+                categoriaInicial={movimiento.CategoriaCargo}
+              />
             </td>
           </tr>
         ))}

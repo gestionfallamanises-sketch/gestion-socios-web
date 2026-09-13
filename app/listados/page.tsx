@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../../lib/supabase";
+import EditarCargoHistorial from "../components/EditarCargoHistorial";
 
 function LinkSocio({ numcens, children }: { numcens: any; children: any }) {
   return (
@@ -16,8 +17,17 @@ function LinkSocio({ numcens, children }: { numcens: any; children: any }) {
   );
 }
 
+function normalizarTexto(texto: string) {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export default function ListadosPage() {
     const [listado, setListado] = useState("");
+    const [busquedaSocio, setBusquedaSocio] = useState("");
     const [filtroSexo, setFiltroSexo] = useState("TODOS");
 const [filtroComision, setFiltroComision] = useState("TODAS");
 const [orden, setOrden] = useState("NOMBRE");
@@ -35,6 +45,13 @@ const [filtroMetodoPagador, setFiltroMetodoPagador] = useState("TODOS");
 const [filtroIBAN, setFiltroIBAN] = useState("TODOS");
 const [fechaNacimientoDesde, setFechaNacimientoDesde] = useState("");
 const [fechaNacimientoHasta, setFechaNacimientoHasta] = useState("");
+const [cargos, setCargos] = useState<any[]>([]);
+const [filtroCategoriaCargo, setFiltroCategoriaCargo] = useState("TODOS");
+const [ordenCargos, setOrdenCargos] = useState<
+  "NOMBRE_ASC" | "NOMBRE_DESC" | "CARGO_ASC" | "CARGO_DESC"
+>("NOMBRE_ASC");
+const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
+const [recargarCargos, setRecargarCargos] = useState(0);
 
 useEffect(() => {
   async function fetchSocios() {
@@ -82,6 +99,12 @@ useEffect(() => {
       }
   
       setEjercicios(data || []);
+
+      const activo = (data || []).find(
+        (ejercicio) => ejercicio.Activo === true
+      );
+      
+      setEjercicioActivo(activo?.Ejercicio ?? null);
   
       if (data && data.length > 0) {
         setEjercicioSeleccionado(data[0].Ejercicio);
@@ -130,6 +153,33 @@ useEffect(() => {
     fetchPagadores();
   }, []);
 
+  useEffect(() => {
+    async function fetchCargos() {
+      if (!ejercicioSeleccionado) return;
+  
+      const { data, error } = await supabase
+        .from("HISTORIAL_SOCIOS")
+        .select(`
+          ID,
+          NUMCENS,
+          Ejercicio,
+          Cargo,
+          CategoriaCargo
+        `)
+        .eq("Ejercicio", ejercicioSeleccionado)
+        .order("NUMCENS", { ascending: true });
+  
+      if (error) {
+        setError(error.message);
+        return;
+      }
+  
+      setCargos(data || []);
+    }
+  
+    fetchCargos();
+  }, [ejercicioSeleccionado, recargarCargos]);
+
 function abreviarAntiguedad(texto: string | null) {
     if (!texto) return "-";
   
@@ -176,25 +226,39 @@ const sociosBaja = socios
 
     const cuotasFiltradas = cuotas.filter((cuota) => {
       if (cuota.EstadoSocio !== "Activo") return false;
-
-        const coincideTipo =
-          filtroTipoCuota === "TODOS" || cuota.IDCuota === filtroTipoCuota;
-      
-        const coincideEstado =
-          filtroEstadoCuota === "TODOS" || cuota.EstadoPago === filtroEstadoCuota;
-      
-        const coincideFormaPago =
-          filtroFormaPago === "TODAS" || cuota.Metodo === filtroFormaPago;
-      
-        const pendiente = Number(cuota.Pendiente || 0);
-      
-        const coincidePendiente =
-          filtroPendiente === "TODOS" ||
-          (filtroPendiente === "SI" && pendiente > 0) ||
-          (filtroPendiente === "NO" && pendiente <= 0);
-      
-        return coincideTipo && coincideEstado && coincideFormaPago && coincidePendiente;
-      });
+    
+      const coincideTipo =
+        filtroTipoCuota === "TODOS" || cuota.IDCuota === filtroTipoCuota;
+    
+      const coincideEstado =
+        filtroEstadoCuota === "TODOS" || cuota.EstadoPago === filtroEstadoCuota;
+    
+      const coincideFormaPago =
+        filtroFormaPago === "TODAS" || cuota.Metodo === filtroFormaPago;
+    
+      const pendiente = Number(cuota.Pendiente || 0);
+    
+      const coincidePendiente =
+        filtroPendiente === "TODOS" ||
+        (filtroPendiente === "SI" && pendiente > 0) ||
+        (filtroPendiente === "NO" && pendiente <= 0);
+    
+      const textoSocio = normalizarTexto(
+        `${cuota.Apellidos || ""} ${cuota.Nombre || ""} ${cuota.NUMCENS || ""}`
+      );
+    
+      const coincideBusqueda =
+        normalizarTexto(busquedaSocio) === "" ||
+        textoSocio.includes(normalizarTexto(busquedaSocio));
+    
+      return (
+        coincideTipo &&
+        coincideEstado &&
+        coincideFormaPago &&
+        coincidePendiente &&
+        coincideBusqueda
+      );
+    });
 
       const tiposCuota = Array.from(
         new Set(cuotas.map((cuota) => cuota.IDCuota).filter(Boolean))
@@ -209,6 +273,13 @@ const sociosBaja = socios
       ).sort();
 
       const pagadoresFiltrados = pagadores.filter((pagador) => {
+        const socioPagador = socios.find(
+          (socio) => Number(socio.NUMCENS) === Number(pagador.Pagador)
+        );
+        
+        if (!socioPagador || socioPagador.Estado !== "Activo") {
+          return false;
+        }
         const cumpleMetodo =
           filtroMetodoPagador === "TODOS" ||
           pagador.Metodo === filtroMetodoPagador;
@@ -221,16 +292,53 @@ const sociosBaja = socios
           (filtroIBAN === "SIN_IBAN" &&
             (!pagador.IBAN || pagador.IBAN.trim() === ""));
       
-        return cumpleMetodo && cumpleIBAN;
+        const textoPagador = normalizarTexto(
+          `${pagador.NombrePagador || ""} ${pagador.NUMCENS_Pagador || ""}`
+        );
+      
+        const coincideBusqueda =
+          normalizarTexto(busquedaSocio) === "" ||
+          textoPagador.includes(normalizarTexto(busquedaSocio));
+      
+        return cumpleMetodo && cumpleIBAN && coincideBusqueda;
       });
 
       const pagadorSocios = cuotas
-  .filter((cuota) => {
-    return (
-      filtroMetodoPagador === "TODOS" ||
-      cuota.Metodo === filtroMetodoPagador
-    );
-  })
+      
+      .filter((cuota) => {
+        const socioRelacionado = socios.find(
+          (socio) => Number(socio.NUMCENS) === Number(cuota.NUMCENS)
+        );
+        
+        const numcensPagador =
+          cuota.NUMCENS_Pagador || cuota.NUMCENS;
+        
+        const socioPagador = socios.find(
+          (socio) => Number(socio.NUMCENS) === Number(numcensPagador)
+        );
+        
+        if (
+          !socioRelacionado ||
+          socioRelacionado.Estado !== "Activo" ||
+          !socioPagador ||
+          socioPagador.Estado !== "Activo"
+        ) {
+          return false;
+        }
+        const coincideMetodo =
+          filtroMetodoPagador === "TODOS" ||
+          cuota.Metodo === filtroMetodoPagador;
+      
+        const textoBusqueda = normalizarTexto(
+          `${cuota.PagadorNombre || ""} ${cuota.NUMCENS_Pagador || ""} ${cuota.Apellidos || ""} ${cuota.Nombre || ""} ${cuota.NUMCENS || ""}`
+        );
+      
+        const coincideBusqueda =
+          normalizarTexto(busquedaSocio) === "" ||
+          textoBusqueda.includes(normalizarTexto(busquedaSocio));
+      
+        return coincideMetodo && coincideBusqueda;
+      })
   .sort((a, b) => {
     const pagadorA = String(a.PagadorNombre || a.NUMCENS_Pagador || "");
     const pagadorB = String(b.PagadorNombre || b.NUMCENS_Pagador || "");
@@ -246,15 +354,23 @@ const sociosBaja = socios
   });
 
 const sociosMostrados = sociosBase
-  .filter((socio) => {
-    const coincideSexo =
-      filtroSexo === "TODOS" || socio.SEXE === filtroSexo;
+.filter((socio) => {
+  const coincideSexo =
+    filtroSexo === "TODOS" || socio.SEXE === filtroSexo;
 
-    const coincideComision =
-      filtroComision === "TODAS" || socio.Comision === filtroComision;
+  const coincideComision =
+    filtroComision === "TODAS" || socio.Comision === filtroComision;
 
-    return coincideSexo && coincideComision;
-  })
+    const textoSocio = normalizarTexto(
+      `${socio.Apellidos || ""} ${socio.Nombre || ""} ${socio.NUMCENS || ""}`
+    );
+    
+    const coincideBusqueda =
+      normalizarTexto(busquedaSocio) === "" ||
+      textoSocio.includes(normalizarTexto(busquedaSocio));
+
+  return coincideSexo && coincideComision && coincideBusqueda;
+})
   .sort((a, b) => {
     if (orden === "NUMCENS") {
       return Number(a.NUMCENS || 0) - Number(b.NUMCENS || 0);
@@ -299,6 +415,69 @@ const sociosMostrados = sociosBase
   
     return cuota?.IDCuota || "-";
   }
+  const cargosFiltrados = cargos
+  .map((fila) => {
+    const socio = socios.find(
+      (s) => Number(s.NUMCENS) === Number(fila.NUMCENS)
+    );
+
+    return {
+      ...fila,
+      socio,
+    };
+  })
+  .filter((fila) => {
+    if (!fila.socio || fila.socio.Estado !== "Activo") {
+      return false;
+    }
+    const coincideCategoria =
+      filtroCategoriaCargo === "TODOS" ||
+      fila.CategoriaCargo === filtroCategoriaCargo;
+  
+      const textoSocio = normalizarTexto(
+        `${fila.socio?.Apellidos || ""} ${fila.socio?.Nombre || ""} ${fila.NUMCENS || ""}`
+      );
+      
+      const coincideBusqueda =
+        normalizarTexto(busquedaSocio) === "" ||
+        textoSocio.includes(normalizarTexto(busquedaSocio));
+  
+    return coincideCategoria && coincideBusqueda;
+  })
+
+  .sort((a, b) => {
+    if (ordenCargos === "CARGO_ASC") {
+      return String(a.Cargo || "").localeCompare(
+        String(b.Cargo || ""),
+        "es",
+        { sensitivity: "base" }
+      );
+    }
+  
+    if (ordenCargos === "CARGO_DESC") {
+      return String(b.Cargo || "").localeCompare(
+        String(a.Cargo || ""),
+        "es",
+        { sensitivity: "base" }
+      );
+    }
+  
+    const nombreA =
+      `${a.socio?.Apellidos || ""}, ${a.socio?.Nombre || ""}`;
+  
+    const nombreB =
+      `${b.socio?.Apellidos || ""}, ${b.socio?.Nombre || ""}`;
+  
+    if (ordenCargos === "NOMBRE_DESC") {
+      return nombreB.localeCompare(nombreA, "es", {
+        sensitivity: "base",
+      });
+    }
+  
+    return nombreA.localeCompare(nombreB, "es", {
+      sensitivity: "base",
+    });
+  });
 
   function exportarExcel() {
     let filas: any[] = [];
@@ -318,15 +497,83 @@ const sociosMostrados = sociosBase
   
       nombreArchivo = `cuotas_${ejercicioSeleccionado || ""}.csv`;
     
+    } else if (listado === "NACIMIENTO") {
+      filas = sociosNacimiento.map((socio) => ({
+        NUMCENS: socio.NUMCENS || "",
+        Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+        "Fecha nacimiento": socio["FECHA de NACIMIENTO"]
+          ? new Date(
+              `${socio["FECHA de NACIMIENTO"]}T00:00:00`
+            ).toLocaleDateString("es-ES", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })
+          : "",
+        Comisión: socio.Comision || "",
+        Antigüedad: abreviarAntiguedad(
+          socio.Antiguedad_Calculada
+        ),
+      }));
+    
+      nombreArchivo = "nacimiento.csv";
+
+    } else if (listado === "PAGADORES") {
+      filas = pagadoresFiltrados.map((pagador) => ({
+        Pagador: pagador.Pagador || "",
+        Nombre: pagador.NombrePagador || "",
+        Método: pagador.Metodo || "",
+        Titular: pagador.TitularCuenta || "",
+        IBAN: pagador.IBAN || "",
+        Socios: pagador.NumeroSocios || 0,
+      }));
+    
+      nombreArchivo = "pagadores.csv";
+
+    } else if (listado === "PAGADOR_SOCIOS") {
+      filas = pagadorSocios.map((cuota) => ({
+        "NUMCENS pagador":
+          cuota.NUMCENS_Pagador || cuota.NUMCENS || "",
+        Pagador:
+          cuota.PagadorNombre || "Mismo socio",
+        "NUMCENS socio":
+          cuota.NUMCENS || "",
+        Socio:
+          `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+        Método:
+          cuota.Metodo || "",
+        Cuota:
+          Number(cuota.Importe || 0).toFixed(2),
+      }));
+    
+      nombreArchivo = "pagador_socios.csv";
+
+    } else if (listado === "CARGOS") {
+      filas = cargosFiltrados.map((fila) => ({
+        NUMCENS: fila.NUMCENS || "",
+        Socio: `${fila.socio?.Apellidos || ""}, ${fila.socio?.Nombre || ""}`,
+        Comisión: fila.socio?.Comision || "",
+        Cargo: fila.Cargo || "",
+        Categoría:
+          fila.CategoriaCargo === "REPRESENTATIVO"
+            ? "Representativo"
+            : fila.CategoriaCargo === "DIRECTIVO"
+            ? "Directivo"
+            : "Vocal",
+      }));
+    
+      nombreArchivo = `cargos_${ejercicioSeleccionado || ""}.csv`;
+
     } else if (listado === "BANDA") {
-      filas = sociosBanda.map((socio) => ({
+      filas = sociosMostrados.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
         Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
         Comisión: socio.Comision || "",
         Sexo: socio.SEXE || "",
       }));
-  
+    
       nombreArchivo = "banda.csv";
+
     } else {
       filas = sociosMostrados.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
@@ -382,15 +629,24 @@ const sociosMostrados = sociosBase
   const sociosNacimiento = socios
   .filter((socio) => {
     const fecha = socio["FECHA de NACIMIENTO"];
-
+  
     if (!fechaNacimientoDesde || !fechaNacimientoHasta || !fecha) {
       return false;
     }
-
+  
+    const textoSocio = normalizarTexto(
+      `${socio.Apellidos || ""} ${socio.Nombre || ""} ${socio.NUMCENS || ""}`
+    );
+  
+    const coincideBusqueda =
+      normalizarTexto(busquedaSocio) === "" ||
+      textoSocio.includes(normalizarTexto(busquedaSocio));
+  
     return (
       fecha >= fechaNacimientoDesde &&
       fecha <= fechaNacimientoHasta &&
-      socio.Estado === "Activo"
+      socio.Estado === "Activo" &&
+      coincideBusqueda
     );
   })
   .sort((a, b) => {
@@ -485,6 +741,13 @@ const sociosMostrados = sociosBase
   activo={listado === "PAGADOR_SOCIOS"}
   onClick={() => setListado("PAGADOR_SOCIOS")}
 />
+
+<BotonListado
+  titulo="Directivos y cargos"
+  activo={listado === "CARGOS"}
+  onClick={() => setListado("CARGOS")}
+/>
+
           </section>
 
           {listado && (
@@ -492,20 +755,41 @@ const sociosMostrados = sociosBase
     <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-          {listado === "ACTIVOS" && "Socios activos"}
-          {listado === "BAJAS" && "Socios de baja"}
-        </h2>
+  {listado === "ACTIVOS" && "Socios activos"}
+  {listado === "NACIMIENTO" && "Nacimiento"}
+  {listado === "BAJAS" && "Socios de baja"}
+  {listado === "CUOTAS" && "Cuotas"}
+  {listado === "BANDA" && "Banda"}
+  {listado === "PAGADORES" && "Pagadores"}
+  {listado === "PAGADOR_SOCIOS" && "Pagador / Socios"}
+  {listado === "CARGOS" && "Directivos y cargos"}
+</h2>
 
-        <p className="text-xs text-zinc-500">
-        {listado === "CUOTAS"
-  ? `Mostrando ${cuotasFiltradas.length} cuotas`
-  : listado === "NACIMIENTO"
-  ? `Mostrando ${sociosNacimiento.length} socios`
-  : `Mostrando ${sociosMostrados.length} socios`}
+
+<p className="text-xs text-zinc-500">
+  {listado === "CUOTAS"
+    ? `Mostrando ${cuotasFiltradas.length} cuotas`
+    : listado === "NACIMIENTO"
+    ? `Mostrando ${sociosNacimiento.length} socios`
+    : listado === "CARGOS"
+    ? `Mostrando ${cargosFiltrados.length} socios`
+    : listado === "PAGADORES"
+    ? `Mostrando ${pagadoresFiltrados.length} pagadores`
+    : listado === "PAGADOR_SOCIOS"
+    ? `Mostrando ${pagadorSocios.length} relaciones`
+    : `Mostrando ${sociosMostrados.length} socios`}
 </p>
       </div>
 
       <div className="flex gap-2 print:hidden">
+
+      <input
+  type="text"
+  value={busquedaSocio}
+  onChange={(e) => setBusquedaSocio(e.target.value)}
+  placeholder="Buscar socio..."
+  className="w-64 border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+/>
   <button
     onClick={exportarExcel}
     className="bg-zinc-700 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
@@ -607,8 +891,44 @@ const sociosMostrados = sociosBase
   </div>
 )}
 
- {listado === "CUOTAS" && (
+{listado === "CARGOS" && (
   <div className="border-t border-zinc-200 bg-white px-4 py-4">
+    <div className="flex flex-wrap items-center gap-6">
+      <GrupoFiltro titulo="Categoría">
+        <FiltroButton
+          active={filtroCategoriaCargo === "TODOS"}
+          onClick={() => setFiltroCategoriaCargo("TODOS")}
+        >
+          Todos
+        </FiltroButton>
+
+        <FiltroButton
+          active={filtroCategoriaCargo === "REPRESENTATIVO"}
+          onClick={() => setFiltroCategoriaCargo("REPRESENTATIVO")}
+        >
+          Representativos
+        </FiltroButton>
+
+        <FiltroButton
+          active={filtroCategoriaCargo === "DIRECTIVO"}
+          onClick={() => setFiltroCategoriaCargo("DIRECTIVO")}
+        >
+          Directivos
+        </FiltroButton>
+
+        <FiltroButton
+          active={filtroCategoriaCargo === "VOCAL"}
+          onClick={() => setFiltroCategoriaCargo("VOCAL")}
+        >
+          Vocales
+        </FiltroButton>
+      </GrupoFiltro>
+    </div>
+  </div>
+)}
+
+ {listado === "CUOTAS" && (
+  <div className="border-t border-zinc-200 bg-white px-4 py-4 print:hidden">
     <div className="flex flex-wrap items-center gap-4">
       <SelectFiltro
         label="Tipo"
@@ -640,20 +960,48 @@ const sociosMostrados = sociosBase
     </div>
   </div>
 )}
+
+{listado === "CUOTAS" && (
+  <div className="hidden border-t border-zinc-200 px-4 py-2 text-xs text-zinc-600 print:flex print:flex-wrap print:items-center print:gap-x-6">
+    <span>
+      <strong>Tipo:</strong>{" "}
+      {filtroTipoCuota === "TODOS" ? "Todos" : filtroTipoCuota}
+    </span>
+
+    <span>
+      <strong>Estado:</strong>{" "}
+      {filtroEstadoCuota === "TODOS" ? "Todos" : filtroEstadoCuota}
+    </span>
+
+    <span>
+      <strong>Forma pago:</strong>{" "}
+      {filtroFormaPago === "TODAS" ? "Todas" : filtroFormaPago}
+    </span>
+
+    <span>
+      <strong>Pendiente:</strong>{" "}
+      {filtroPendiente === "TODOS"
+        ? "Todos"
+        : filtroPendiente === "SI"
+        ? "Sí"
+        : "No"}
+    </span>
+  </div>
+)}
+
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
       <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
   <tr>
-
-  {listado === "NACIMIENTO" ? (
-  <>
-    <th className="px-4 py-3">NUMCENS</th>
-    <th className="px-4 py-3">Socio</th>
-    <th className="px-4 py-3">Fecha nacimiento</th>
-    <th className="px-4 py-3">Comisión</th>
-    <th className="px-4 py-3">Antigüedad</th>
-  </>
-) : listado === "BANDA" ? (
+    {listado === "NACIMIENTO" ? (
+      <>
+        <th className="px-4 py-3">NUMCENS</th>
+        <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3">Fecha nacimiento</th>
+        <th className="px-4 py-3">Comisión</th>
+        <th className="px-4 py-3">Antigüedad</th>
+      </>
+    ) : listado === "BANDA" ? (
       <>
         <th className="px-4 py-3">NUMCENS</th>
         <th className="px-4 py-3">Socio</th>
@@ -671,88 +1019,164 @@ const sociosMostrados = sociosBase
         <th className="px-4 py-3">Forma pago</th>
         <th className="px-4 py-3">Estado</th>
       </>
-
-) : listado === "PAGADOR_SOCIOS" ? (
-  <>
-    <th className="w-24 px-4 py-3">NUMCENS pagador</th>
-    <th className="px-4 py-3">Pagador</th>
-    <th className="w-24 px-4 py-3">NUMCENS socio</th>
-    <th className="px-4 py-3">Socio</th>
-    <th className="px-4 py-3">Método</th>
-    <th className="w-28 px-4 py-3 text-right">Cuota</th>
-  </>
-
+    ) : listado === "PAGADOR_SOCIOS" ? (
+      <>
+        <th className="w-24 px-4 py-3">NUMCENS pagador</th>
+        <th className="px-4 py-3">Pagador</th>
+        <th className="w-24 px-4 py-3">NUMCENS socio</th>
+        <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3">Método</th>
+        <th className="w-28 px-4 py-3 text-right">Cuota</th>
+      </>
     ) : listado === "PAGADORES" ? (
       <>
         <th className="w-8 px-4 py-3">Pagador</th>
         <th className="px-4 py-3">Nombre</th>
         <th className="w-20 px-4 py-3">Método</th>
         <th className="px-4 py-3">Titular</th>
-        <th className="px-4 py-3 whitespace-nowrap">
-  IBAN
-</th>
+        <th className="px-4 py-3 whitespace-nowrap">IBAN</th>
         <th className="w-16 px-4 py-3 text-right">Socios</th>
+      </>
+    ) : listado === "CARGOS" ? (
+      <>
+        <th className="px-4 py-3">NUMCENS</th>
+        <th className="px-4 py-3">
+  <button
+    type="button"
+    onClick={() =>
+      setOrdenCargos((actual) =>
+        actual === "NOMBRE_ASC" ? "NOMBRE_DESC" : "NOMBRE_ASC"
+      )
+    }
+    className="flex items-center gap-1 font-semibold uppercase hover:text-red-900"
+  >
+    Socio
+    <span className="text-[10px]">
+      {ordenCargos === "NOMBRE_ASC"
+        ? "↑"
+        : ordenCargos === "NOMBRE_DESC"
+        ? "↓"
+        : "↕"}
+    </span>
+  </button>
+</th>
+        <th className="px-4 py-3">Comisión</th>
+        <th className="px-4 py-3">
+  <button
+    type="button"
+    onClick={() =>
+      setOrdenCargos((actual) =>
+        actual === "CARGO_ASC" ? "CARGO_DESC" : "CARGO_ASC"
+      )
+    }
+    className="flex items-center gap-1 font-semibold uppercase hover:text-red-900"
+  >
+    Cargo
+    <span className="text-[10px]">
+      {ordenCargos === "CARGO_ASC"
+        ? "↑"
+        : ordenCargos === "CARGO_DESC"
+        ? "↓"
+        : "↕"}
+    </span>
+  </button>
+</th>
+        <th className="px-4 py-3">Categoría</th>
+        <th className="w-20 px-4 py-3 text-center print:hidden">
+  Editar
+</th>
       </>
     ) : (
       <>
         <th className="px-4 py-3">NUMCENS</th>
-<th className="px-4 py-3">Socio</th>
-<th className="px-4 py-3">Fecha nacimiento</th>
-<th className="px-4 py-3">Com/Sx</th>
-<th className="px-4 py-3 text-right">Antigüedad</th>
+        <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3">Fecha nacimiento</th>
+        <th className="px-4 py-3">Com/Sx</th>
+        <th className="px-4 py-3 text-right">Antigüedad</th>
       </>
     )}
   </tr>
 </thead>
 
 <tbody>
-{listado === "NACIMIENTO" ? (
-  sociosNacimiento.map((socio) => (
-    <tr key={socio.NUMCENS} className="border-t border-zinc-200 hover:bg-red-50">
-      <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
+  {listado === "NACIMIENTO" ? (
+    sociosNacimiento.map((socio) => (
+      <tr
+        key={socio.NUMCENS}
+        className="border-t border-zinc-200 hover:bg-red-50"
+      >
+        <td className="px-4 py-3 text-zinc-600">
+          {socio.NUMCENS}
+        </td>
 
-      <td className="px-4 py-3 font-medium text-zinc-900">
-        <LinkSocio numcens={socio.NUMCENS}>
-          {socio.Apellidos}, {socio.Nombre}
-        </LinkSocio>
-      </td>
-
-      <td className="px-4 py-3">
-      {socio["FECHA de NACIMIENTO"]
-  ? new Date(socio["FECHA de NACIMIENTO"]).toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
-  : "-"}
-      </td>
-
-      <td className="px-4 py-3">{socio.Comision || "-"}</td>
-
-      <td className="px-4 py-3">
-        {abreviarAntiguedad(socio.Antiguedad_Calculada)}
-      </td>
-    </tr>
-  ))
-) : listado === "CUOTAS" ? (
-
-    cuotasFiltradas.map((cuota) => (
-      <tr key={cuota.IDCuotaSocio} className="border-t border-zinc-200 hover:bg-red-50">
-        <td className="px-4 py-3 text-zinc-600">{cuota.NUMCENS}</td>
         <td className="px-4 py-3 font-medium text-zinc-900">
-  <LinkSocio numcens={cuota.NUMCENS}>
-    {cuota.Apellidos}, {cuota.Nombre}
-  </LinkSocio>
-</td>
-        <td className="px-4 py-3 text-zinc-600">{cuota.IDCuota}</td>
-        <td className="px-4 py-3 text-right">{Number(cuota.Importe || 0).toFixed(2)} €</td>
-        <td className="px-4 py-3 text-right text-green-700">{Number(cuota.TotalPagado || 0).toFixed(2)} €</td>
-        <td className="px-4 py-3 text-right font-medium text-red-700">{Number(cuota.Pendiente || 0).toFixed(2)} €</td>
-        <td className="px-4 py-3 text-zinc-600">{cuota.Metodo || "-"}</td>
-        <td className="px-4 py-3 text-zinc-600">{cuota.EstadoPago || "-"}</td>
+          <LinkSocio numcens={socio.NUMCENS}>
+            {socio.Apellidos}, {socio.Nombre}
+          </LinkSocio>
+        </td>
+
+        <td className="px-4 py-3">
+          {socio["FECHA de NACIMIENTO"]
+            ? new Date(
+                `${socio["FECHA de NACIMIENTO"]}T00:00:00`
+              ).toLocaleDateString("es-ES", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })
+            : "-"}
+        </td>
+
+        <td className="px-4 py-3">
+          {socio.Comision || "-"}
+        </td>
+
+        <td className="px-4 py-3">
+          {abreviarAntiguedad(socio.Antiguedad_Calculada)}
+        </td>
       </tr>
     ))
+  ) : listado === "CUOTAS" ? (
+    cuotasFiltradas.map((cuota) => (
+      <tr
+        key={cuota.IDCuotaSocio}
+        className="border-t border-zinc-200 hover:bg-red-50"
+      >
+        <td className="px-4 py-3 text-zinc-600">
+          {cuota.NUMCENS}
+        </td>
 
+        <td className="px-4 py-3 font-medium text-zinc-900">
+          <LinkSocio numcens={cuota.NUMCENS}>
+            {cuota.Apellidos}, {cuota.Nombre}
+          </LinkSocio>
+        </td>
+
+        <td className="px-4 py-3 text-zinc-600">
+          {cuota.IDCuota}
+        </td>
+
+        <td className="px-4 py-3 text-right">
+          {Number(cuota.Importe || 0).toFixed(2)} €
+        </td>
+
+        <td className="px-4 py-3 text-right text-green-700">
+          {Number(cuota.TotalPagado || 0).toFixed(2)} €
+        </td>
+
+        <td className="px-4 py-3 text-right font-medium text-red-700">
+          {Number(cuota.Pendiente || 0).toFixed(2)} €
+        </td>
+
+        <td className="px-4 py-3 text-zinc-600">
+          {cuota.Metodo || "-"}
+        </td>
+
+        <td className="px-4 py-3 text-zinc-600">
+          {cuota.EstadoPago || "-"}
+        </td>
+      </tr>
+    ))
   ) : listado === "PAGADOR_SOCIOS" ? (
     pagadorSocios.map((cuota) => (
       <tr
@@ -762,78 +1186,174 @@ const sociosMostrados = sociosBase
         <td className="px-4 py-3 text-zinc-600">
           {cuota.NUMCENS_Pagador || cuota.NUMCENS || "-"}
         </td>
-  
+
         <td className="px-4 py-3 font-medium text-zinc-900">
           {cuota.PagadorNombre || "Mismo socio"}
         </td>
-  
+
         <td className="px-4 py-3 text-zinc-600">
           {cuota.NUMCENS}
         </td>
-  
+
         <td className="px-4 py-3 font-medium text-zinc-900">
-  <LinkSocio numcens={cuota.NUMCENS}>
-    {cuota.Apellidos}, {cuota.Nombre}
-  </LinkSocio>
-</td>
-  
+          <LinkSocio numcens={cuota.NUMCENS}>
+            {cuota.Apellidos}, {cuota.Nombre}
+          </LinkSocio>
+        </td>
+
         <td className="px-4 py-3 text-zinc-600">
           {cuota.Metodo || "-"}
         </td>
-  
+
         <td className="px-4 py-3 text-right">
           {Number(cuota.Importe || 0).toFixed(2)} €
         </td>
       </tr>
     ))
-
   ) : listado === "PAGADORES" ? (
     pagadoresFiltrados.map((pagador) => (
-      <tr key={`${pagador.Pagador}-${pagador.Metodo}`} className="border-t border-zinc-200 hover:bg-red-50">
-        <td className="px-4 py-3 text-zinc-600">{pagador.Pagador}</td>
-        <td className="px-4 py-3 font-medium text-zinc-900">{pagador.NombrePagador || "-"}</td>
-        <td className="px-4 py-3 text-zinc-600">{pagador.Metodo || "-"}</td>
-        <td className="px-4 py-3 text-zinc-600">{pagador.TitularCuenta || "-"}</td>
-        <td className="px-4 py-3 text-zinc-600 whitespace-nowrap">
-  {pagador.IBAN || "-"}
-</td>
-        <td className="px-4 py-3 text-right font-medium">{pagador.NumeroSocios || 0}</td>
+      <tr
+        key={`${pagador.Pagador}-${pagador.Metodo}`}
+        className="border-t border-zinc-200 hover:bg-red-50"
+      >
+        <td className="px-4 py-3 text-zinc-600">
+          {pagador.Pagador}
+        </td>
+
+        <td className="px-4 py-3 font-medium text-zinc-900">
+          {pagador.NombrePagador || "-"}
+        </td>
+
+        <td className="px-4 py-3 text-zinc-600">
+          {pagador.Metodo || "-"}
+        </td>
+
+        <td className="px-4 py-3 text-zinc-600">
+          {pagador.TitularCuenta || "-"}
+        </td>
+
+        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+          {pagador.IBAN || "-"}
+        </td>
+
+        <td className="px-4 py-3 text-right font-medium">
+          {pagador.NumeroSocios || 0}
+        </td>
       </tr>
+    ))
+  ) : listado === "CARGOS" ? (
+    cargosFiltrados.map((fila) => (
+      <tr
+        key={fila.ID}
+        className="border-t border-zinc-200 hover:bg-red-50"
+      >
+        <td className="px-4 py-3 text-zinc-600">
+          {fila.NUMCENS}
+        </td>
+
+        <td className="px-4 py-3 font-medium text-zinc-900">
+          <LinkSocio numcens={fila.NUMCENS}>
+            {fila.socio?.Apellidos || "-"}, {fila.socio?.Nombre || "-"}
+          </LinkSocio>
+        </td>
+
+        <td className="px-4 py-3 text-zinc-600">
+          {fila.socio?.Comision || "-"}
+        </td>
+
+        <td className="px-4 py-3">
+          <span
+            className={
+              fila.CategoriaCargo === "REPRESENTATIVO"
+                ? "bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800"
+                : fila.CategoriaCargo === "DIRECTIVO"
+                ? "bg-red-100 px-2 py-1 text-xs font-semibold text-red-800"
+                : "bg-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-700"
+            }
+          >
+            {fila.Cargo || "-"}
+          </span>
+        </td>
+
+        <td className="px-4 py-3 text-zinc-600">
+  {fila.CategoriaCargo === "REPRESENTATIVO"
+    ? "Representativo"
+    : fila.CategoriaCargo === "DIRECTIVO"
+    ? "Directivo"
+    : "Vocal"}
+</td>
+
+<td className="px-4 py-3 text-center print:hidden">
+  <EditarCargoHistorial
+    id={Number(fila.ID)}
+    numcens={Number(fila.NUMCENS)}
+    ejercicio={Number(fila.Ejercicio)}
+    ejercicioActivo={ejercicioActivo}
+    cargoInicial={fila.Cargo}
+    categoriaInicial={fila.CategoriaCargo}
+    soloBoton={true}
+    onGuardado={() =>
+      setRecargarCargos((valor) => valor + 1)
+    }
+  />
+</td>
+
+</tr>
     ))
   ) : (
     sociosMostrados.map((socio) => (
-      <tr key={socio.NUMCENS} className="border-t border-zinc-200 hover:bg-red-50">
+      <tr
+        key={socio.NUMCENS}
+        className="border-t border-zinc-200 hover:bg-red-50"
+      >
         {listado === "BANDA" ? (
           <>
-            <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
+            <td className="px-4 py-3 text-zinc-600">
+              {socio.NUMCENS}
+            </td>
+
             <td className="px-4 py-3 font-medium text-zinc-900">
-  <LinkSocio numcens={socio.NUMCENS}>
-    {socio.Apellidos}, {socio.Nombre}
-  </LinkSocio>
-</td>
-            <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"}</td>
-            <td className="px-4 py-3 text-zinc-600">{socio.SEXE || "-"}</td>
+              <LinkSocio numcens={socio.NUMCENS}>
+                {socio.Apellidos}, {socio.Nombre}
+              </LinkSocio>
+            </td>
+
+            <td className="px-4 py-3 text-zinc-600">
+              {socio.Comision || "-"}
+            </td>
+
+            <td className="px-4 py-3 text-zinc-600">
+              {socio.SEXE || "-"}
+            </td>
           </>
         ) : (
           <>
-            <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
+            <td className="px-4 py-3 text-zinc-600">
+              {socio.NUMCENS}
+            </td>
+
             <td className="px-4 py-3 font-medium text-zinc-900">
-  <LinkSocio numcens={socio.NUMCENS}>
-    {socio.Apellidos}, {socio.Nombre}
-  </LinkSocio>
-</td>
-<td className="px-4 py-3 text-zinc-600">
-  {socio["FECHA de NACIMIENTO"]
-    ? new Date(
-        `${socio["FECHA de NACIMIENTO"]}T00:00:00`
-      ).toLocaleDateString("es-ES", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      })
-    : "-"}
-</td>
-            <td className="px-4 py-3 text-zinc-600">{socio.Comision || "-"} / {socio.SEXE || "-"}</td>
+              <LinkSocio numcens={socio.NUMCENS}>
+                {socio.Apellidos}, {socio.Nombre}
+              </LinkSocio>
+            </td>
+
+            <td className="px-4 py-3 text-zinc-600">
+              {socio["FECHA de NACIMIENTO"]
+                ? new Date(
+                    `${socio["FECHA de NACIMIENTO"]}T00:00:00`
+                  ).toLocaleDateString("es-ES", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })
+                : "-"}
+            </td>
+
+            <td className="px-4 py-3 text-zinc-600">
+              {socio.Comision || "-"} / {socio.SEXE || "-"}
+            </td>
+
             <td className="px-4 py-3 text-right font-medium">
               {abreviarAntiguedad(socio.Antiguedad_Calculada)}
             </td>
