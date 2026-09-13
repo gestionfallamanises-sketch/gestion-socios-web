@@ -228,15 +228,16 @@ const textoResponsableLoteria = grupoLoteria
       </div>
 
       <div className="flex items-center gap-3">
-        <span
-          className={
-            socioAny.Estado === "Activo"
-              ? "bg-green-100 px-4 py-2 text-sm font-semibold text-green-700"
-              : "bg-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700"
-          }
-        >
-          {socioAny.Estado || "Sin estado"}
-        </span>
+      <span
+  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white ${
+    socioAny.Estado === "Activo"
+      ? "bg-green-600"
+      : "bg-red-600"
+  }`}
+  title={socioAny.Estado === "Activo" ? "Activo" : "Baja"}
+>
+  {socioAny.Estado === "Activo" ? "A" : "B"}
+</span>
 
         {socioAny.Estado === "Activo" ? (
   <Link
