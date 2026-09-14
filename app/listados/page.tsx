@@ -55,32 +55,174 @@ const [recargarCargos, setRecargarCargos] = useState(0);
 
 useEffect(() => {
   async function fetchSocios() {
-    const { data, error } = await supabase
-    .from("SOCIOS_ANTIGUEDAD_CALCULADA")
-    .select(`
-      NUMCENS,
-      Nombre,
-      Apellidos,
-      Estado,
-      Comision,
-      SEXE,
-      Antiguedad_Calculada,
-      Antiguedad_Meses_Total,
-      "FECHA de NACIMIENTO",
-      ConLoteria,
-      NumPapeletas,
-      PapeletasFalla,
-      PapeletasVirgen,
-      PapeletasNavidad,
-      PapeletasNino,
-      EsBanda
-    `);
+    const [
+      { data: antiguedadData, error: antiguedadError },
+      { data: sociosData, error: sociosError },
+      { data: familiasData, error: familiasError },
+    ] = await Promise.all([
+      supabase
+        .from("SOCIOS_ANTIGUEDAD_CALCULADA")
+        .select(`
+          NUMCENS,
+          Nombre,
+          Apellidos,
+          Estado,
+          Comision,
+          SEXE,
+          Antiguedad_Calculada,
+          Antiguedad_Meses_Total,
+          "FECHA de NACIMIENTO",
+          ConLoteria,
+          NumPapeletas,
+          PapeletasFalla,
+          PapeletasVirgen,
+          PapeletasNavidad,
+          PapeletasNino,
+          EsBanda
+        `),
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setSocios(data || []);
+      supabase
+        .from("SOCIOS")
+        .select(`
+          NUMCENS,
+          Nombre,
+          Apellidos,
+          ID_Familia,
+          "Teléfono 1",
+          "Teléfono 2",
+          "FECHA de NACIMIENTO"
+        `),
+
+      supabase
+        .from("FAMILIAS")
+        .select(`
+          ID_Familia,
+          Titular_NUMCENS
+        `),
+    ]);
+
+    if (antiguedadError || sociosError || familiasError) {
+      setError(
+        antiguedadError?.message ||
+          sociosError?.message ||
+          familiasError?.message ||
+          "Error al cargar los socios"
+      );
+      return;
     }
+
+    const datosSocios = sociosData || [];
+    const familias = familiasData || [];
+
+    function obtenerTelefono(socio: any) {
+      return (
+        socio?.["Teléfono 1"]?.trim() ||
+        socio?.["Teléfono 2"]?.trim() ||
+        ""
+      );
+    }
+
+    function esAdulto(fechaNacimiento: string | null) {
+      if (!fechaNacimiento) return false;
+
+      const nacimiento = new Date(`${fechaNacimiento}T00:00:00`);
+      const hoy = new Date();
+
+      let edad = hoy.getFullYear() - nacimiento.getFullYear();
+
+      const mes = hoy.getMonth() - nacimiento.getMonth();
+
+      if (
+        mes < 0 ||
+        (mes === 0 && hoy.getDate() < nacimiento.getDate())
+      ) {
+        edad--;
+      }
+
+      return edad >= 18;
+    }
+
+    const sociosConTelefono = (antiguedadData || []).map((socio) => {
+      const datosSocio = datosSocios.find(
+        (s) => Number(s.NUMCENS) === Number(socio.NUMCENS)
+      );
+
+      const telefonoPropio = obtenerTelefono(datosSocio);
+
+      if (telefonoPropio) {
+        return {
+          ...socio,
+          TelefonoListado: telefonoPropio,
+          OrigenTelefono: "Propio",
+          ContactoTelefono: `${socio.Nombre || ""} ${
+            socio.Apellidos || ""
+          }`.trim(),
+        };
+      }
+
+      if (!datosSocio?.ID_Familia) {
+        return {
+          ...socio,
+          TelefonoListado: "",
+          OrigenTelefono: "",
+          ContactoTelefono: "",
+        };
+      }
+
+      const familia = familias.find(
+        (f) =>
+          Number(f.ID_Familia) === Number(datosSocio.ID_Familia)
+      );
+
+      const titular = datosSocios.find(
+        (s) =>
+          Number(s.NUMCENS) === Number(familia?.Titular_NUMCENS)
+      );
+
+      const telefonoTitular = obtenerTelefono(titular);
+
+      if (telefonoTitular) {
+        return {
+          ...socio,
+          TelefonoListado: telefonoTitular,
+          OrigenTelefono: "Titular",
+          ContactoTelefono: `${titular?.Nombre || ""} ${
+            titular?.Apellidos || ""
+          }`.trim(),
+        };
+      }
+
+      const otroAdulto = datosSocios.find(
+        (s) =>
+          Number(s.ID_Familia) === Number(datosSocio.ID_Familia) &&
+          Number(s.NUMCENS) !== Number(socio.NUMCENS) &&
+          Number(s.NUMCENS) !== Number(titular?.NUMCENS) &&
+          esAdulto(s["FECHA de NACIMIENTO"]) &&
+          obtenerTelefono(s)
+      );
+
+      const telefonoFamiliar = obtenerTelefono(otroAdulto);
+
+      if (telefonoFamiliar) {
+        return {
+          ...socio,
+          TelefonoListado: telefonoFamiliar,
+          OrigenTelefono: "Familiar",
+          ContactoTelefono: `${otroAdulto?.Nombre || ""} ${
+            otroAdulto?.Apellidos || ""
+          }`.trim(),
+        };
+      }
+
+      return {
+        ...socio,
+        TelefonoListado: "",
+        OrigenTelefono: "",
+        ContactoTelefono: "",
+      };
+    });
+
+    setSocios(sociosConTelefono);
   }
 
   fetchSocios();
@@ -578,6 +720,22 @@ const sociosMostrados = sociosBase
       filas = sociosMostrados.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
         Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+    
+        ...((listado === "ACTIVOS" || listado === "BAJAS")
+  ? {
+      Teléfono: socio.TelefonoListado || "",
+      "Origen teléfono":
+        socio.OrigenTelefono === "Propio"
+          ? "Propio"
+          : socio.OrigenTelefono === "Titular"
+          ? "Titular"
+          : socio.OrigenTelefono === "Familiar"
+          ? "Familiar"
+          : "",
+      Contacto: socio.ContactoTelefono || "",
+    }
+  : {}),
+    
         "Fecha nacimiento": socio["FECHA de NACIMIENTO"]
           ? new Date(
               `${socio["FECHA de NACIMIENTO"]}T00:00:00`
@@ -587,10 +745,14 @@ const sociosMostrados = sociosBase
               year: "numeric",
             })
           : "",
+    
         "Com/Sx": `${socio.Comision || "-"} / ${socio.SEXE || "-"}`,
-        Antigüedad: abreviarAntiguedad(socio.Antiguedad_Calculada),
+    
+        Antigüedad: abreviarAntiguedad(
+          socio.Antiguedad_Calculada
+        ),
       }));
-  
+    
       nombreArchivo =
         listado === "ACTIVOS"
           ? "socios_activos.csv"
@@ -1090,6 +1252,7 @@ const sociosMostrados = sociosBase
       <>
         <th className="px-4 py-3">NUMCENS</th>
         <th className="px-4 py-3">Socio</th>
+        <th className="px-4 py-3">Teléfono / contacto</th>
         <th className="px-4 py-3">Fecha nacimiento</th>
         <th className="px-4 py-3">Com/Sx</th>
         <th className="px-4 py-3 text-right">Antigüedad</th>
@@ -1337,6 +1500,30 @@ const sociosMostrados = sociosBase
                 {socio.Apellidos}, {socio.Nombre}
               </LinkSocio>
             </td>
+
+            <td className="px-4 py-3">
+  {socio.TelefonoListado ? (
+    <div>
+      <div className="font-medium text-zinc-900">
+        {socio.OrigenTelefono === "Titular"
+          ? "T · "
+          : socio.OrigenTelefono === "Familiar"
+          ? "F · "
+          : ""}
+        {socio.TelefonoListado}
+      </div>
+
+      {socio.OrigenTelefono !== "Propio" &&
+        socio.ContactoTelefono && (
+          <div className="text-xs text-zinc-500">
+            {socio.ContactoTelefono}
+          </div>
+        )}
+    </div>
+  ) : (
+    <span className="text-zinc-400">-</span>
+  )}
+</td>
 
             <td className="px-4 py-3 text-zinc-600">
               {socio["FECHA de NACIMIENTO"]
