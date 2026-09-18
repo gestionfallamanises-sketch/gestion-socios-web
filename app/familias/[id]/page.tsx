@@ -8,6 +8,7 @@ import MakeTitularButton from "../../components/MakeTitularButton";
 import RemoveMemberButton from "../../components/RemoveMemberButton";
 import TrasladarFamiliaButton from "../../components/TrasladarFamiliaButton";
 import GenerarCuotasButton from "../../components/GenerarCuotasButton";
+import PrintButton from "../../components/PrintButton";
 
 export default async function FamiliaPage({
   params,
@@ -62,23 +63,44 @@ const { data: miembros } = await supabase
 
   const numsFamilia = miembrosAny?.map((s) => s.NUMCENS) || [];
 
-  const { data: formasPagoFamilia } =
+  const { data: formasPagoFamilia, error: errorFormasPago } =
   numsFamilia.length > 0
     ? await supabase
         .from("FORMAS_PAGO_SOCIOS")
-        .select(`
-          *,
-          PAGADORES_EXTERNOS (
-            Nombre,
-            Apellidos,
-            NIF
-          )
-        `)
-        .in("NUMCENS", numsFamilia)
+        .select("*")
+        .in(
+          "NUMCENS",
+          numsFamilia.map((num) => Number(num))
+        )
         .eq("Activo", true)
-    : { data: [] };
+    : { data: [], error: null };
+
+if (errorFormasPago) {
+  console.error(
+    "Error cargando formas de pago:",
+    errorFormasPago.message
+  );
+}
 
     const formasPagoFamiliaAny = (formasPagoFamilia || []) as any[];
+
+    const numsPagadoresSocios = [
+      ...new Set(
+        formasPagoFamiliaAny
+          .map((fp) => Number(fp.NUMCENS_Pagador))
+          .filter((num) => num > 0)
+      ),
+    ];
+    
+    const { data: sociosPagadores } =
+      numsPagadoresSocios.length > 0
+        ? await supabase
+            .from("SOCIOS")
+            .select("NUMCENS, Nombre, Apellidos")
+            .in("NUMCENS", numsPagadoresSocios)
+        : { data: [] };
+    
+    const sociosPagadoresAny = (sociosPagadores || []) as any[];
   
   const { data: cuotasFamilia } =
     numsFamilia.length > 0
@@ -160,12 +182,19 @@ const totalPendiente =
     return (
       <div className="min-h-screen bg-zinc-100 p-8">
         <main className="mx-auto max-w-5xl border border-zinc-200 bg-white p-8">
-          <Link
-            href="/familias"
-            className="mb-6 inline-block text-sm font-medium text-red-900 hover:text-red-950"
-          >
-            ← Volver a familias
-          </Link>
+        <div className="mb-6 flex items-center justify-between">
+  
+  <Link
+    href="/familias"
+    className="text-sm font-medium text-red-900 hover:text-red-950 print:hidden"
+  >
+    ← Volver a familias
+  </Link>
+
+  <div className="print:hidden">
+    <PrintButton />
+  </div>
+</div>
 
           <h1 className="text-2xl font-bold">Familia no encontrada</h1>
 
@@ -180,81 +209,75 @@ const totalPendiente =
   return (
     <div className="min-h-screen bg-zinc-100 p-8">
       <main className="mx-auto max-w-7xl">
-        <Link
-          href="/familias"
-          className="mb-6 inline-block text-sm font-medium text-red-900 hover:text-red-950"
-        >
-          ← Volver a familias
-        </Link>
+      <div className="mb-6 flex items-center justify-between">
+  <Link
+    href="/familias"
+    className="text-sm font-medium text-red-900 hover:text-red-950 print:hidden"
+  >
+    ← Volver a familias
+  </Link>
 
-        <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
-          <div className="border-l-4 border-red-900 px-6 py-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-zinc-900">
-                  {familiaAny.Nombre_Familia || "Familia sin nombre"}
-                </h1>
-
-                <p className="mt-2 text-sm text-zinc-600">
-                  ID familia {familiaAny.ID_Familia} · {miembros?.length || 0} miembros ·{" "}
-                  {totalPapeletas} papeletas
-                </p>
-              </div>
-
-              <Link
-                href={`/familias/${familiaAny.ID_Familia}/editar`}
-                className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-              >
-                Editar familia
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-8 border border-zinc-200 bg-white">
-          <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                Datos del titular
-              </h2>
-
-              <p className="text-xs text-zinc-500">
-                Información principal de contacto
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 text-sm md:grid-cols-5">
-          <Bloque
-  label="Titular"
-  value={
-    titularAny
-      ? `${titularAny.Nombre} ${titularAny.Apellidos}`
-      : "-"
-  }
-/>
-
-<Bloque
-  label="Teléfono"
-  value={titularAny?.["Teléfono 1"] || "-"}
-/>
-
-<Bloque
-  label="Dirección"
-  value={titularAny?.Dirección || "-"}
-/>
-
-<Bloque
-  label="Población"
-  value={titularAny?.Poblacion || titularAny?.Ciudad || "-"}
-/>
-
-<Bloque
-  label="Cuenta"
-  value={datosBancoTitularAny?.IBAN || "-"}
-/>
+  <div className="print:hidden">
+    <PrintButton />
+  </div>
 </div>
-        </section>
+
+        <section className="mb-5 border border-zinc-200 bg-white shadow-sm">
+  <div className="border-l-4 border-red-900 px-5 py-4">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="text-xl font-bold text-zinc-900">
+            {familiaAny.Nombre_Familia || "Familia sin nombre"}
+          </h1>
+
+          <span className="text-xs text-zinc-400">
+            ID {familiaAny.ID_Familia}
+          </span>
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-zinc-600">
+          <span>
+            <span className="font-medium text-zinc-800">Titular:</span>{" "}
+            {titularAny
+              ? `${titularAny.Nombre} ${titularAny.Apellidos}`
+              : "-"}
+          </span>
+
+          <span>
+            <span className="font-medium text-zinc-800">Tel:</span>{" "}
+            {titularAny?.["Teléfono 1"] || "-"}
+          </span>
+
+          <span>
+            <span className="font-medium text-zinc-800">Miembros:</span>{" "}
+            {miembros?.length || 0}
+          </span>
+
+          <span>
+            <span className="font-medium text-zinc-800">Papeletas:</span>{" "}
+            {totalPapeletas}
+          </span>
+        </div>
+
+        <div className="mt-1 text-xs text-zinc-500">
+          {titularAny?.Dirección || "-"}
+          {(titularAny?.Poblacion || titularAny?.Ciudad) &&
+            ` · ${titularAny?.Poblacion || titularAny?.Ciudad}`}
+        </div>
+      </div>
+
+      <Link
+        href={`/familias/${familiaAny.ID_Familia}/editar`}
+        className="shrink-0 border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+      >
+        Editar familia
+      </Link>
+
+    </div>
+  </div>
+</section>
 
         <section className="mb-8 border border-zinc-200 bg-white">
           <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
@@ -282,15 +305,15 @@ const totalPendiente =
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                  <tr>
-                    <th className="px-4 py-3">NUMCENS</th>
-                    <th className="px-4 py-3">Nombre</th>
-                    <th className="px-4 py-3">Tipo cuota</th>
-                    <th className="px-4 py-3">Lotería</th>
-                    <th className="px-4 py-3">Pagador</th>
-                    <th className="px-4 py-3 text-right">Cuota</th>
-                    <th className="px-4 py-3 text-right">Titular / acciones</th>
-                  </tr>
+                <tr>
+                <th className="px-4 py-3">Socio</th>
+<th className="px-4 py-3">Tipo cuota</th>
+<th className="px-4 py-3">Pagador</th>
+<th className="px-4 py-3 text-right">Cuota</th>
+<th className="px-4 py-3 text-right">Pagado</th>
+<th className="px-4 py-3 text-right">Pendiente</th>
+<th className="px-4 py-3 text-right">Acciones</th>
+</tr>
                 </thead>
 
                 <tbody>
@@ -307,24 +330,28 @@ const totalPendiente =
         key={socio.NUMCENS}
         className="border-t border-zinc-200 hover:bg-red-50"
       >
-        <td className="px-4 py-3 text-zinc-600">{socio.NUMCENS}</td>
-
         <td className="px-4 py-3">
-          <Link
-            href={`/socios/${socio.NUMCENS}?fromFamilia=${familiaAny.ID_Familia}`}
-            className="font-medium text-zinc-900 hover:text-red-900 hover:underline"
-          >
-            {socio.Nombre} {socio.Apellidos}
-          </Link>
-        </td>
+  <Link
+    href={`/socios/${socio.NUMCENS}?fromFamilia=${familiaAny.ID_Familia}`}
+    className="font-medium text-zinc-900 hover:text-red-900 hover:underline"
+  >
+    {socio.Nombre} {socio.Apellidos}
+  </Link>
+
+  <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
+    <span>Nº {socio.NUMCENS}</span>
+
+    {socio.ConLoteria && (
+      <span className="bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+        Lotería
+      </span>
+    )}
+  </div>
+</td>
 
         <td className="px-4 py-3 text-zinc-600">
   {cuota?.Tipo || cuota?.TipoCuota || cuota?.NombreCuota || cuota?.Descripcion || cuota?.IDCuota || "-"}
 </td>
-
-        <td className="px-4 py-3 text-zinc-600">
-          {socio.ConLoteria ? "Sí" : "No"}
-        </td>
 
         <td className="px-4 py-3 text-zinc-600">
   {(() => {
@@ -334,13 +361,49 @@ const totalPendiente =
         fp.Activo === true
     );
 
-    return familiaAny.Titular_NUMCENS || "-";
+    if (!formaPago) {
+      return "-";
+    }
+
+    if (formaPago.IDPagadorExterno) {
+      const externo = formaPago.PAGADORES_EXTERNOS;
+
+      return externo
+        ? `Externo · ${externo.Nombre || ""} ${externo.Apellidos || ""}`.trim()
+        : "Pagador externo";
+    }
+
+    const numcensPagador = formaPago.NUMCENS_Pagador;
+
+    if (!numcensPagador) {
+      return "-";
+    }
+
+    if (Number(numcensPagador) === Number(socio.NUMCENS)) {
+      return "Él mismo";
+    }
+
+    return `Nº ${numcensPagador}`;
   })()}
 </td>
 
         <td className="px-4 py-3 text-right font-medium">
           {Number(cuota?.Importe || 0).toFixed(2)} €
         </td>
+
+        <td className="px-4 py-3 text-right font-medium text-green-700">
+  {Number(cuota?.TotalPagado || 0).toFixed(2)} €
+</td>
+
+<td
+  className={`px-4 py-3 text-right font-medium ${
+    Number(cuota?.Pendiente || 0) > 0
+      ? "text-red-700"
+      : "text-zinc-500"
+  }`}
+>
+  {Number(cuota?.Pendiente || 0).toFixed(2)} €
+</td>
 
         <td className="px-4 py-3 text-right">
           {String(socio.NUMCENS) === String(familiaAny?.Titular_NUMCENS) ? (
@@ -367,125 +430,56 @@ const totalPendiente =
           )}
         </section>
 
-        <section className="border border-zinc-200 bg-white">
-          <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-            <div> 
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                Cuotas y pagos
-              </h2> 
+        <section className="border border-zinc-200 bg-white shadow-sm">
+  <div className="flex flex-col xl:flex-row xl:items-stretch">
 
-              <p className="text-xs text-zinc-500">
-                Resumen económico familiar del ejercicio actual
-              </p>
-            </div>
+    <div className="grid flex-1 grid-cols-2 divide-x divide-zinc-200 md:grid-cols-4">
+      <div className="px-5 py-4">
+        <div className="text-xs uppercase text-zinc-500">Ejercicio</div>
+        <div className="mt-1 text-lg font-semibold text-zinc-900">
+          {ejercicioActual || "-"}
+        </div>
+      </div>
 
-            <div className="flex items-center gap-3">
- 
-  {(ejercicioActual ?? ejercicioActivo) !== null && (
-  <GenerarCuotasButton
-    ejercicio={ejercicioActual ?? ejercicioActivo!}
-  />
-)}
+      <div className="px-5 py-4">
+        <div className="text-xs uppercase text-zinc-500">Total cuotas</div>
+        <div className="mt-1 text-lg font-semibold text-zinc-900">
+          {totalCuotas.toFixed(2)} €
+        </div>
+      </div>
 
-  <Link
-    href={"/familias/" + familiaAny?.ID_Familia + "/cuotas"}
-    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-  >
-    Ver detalle económico
-  </Link>
-</div>
-          </div>
+      <div className="px-5 py-4">
+        <div className="text-xs uppercase text-zinc-500">Total pagado</div>
+        <div className="mt-1 text-lg font-semibold text-green-700">
+          {totalPagado.toFixed(2)} €
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 text-sm md:grid-cols-4">
-            <Bloque label="Ejercicio" value={ejercicioActual || "-"} />
-            <Bloque label="Total cuotas" value={`${totalCuotas.toFixed(2)} €`} />
-            <Bloque label="Total pagado" value={`${totalPagado.toFixed(2)} €`} />
-            <Bloque label="Total pendiente" value={`${totalPendiente.toFixed(2)} €`} />
-          </div>
+      <div className="px-5 py-4">
+        <div className="text-xs uppercase text-zinc-500">Total pendiente</div>
+        <div className="mt-1 text-lg font-semibold text-red-700">
+          {totalPendiente.toFixed(2)} €
+        </div>
+      </div>
+    </div>
 
-          <div className="border-t border-zinc-200 p-4">
-</div>
+    <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-zinc-200 p-4 xl:border-l xl:border-t-0">
+      {(ejercicioActual ?? ejercicioActivo) !== null && (
+        <GenerarCuotasButton
+          ejercicio={ejercicioActual ?? ejercicioActivo!}
+        />
+      )}
 
-          <div className="overflow-x-auto border-t border-zinc-200">
-            <table className="w-full text-sm">
-              <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                <tr>
-                  <th className="px-4 py-3">Socio</th>
-                  <th className="px-4 py-3">Ejercicio</th>
-                  <th className="px-4 py-3 text-right">Cuota</th>
-                  <th className="px-4 py-3 text-right">Pagado</th>
-                  <th className="px-4 py-3 text-right">Pendiente</th>
-                  <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3">Método</th>
-                </tr>
-              </thead>
-
-              <tbody>
-              {cuotasActuales.length === 0 ? (
-  <tr>
-    <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
-      No hay cuotas generadas para esta familia.
-    </td>
-  </tr>
-) : (
-  cuotasActuales.map((cuota: any) => {
-    const plazosCuota = plazosFamiliaAny.filter(
-      (p: any) =>
-        Number(p.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
-    );
-  
-    const pagadoCuota = plazosCuota.reduce(
-      (total: number, plazo: any) =>
-        total + Number(plazo.ImportePagado || 0),
-      0
-    );
-  
-    const pendienteCuota = plazosCuota.reduce(
-      (total: number, plazo: any) =>
-        total + Number(plazo.Pendiente || 0),
-      0
-    );
-
-    return (
-      <tr
-        key={cuota.IDCuotaSocio}
-        className="border-t border-zinc-200 hover:bg-red-50"
+      <Link
+        href={`/familias/${familiaAny.ID_Familia}/cuotas`}
+        className="whitespace-nowrap bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
       >
-        <td className="px-4 py-3 font-medium">
-          {cuota.Apellidos}, {cuota.Nombre}
-        </td>
+        Ver detalle económico
+      </Link>
+    </div>
 
-        <td className="px-4 py-3 text-zinc-600">
-          {cuota.Ejercicio}
-        </td>
-
-        <td className="px-4 py-3 text-right">
-          {Number(cuota.Importe || 0).toFixed(2)} €
-        </td>
-
-        <td className="px-4 py-3 text-right text-green-700">
-          {pagadoCuota.toFixed(2)} €
-        </td>
-
-        <td className="px-4 py-3 text-right text-red-700">
-          {pendienteCuota.toFixed(2)} €
-        </td>
-
-        <td className="px-4 py-3">
-          <EstadoBadge estado={cuota.EstadoPago} />
-        </td>
-
-        <td className="px-4 py-3 text-zinc-600">
-          {cuota.Metodo || "-"}
-        </td>
-      </tr>
-    );
-  })
-)}
-              </tbody>
-            </table>
-          </div>
-        </section>
+  </div>
+</section>
       </main>
     </div>
   );

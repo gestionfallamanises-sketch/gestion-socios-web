@@ -4,6 +4,7 @@ import Sidebar from "../../components/Sidebar";
 import { supabase } from "../../../lib/supabaseClient";
 import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 import HistorialSocioModal from "../../components/HistorialSocioModal";
+import ExcelSocioButton from "../../components/ExcelSocioButton";
 
 export default async function SocioPage({
   params,
@@ -206,10 +207,33 @@ const textoResponsableLoteria = grupoLoteria
 
       <main className="min-w-0 flex-1 p-8">
         <div className="mx-auto max-w-7xl">
-          <Link href={fromFamilia ? `/familias/${fromFamilia}` : "/"} className="mb-6 inline-block text-sm font-medium text-red-900 hover:text-red-950"
-            >
-            {fromFamilia ? "← Volver a familia" : "← Volver al listado"}
-          </Link>
+        <div className="mb-6 flex items-center justify-between gap-4">
+  <Link
+    href={fromFamilia ? `/familias/${fromFamilia}` : "/"}
+    className="text-sm font-medium text-red-900 hover:text-red-950"
+  >
+    {fromFamilia ? "← Volver a familia" : "← Volver al listado"}
+  </Link>
+
+  <div className="flex items-center gap-2">
+  <ExcelSocioButton
+  socio={socioAny}
+  cuota={resumenCuotaActualAny || cuotaActual}
+  formaPago={formaPagoAny}
+  pagador={textoPagador}
+  iban={datosBancoAny?.IBAN || ""}
+  familia={miembrosFamiliaAny}
+/>
+
+    <Link
+  href={`/socios/${numcens}/imprimir`}
+  target="_blank"
+  className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+>
+  Imprimir
+</Link>
+  </div>
+</div>
 
           <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
   <div className="border-l-4 border-red-900 px-6 py-5">

@@ -7,6 +7,7 @@ import Sidebar from "../components/Sidebar";
 import GenerarCuotasButton from "../components/GenerarCuotasButton";
 import RegistrarPagoGeneralButton from "../components/RegistrarPagoGeneralButton";
 import { normalizarTexto } from "@/lib/texto";
+import * as XLSX from "xlsx";
 
 export default function CuotasPage() {
   const [cuotas, setCuotas] = useState<any[]>([]);
@@ -14,6 +15,7 @@ export default function CuotasPage() {
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
+  const [tarifas, setTarifas] = useState<any[]>([]);
 
   useEffect(() => {
     cargarEjercicios();
@@ -55,6 +57,19 @@ export default function CuotasPage() {
       return;
     }
   
+    const { data: tarifasData, error: errorTarifas } = await supabase
+  .from("TIPOS_CUOTA")
+  .select("IDCuota, CodigoCuota, Descripcion, Importe")
+  .eq("Ejercicio", ejercicioSeleccionado)
+  .order("CodigoCuota", { ascending: true });
+
+if (errorTarifas) {
+  alert(errorTarifas.message);
+  return;
+}
+
+setTarifas(tarifasData || []);
+
     const { data, error } = await supabase
       .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
@@ -112,6 +127,189 @@ const coincideBusqueda = normalizarTexto(texto).includes(
     0
   );
 
+  async function cambiarTarifa(numcens: number, idCuota: string) {
+    const { error } = await (supabase as any)
+  .from("SOCIOS")
+  .update({
+    IDCuotaManual: idCuota,
+  })
+  .eq("NUMCENS", numcens);
+  
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  
+    const { error: errorRecalculo } = await (supabase as any).rpc(
+      "generar_actualizar_cuotas_completo",
+      {
+        p_ejercicio: ejercicioSeleccionado,
+      }
+    );
+  
+    if (errorRecalculo) {
+      alert(errorRecalculo.message);
+      return;
+    }
+  
+    await cargarCuotas();
+  }
+
+  function exportarExcel() {
+    const datos = cuotasFiltradas.map((cuota) => ({
+      Socio: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+      NUMCENS: cuota.NUMCENS || "",
+      Tipo: (
+        cuota.Descripcion ||
+        cuota.CodigoCuota ||
+        cuota.IDCuota ||
+        ""
+      ).replace(`${ejercicioSeleccionado}_`, ""),
+      Importe: Number(cuota.Importe || 0),
+      Pagado: Number(cuota.TotalPagado || 0),
+      Pendiente: Number(cuota.Pendiente || 0),
+      "Forma de pago": cuota.Metodo || "",
+      Estado: cuota.EstadoPago || "",
+    }));
+  
+    const hoja = XLSX.utils.json_to_sheet(datos);
+  
+    hoja["!cols"] = [
+      { wch: 38 },
+      { wch: 12 },
+      { wch: 25 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 14 },
+    ];
+  
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Cuotas");
+  
+    XLSX.writeFile(
+      libro,
+      `Cuotas_${ejercicioSeleccionado || ""}.xlsx`
+    );
+  }
+
+  function imprimirCuotas() {
+    const filas = cuotasFiltradas
+      .map(
+        (cuota) => `
+          <tr>
+            <td>${cuota.Apellidos || ""}, ${cuota.Nombre || ""}</td>
+            <td>${cuota.NUMCENS || ""}</td>
+            <td>${cuota.IDCuota || ""}</td>
+            <td class="numero">${Number(cuota.Importe || 0).toFixed(2)} €</td>
+            <td class="numero">${Number(cuota.TotalPagado || 0).toFixed(2)} €</td>
+            <td class="numero">${Number(cuota.Pendiente || 0).toFixed(2)} €</td>
+            <td>${cuota.Metodo || ""}${
+              cuota.Fraccionado ? ` · ${cuota.NumeroPlazos} plazos` : ""
+            }</td>
+            <td>${cuota.EstadoPago || ""}</td>
+          </tr>
+        `
+      )
+      .join("");
+  
+    const ventana = window.open("", "_blank");
+  
+    if (!ventana) return;
+  
+    ventana.document.write(`
+      <html>
+        <head>
+          <title>Cuotas ${ejercicioSeleccionado || ""}</title>
+  
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 30px;
+              color: #18181b;
+            }
+  
+            h1 {
+              margin: 0;
+              font-size: 22px;
+            }
+  
+            p {
+              margin: 6px 0 20px;
+              color: #71717a;
+              font-size: 13px;
+            }
+  
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 11px;
+            }
+  
+            th {
+              background: #f4f4f5;
+              text-align: left;
+              padding: 8px;
+              border-bottom: 1px solid #a1a1aa;
+            }
+  
+            td {
+              padding: 7px 8px;
+              border-bottom: 1px solid #e4e4e7;
+            }
+  
+            .numero {
+              text-align: right;
+              white-space: nowrap;
+            }
+  
+            @media print {
+              body {
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+  
+        <body>
+          <h1>Listado de cuotas</h1>
+          <p>
+            Ejercicio ${ejercicioSeleccionado || ""} ·
+            ${cuotasFiltradas.length} cuotas
+          </p>
+  
+          <table>
+            <thead>
+              <tr>
+                <th>Socio</th>
+                <th>NUMCENS</th>
+                <th>Tipo</th>
+                <th>Importe</th>
+                <th>Pagado</th>
+                <th>Pendiente</th>
+                <th>Forma pago</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+  
+            <tbody>
+              ${filas}
+            </tbody>
+          </table>
+  
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+  
+    ventana.document.close();
+  }
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -131,36 +329,23 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row">
-                
-                <select
-  value={ejercicioSeleccionado ?? ""}
-  onChange={(e) =>
-    setEjercicioSeleccionado(
-      e.target.value ? Number(e.target.value) : null
-    )
-  }
->
-  <option value="" disabled>
-    Selecciona un ejercicio
-  </option>
+                <div className="flex items-center gap-2">
+  <button
+    type="button"
+    onClick={exportarExcel}
+    className="bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-300"  >
+    Excel
+  </button>
 
-  {ejercicios.map((ejercicio: any) => (
-    <option
-      key={ejercicio.Ejercicio}
-      value={ejercicio.Ejercicio}
-    >
-      {ejercicio.Ejercicio}
-    </option>
-  ))}
-</select>
-
-  <RegistrarPagoGeneralButton />
-
-  {ejercicioSeleccionado !== null && (
-  <GenerarCuotasButton ejercicio={ejercicioSeleccionado} />
-)}
+  <button
+    type="button"
+    onClick={imprimirCuotas}
+    className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
+     >
+    Imprimir
+  </button>
 </div>
+
               </div>
             </div>
           </section>
@@ -221,17 +406,46 @@ const coincideBusqueda = normalizarTexto(texto).includes(
           </section>
 
           <section className="border border-zinc-200 bg-white">
-            <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                  Listado de cuotas
-                </h2>
+          <div className="flex items-center justify-between px-4 py-4">
+  <div>
+    <h2 className="text-lg font-semibold text-zinc-900">
+      Listado de cuotas
+    </h2>
+    <p className="mt-1 text-sm text-zinc-500">
+      Mostrando {cuotasFiltradas.length} de {cuotas.length}
+    </p>
+  </div>
 
-                <p className="text-xs text-zinc-500">
-                  Mostrando {cuotasFiltradas.length} de {cuotas.length} cuotas
-                </p>
-              </div>
-            </div>
+  <div className="flex items-center gap-3">
+  <select
+  value={ejercicioSeleccionado ?? ""}
+  onChange={(e) =>
+    setEjercicioSeleccionado(
+      e.target.value ? Number(e.target.value) : null
+    )
+  }
+>
+  <option value="" disabled>
+    Selecciona un ejercicio
+  </option>
+
+  {ejercicios.map((ejercicio: any) => (
+    <option
+      key={ejercicio.Ejercicio}
+      value={ejercicio.Ejercicio}
+    >
+      {ejercicio.Ejercicio}
+    </option>
+  ))}
+</select>
+
+  <RegistrarPagoGeneralButton />
+
+  {ejercicioSeleccionado !== null && (
+  <GenerarCuotasButton ejercicio={ejercicioSeleccionado} />
+)}
+  </div>
+</div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -270,9 +484,26 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                           {cuota.NUMCENS}
                         </td>
 
-                        <td className="px-4 py-3 text-zinc-600">
-                          {cuota.IDCuota}
-                        </td>
+                        <td className="px-4 py-3">
+  <select
+    value={cuota.IDCuota || ""}
+    onChange={(e) =>
+      cambiarTarifa(Number(cuota.NUMCENS), e.target.value)
+    }
+    className="cursor-pointer bg-transparent py-1 text-sm text-zinc-600 outline-none hover:text-red-900"
+    title="Cambiar tarifa"
+  >
+    {tarifas.map((tarifa) => (
+      <option key={tarifa.IDCuota} value={tarifa.IDCuota}>
+  {(
+    tarifa.Descripcion ||
+    tarifa.CodigoCuota ||
+    tarifa.IDCuota
+  ).replace(`${ejercicioSeleccionado}_`, "")}
+</option>
+    ))}
+  </select>
+</td>
 
                         <td className="px-4 py-3 text-right">
                           {Number(cuota.Importe || 0).toFixed(2)} €

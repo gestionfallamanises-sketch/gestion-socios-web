@@ -37,6 +37,7 @@ const [pagadorOriginal, setPagadorOriginal] = useState<number | null>(null);
 const [busquedaPagador, setBusquedaPagador] = useState("");
 const [socios, setSocios] = useState<any[]>([]);
 const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
+const [tarifas, setTarifas] = useState<any[]>([]);
 const [pagadoresExtra, setPagadoresExtra] = useState<any[]>([
   {
     TitularCuenta: "",
@@ -57,10 +58,6 @@ const [sociosPagadosSeleccionados, setSociosPagadosSeleccionados] = useState<num
 const [aplicarASociosPagados, setAplicarASociosPagados] = useState(false);
 const [continuarGuardado, setContinuarGuardado] =
   useState(false);
-  const [modalCambioCuota, setModalCambioCuota] = useState<{
-    campo: "EsBanda" | "ConLoteria" | "Comision";
-    valor: boolean | string;
-  } | null>(null);
 
 useHotkeys(
   "ctrl+s",
@@ -104,6 +101,16 @@ useEffect(() => {
       .maybeSingle();
 
     setEjercicioActivo(ejercicio?.Ejercicio ?? null);
+
+    if (ejercicio?.Ejercicio) {
+      const { data: tarifasData } = await supabase
+        .from("TIPOS_CUOTA")
+        .select("IDCuota, CodigoCuota, Descripcion, Importe")
+        .eq("Ejercicio", ejercicio.Ejercicio)
+        .order("CodigoCuota", { ascending: true });
+    
+      setTarifas(tarifasData || []);
+    }
 
       const { data, error } = await supabase
   .from("SOCIOS")
@@ -326,6 +333,7 @@ setSocios(listaSocios || []);
         ConLoteria: socio.ConLoteria,
 EsBanda: socio.EsBanda,
 CARREG: socio.CARREG,
+IDCuotaManual: socio.IDCuotaManual,
 
       })
       .eq("NUMCENS", Number(numcens));
@@ -493,17 +501,11 @@ if (aplicarASociosPagados && sociosPagadosSeleccionados.length > 0) {
   }
 }
 
-    const hoy = new Date();
-
-const ejercicioActual =
-  hoy.getMonth() >= 3
-    ? hoy.getFullYear() + 1
-    : hoy.getFullYear();
 
 const { error: errorRecalculo } = await (supabase as any).rpc(
   "generar_actualizar_cuotas_completo",
   {
-    p_ejercicio: ejercicioActual,
+    p_ejercicio: ejercicioActivo,
   }
 );
     
@@ -517,7 +519,7 @@ const { error: errorRecalculo } = await (supabase as any).rpc(
     .from("CUOTAS_SOCIOS")
     .select("IDCuotaSocio")
     .eq("NUMCENS", Number(numcens))
-    .eq("Ejercicio", ejercicioActual)
+    .eq("Ejercicio", ejercicioActivo)
     .maybeSingle();
   
   if (cuotaActual?.IDCuotaSocio) {
@@ -709,7 +711,7 @@ router.push(`/socios/${numcens}`);
                 </h2>
               </div>
 
-              <div className="grid gap-3 p-4 md:grid-cols-4 lg:grid-cols-5">
+              <div className="grid gap-3 p-4 md:grid-cols-3 lg:grid-cols-[0.7fr_0.7fr_0.7fr_0.7fr_1.3fr_2fr]">
                 <div>
                   <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
                     Comisión
@@ -718,11 +720,9 @@ router.push(`/socios/${numcens}`);
                   <select
   value={socio.Comision || ""}
   onChange={(e) =>
-    setModalCambioCuota({
-      campo: "Comision",
-      valor: e.target.value,
-    })
+    cambiarCampo("Comision", e.target.value)
   }
+
   className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
 >
                     <option value="">-</option>
@@ -757,11 +757,9 @@ router.push(`/socios/${numcens}`);
   <select
   value={socio.EsBanda ? "true" : "false"}
   onChange={(e) =>
-    setModalCambioCuota({
-      campo: "EsBanda",
-      valor: e.target.value === "true",
-    })
-  }
+  cambiarCampo("EsBanda", e.target.value === "true")
+}
+
   className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
 >
     <option value="false">No</option>
@@ -777,11 +775,9 @@ router.push(`/socios/${numcens}`);
                   <select
   value={socio.ConLoteria ? "true" : "false"}
   onChange={(e) =>
-    setModalCambioCuota({
-      campo: "ConLoteria",
-      valor: e.target.value === "true",
-    })
+    cambiarCampo("ConLoteria", e.target.value === "true")
   }
+
   className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
 >
   <option value="false">No</option>
@@ -797,6 +793,33 @@ router.push(`/socios/${numcens}`);
   }
 />
 
+<div>
+  <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
+    Tarifa
+  </label>
+
+  <select
+    value={socio.IDCuotaManual ?? ""}
+    required
+    onChange={(e) =>
+      cambiarCampo("IDCuotaManual", e.target.value)
+    }
+    className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+  >
+
+    {tarifas.map((tarifa) => (
+      <option key={tarifa.IDCuota} value={tarifa.IDCuota}>
+        {(
+  tarifa.Descripcion ||
+  tarifa.CodigoCuota ||
+  tarifa.IDCuota
+).replace(`${ejercicioActivo}_`, "")}
+{" — "}
+{Number(tarifa.Importe || 0).toFixed(2)} €
+      </option>
+    ))}
+  </select>
+</div>
 
               </div>
             </section>
@@ -1038,26 +1061,6 @@ router.push(`/socios/${numcens}`);
   onConfirm={() => {
     setModalNifDuplicado(false);
     setNifDuplicadoConfirmado(true);
-  }}
-/>
-
-        <ConfirmModal
-  open={modalCambioCuota !== null}
-  title="ATENCIÓN"
-  message="Este cambio afecta al cálculo de la cuota anual del socio. Compruebe que el cambio es correcto antes de continuar."
-  confirmText="Sí, cambiar"
-  cancelText="Cancelar"
-  onCancel={() => setModalCambioCuota(null)}
-  onConfirm={() => {
-    if (!modalCambioCuota) return;
-
-    cambiarCampo(
-      modalCambioCuota.campo,
-      modalCambioCuota.valor
-    );
-
-    setModalCambioCuota(null);
-
   }}
 />
 

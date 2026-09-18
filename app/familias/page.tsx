@@ -11,13 +11,35 @@ export default function FamiliasPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function cargarFamilias() {
-    const { data, error } = await (supabase as any)
+    const { data: familiasData, error: errorFamilias } = await (supabase as any)
       .from("FAMILIAS")
       .select("*")
       .order("Nombre_Familia", { ascending: true });
-
-    if (error) setError(error.message);
-    else setFamilias((data as any[]) || []);
+  
+    if (errorFamilias) {
+      setError(errorFamilias.message);
+      return;
+    }
+  
+    const { data: sociosData, error: errorSocios } = await (supabase as any)
+      .from("SOCIOS")
+      .select("ID_Familia")
+      .not("ID_Familia", "is", null);
+  
+    if (errorSocios) {
+      setError(errorSocios.message);
+      return;
+    }
+  
+    const familiasConMiembros = new Set(
+      (sociosData || []).map((socio: any) => Number(socio.ID_Familia))
+    );
+  
+    const familiasActivas = (familiasData || []).filter((familia: any) =>
+      familiasConMiembros.has(Number(familia.ID_Familia))
+    );
+  
+    setFamilias(familiasActivas);
   }
 
   useEffect(() => {

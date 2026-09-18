@@ -16,6 +16,7 @@ export default function AddMemberForm({
   const [socios, setSocios] = useState<any[]>([]);
   const [seleccion, setSeleccion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
     async function cargarSocios() {
@@ -117,61 +118,114 @@ if (errorCuotas) {
   }
 
   return (
-    <div className="flex flex-col items-end">
-      <div className="flex items-center gap-2">
-      <div className="relative w-72">
-  <input
-    value={seleccion}
-    onChange={(e) => setSeleccion(e.target.value)}
-    placeholder="Buscar socio..."
-    className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
-  />
-
-  {seleccion && (
-    <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto border border-zinc-200 bg-white shadow-lg">
-      {socios
-        .filter((socio) => {
-          const texto = normalizar(
-            `${socio.NUMCENS} ${socio.Apellidos} ${socio.Nombre}`
-          );
-
-          return texto.includes(
-            normalizar(seleccion)
-          );
-        })
-        .slice(0, 20)
-        .map((socio) => (
-          <button
-            key={socio.NUMCENS}
-            type="button"
-            onClick={() =>
-              setSeleccion(
-                `${socio.NUMCENS} - ${socio.Apellidos}, ${socio.Nombre}`
-              )
-            }
-            className="block w-full border-b border-zinc-100 px-3 py-2 text-left text-sm hover:bg-red-50"
-          >
-            {socio.NUMCENS} · {socio.Apellidos},{" "}
-            {socio.Nombre}
-          </button>
-        ))}
-    </div>
-  )}
-</div>
-
-        <button
-          type="button"
-          onClick={agregarMiembro}
-          disabled={loading}
-          className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50"
-        >
-          {loading ? "Añadiendo..." : "Añadir miembro"}
-        </button>
-      </div>
-
-      <p className="mt-2 text-xs text-zinc-500">
-        Solo aparecen socios que todavía no están asignados a ninguna familia.
-      </p>
-      </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
+      >
+        + Añadir miembro
+      </button>
+  
+      {abierto && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg border border-zinc-200 bg-white shadow-xl">
+  
+            <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-900">
+                  Añadir miembro
+                </h2>
+  
+                <p className="mt-1 text-xs text-zinc-500">
+                  Selecciona un socio que todavía no pertenezca a ninguna familia.
+                </p>
+              </div>
+  
+              <button
+                type="button"
+                onClick={() => {
+                  setAbierto(false);
+                  setSeleccion("");
+                }}
+                className="text-xl text-zinc-400 hover:text-zinc-700"
+              >
+                ×
+              </button>
+            </div>
+  
+            <div className="p-5">
+              <div className="relative">
+                <input
+                  autoFocus
+                  value={seleccion}
+                  onChange={(e) => setSeleccion(e.target.value)}
+                  placeholder="Buscar por nombre, apellidos o NUMCENS..."
+                  className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
+                />
+  
+                {seleccion && (
+                  <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto border border-zinc-200 bg-white shadow-lg">
+                    {socios
+                      .filter((socio) => {
+                        const texto = normalizar(
+                          `${socio.NUMCENS} ${socio.Apellidos} ${socio.Nombre}`
+                        );
+  
+                        return texto.includes(normalizar(seleccion));
+                      })
+                      .slice(0, 20)
+                      .map((socio) => (
+                        <button
+                          key={socio.NUMCENS}
+                          type="button"
+                          onClick={() =>
+                            setSeleccion(
+                              `${socio.NUMCENS} - ${socio.Apellidos}, ${socio.Nombre}`
+                            )
+                          }
+                          className="block w-full border-b border-zinc-100 px-3 py-2 text-left text-sm hover:bg-red-50"
+                        >
+                          <span className="font-medium">
+                            {socio.Apellidos}, {socio.Nombre}
+                          </span>
+  
+                          <span className="ml-2 text-xs text-zinc-400">
+                            Nº {socio.NUMCENS}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+  
+            <div className="flex justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setAbierto(false);
+                  setSeleccion("");
+                }}
+                disabled={loading}
+                className="border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+              >
+                Cancelar
+              </button>
+  
+              <button
+                type="button"
+                onClick={agregarMiembro}
+                disabled={loading || !seleccion}
+                className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50"
+              >
+                {loading ? "Añadiendo..." : "Añadir miembro"}
+              </button>
+            </div>
+  
+          </div>
+        </div>
+      )}
+    </>
   );
 }

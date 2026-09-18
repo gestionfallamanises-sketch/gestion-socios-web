@@ -5,6 +5,7 @@ import Link from "next/link";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../../lib/supabase";
 import EditarCargoHistorial from "../components/EditarCargoHistorial";
+import * as XLSX from "xlsx";
 
 function LinkSocio({ numcens, children }: { numcens: any; children: any }) {
   return (
@@ -418,8 +419,10 @@ const sociosBaja = socios
         const socioPagador = socios.find(
           (socio) => Number(socio.NUMCENS) === Number(pagador.Pagador)
         );
-        
-        if (!socioPagador || socioPagador.Estado !== "Activo") {
+      
+        // Si el pagador es un socio, solo mostrarlo si está activo.
+        // Si no existe en SOCIOS, puede ser un pagador externo y no se descarta.
+        if (socioPagador && socioPagador.Estado !== "Activo") {
           return false;
         }
         const cumpleMetodo =
@@ -761,31 +764,33 @@ const sociosMostrados = sociosBase
           : "listado.csv";
     }
   
-    const cabeceras = Object.keys(filas[0] || {});
-  
-    const contenido = [
-      cabeceras.join(";"),
-      ...filas.map((fila) =>
-        cabeceras
-          .map((cabecera) =>
-            `"${String(fila[cabecera] ?? "").replace(/"/g, '""')}"`
-          )
-          .join(";")
-      ),
-    ].join("\n");
-  
-    const blob = new Blob(["\ufeff" + contenido], {
-      type: "text/csv;charset=utf-8;",
-    });
-  
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-  
-    link.href = url;
-    link.download = nombreArchivo;
-    link.click();
-  
-    URL.revokeObjectURL(url);
+    if (filas.length === 0) return;
+
+const hoja = XLSX.utils.json_to_sheet(filas);
+
+// Ajustar automáticamente el ancho de cada columna
+const cabeceras = Object.keys(filas[0]);
+
+hoja["!cols"] = cabeceras.map((cabecera) => {
+  const anchoMaximo = Math.max(
+    cabecera.length,
+    ...filas.map((fila) =>
+      String(fila[cabecera] ?? "").length
+    )
+  );
+
+  return {
+    wch: Math.min(anchoMaximo + 2, 45),
+  };
+});
+
+const libro = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(libro, hoja, "Listado");
+
+XLSX.writeFile(
+  libro,
+  nombreArchivo.replace(".csv", ".xlsx")
+);
   }
 
   const sociosNacimiento = socios
