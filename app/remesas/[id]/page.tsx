@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import ExportarRemesaExcelButton from "@/app/components/ExportarRemesaExcelButton";
 import PrintButton from "@/app/components/PrintButton";
 import EditarImporteRemesaInput from "@/app/components/EditarImporteRemesaInput";
+import EditarImporteReciboRemesaInput from "@/app/components/EditarImporteReciboRemesaInput";
 import QuitarLineaRemesaButton from "@/app/components/QuitarLineaRemesaButton";
 import EditarFechaVencimientoInput from "@/app/components/EditarFechaVencimientoInput";
 import MarcarReciboAgrupadoDevueltoButton from "@/app/components/MarcarReciboAgrupadoDevueltoButton";
@@ -148,6 +149,8 @@ const remesaAgrupada: any[] = Object.values(
         acc[clave] = {
           NUMCENS_Pagador: linea.NUMCENS_Pagador,
           EstadoAgrupado: linea.Estado,
+          TitularCuenta: linea.TitularCuenta || null,
+          Lineas: [],
           NombreDeudor:
   linea.TitularCuenta ||
   (() => {
@@ -179,11 +182,23 @@ const remesaAgrupada: any[] = Object.values(
       }
 
       acc[clave].Importe += Number(linea.Importe || 0);
-      acc[clave].Concepto.push(
-        `${linea.NUMCENS}-${
-          linea.CUOTAS_SOCIOS?.Ejercicio || remesaAny?.Ejercicio
-        }-${linea.CUOTAS_PLAZOS?.NumeroPlazo || ""}`
-      );
+      acc[clave].Concepto.push(linea.NUMCENS);
+
+      acc[clave].Lineas.push({
+        IDDetalleRemesa: linea.IDDetalleRemesa,
+        NUMCENS: linea.NUMCENS,
+        NumeroPlazo: linea.CUOTAS_PLAZOS?.NumeroPlazo,
+        Nombre:
+          sociosRemesaAny.find(
+            (s) => Number(s.NUMCENS) === Number(linea.NUMCENS)
+          )?.Nombre || "",
+        Apellidos:
+          sociosRemesaAny.find(
+            (s) => Number(s.NUMCENS) === Number(linea.NUMCENS)
+          )?.Apellidos || "",
+        Importe: Number(linea.Importe || 0),
+        Estado: linea.Estado,
+      });
 
       if (
         String(linea.Estado || "").trim().toLowerCase() === "devuelto"
@@ -203,14 +218,18 @@ const remesaAgrupada: any[] = Object.values(
   );
 
   const remesaAgrupadaFiltrada = textoBusqueda
-  ? remesaAgrupada.filter((fila) => {
+  ? remesaAgrupada.filter((fila: any) => {
       const texto = [
         fila.NombreDeudor,
+        fila.NUMCENS_Pagador,
         fila.IBAN,
         fila.ReferenciaMandato,
         fila.ReferenciaAdeudo,
-        fila.Concepto,
-        fila.NUMCENS_Pagador,
+        ...(fila.Lineas || []).flatMap((linea: any) => [
+          linea.NUMCENS,
+          linea.Nombre,
+          linea.Apellidos,
+        ]),
       ]
         .filter(Boolean)
         .join(" ");
@@ -235,12 +254,25 @@ const remesaAgrupada: any[] = Object.values(
 
       <main className="min-w-0 flex-1 p-8">
         <div className="mx-auto max-w-7xl">
-          <Link
-            href="/remesas"
-            className="mb-6 inline-block text-sm font-medium text-red-900 hover:text-red-950"
-          >
-            ← Volver a remesas
-          </Link>
+        <div className="mb-6 flex items-center justify-between">
+  <Link
+    href="/remesas"
+    className="text-sm font-medium text-red-900 hover:text-red-950"
+  >
+    ← Volver a remesas
+  </Link>
+
+  <div className="flex items-center gap-2">
+    <PrintButton />
+
+    <ExportarRemesaExcelButton
+  filas={remesaAgrupada}
+  idRemesa={remesaAny?.IDRemesa}
+  ejercicio={remesaAny?.Ejercicio}
+  fechaVencimiento={remesaAny?.FechaVencimiento}
+/>
+  </div>
+</div>
 
           <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
             <div className="border-l-4 border-red-900 px-6 py-5">
@@ -248,227 +280,90 @@ const remesaAgrupada: any[] = Object.values(
                 Remesa {id}
               </h1>
 
-              <p className="mt-2 text-sm text-zinc-600">
-                Ejercicio {remesaAny?.Ejercicio} · Estado {remesaAny?.Estado} · Total{" "}
-                {total.toFixed(2)} €
-              </p>
+              <div className="mt-2 flex items-center justify-between gap-6">
+              <p className="text-base text-zinc-600">
+    Ejercicio {remesaAny?.Ejercicio} · Estado {remesaAny?.Estado} · Total{" "}
+    <span className="font-semibold text-zinc-900">
+      {total.toFixed(2)} €
+    </span>
+  </p>
+
+  <div className="flex items-center gap-2">
+  <span className="text-base font-semibold text-zinc-700">
+  Vencimiento
+</span>
+
+<EditarFechaVencimientoInput
+  idRemesa={Number(id)}
+  fechaInicial={remesaAny?.FechaVencimiento || ""}
+/>
+  </div>
+</div>
             </div>
           </section>
 
-          <section className="border border-zinc-200 bg-white">
-            <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-            <div className="w-full">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                  Líneas de remesa
-                </h2>
+          <section className="mt-8 border border-zinc-200 bg-white">
+          <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
+  <div>
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+      Vista agrupada para banco
+    </h2>
 
-                <p className="text-xs text-zinc-500">
-  Detalle interno para comprobar cuotas, pagadores e importes
-</p>
+    <p className="text-xs text-zinc-500">
+      Recibos agrupados por pagador
+    </p>
+  </div>
 
-<div className="mt-3 flex items-center justify-between">
-  <form
-    className="flex items-center gap-2"
-    method="get"
-  >
+  <div className="flex items-center gap-2">
+  <form method="get" className="flex items-center gap-2">
     <input
       type="text"
       name="buscar"
       defaultValue={buscar}
-      placeholder="Buscar socio, apellido, NUMCENS, pagador..."
-      className="h-9 w-80 border border-zinc-300 px-3 text-sm outline-none focus:border-red-900"
+      placeholder="Buscar socio, pagador, NUMCENS, IBAN..."
+      className="h-9 w-72 border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-red-900"
     />
 
-<button
-  type="submit"
-  className="h-9 bg-red-900 px-4 text-sm font-medium text-white hover:bg-red-950"
->
-  Buscar
-</button>
+    <button
+      type="submit"
+      className="h-9 bg-red-900 px-4 text-sm font-medium text-white hover:bg-red-950"
+    >
+      Buscar
+    </button>
 
-{remesaAny?.Estado !== "Cobrada" && (
-  <div className="flex gap-2">
-    <AgregarLineasRemesaButton
-      idRemesa={Number(id)}
-    />
-
-    <AgregarLineasRemesaButton
-      idRemesa={Number(id)}
-      modo="especial"
-    />
-  </div>
-)}
-
-{buscar && (
-  <a
-    href={`/remesas/${id}`}
-    className="flex h-9 items-center bg-zinc-200 px-4 text-sm font-medium hover:bg-zinc-300"
-  >
-    Limpiar
-  </a>
-)}
+    {buscar && (
+      <a
+        href={`/remesas/${id}`}
+        className="flex h-9 items-center bg-zinc-200 px-3 text-sm font-medium hover:bg-zinc-300"
+      >
+        Limpiar
+      </a>
+    )}
   </form>
 
-  <div className="flex items-center gap-2">
-    <PrintButton />
+  {remesaAny?.Estado !== "Cobrada" && (
+    <>
+      <AgregarLineasRemesaButton idRemesa={Number(id)} />
 
-    <ExportarRemesaExcelButton
-  filas={lineasAny}
-  idRemesa={remesaAny?.IDRemesa}
-  ejercicio={remesaAny?.Ejercicio}
-/>
-  </div>
-</div>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
-                  <tr>
-                    <th className="px-4 py-3">Socio cuota</th>
-                    <th className="px-4 py-3">Pagador</th>
-                    <th className="px-4 py-3">Ref. mandato</th>
-                    <th className="px-4 py-3">Cuota / plazo</th>
-                    <th className="px-4 py-3">Estado</th>
-                    <th className="px-4 py-3 text-right">Importe</th>
-                    <th className="px-4 py-3 text-center">Quitar</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {lineasAny.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
-                        Esta remesa no tiene líneas.
-                      </td>
-                    </tr>
-                  ) : (
-                    lineasFiltradas.map((linea) => {
-                      const socioCuota = sociosRemesaAny.find(
-                        (s) => Number(s.NUMCENS) === Number(linea.NUMCENS)
-                      );
-
-                      linea.socioCuotaNombre =
-                        `${socioCuota?.Apellidos || ""}, ${
-                          socioCuota?.Nombre || ""
-                        }`;
-
-                      const ejercicio =
-                        linea.CUOTAS_SOCIOS?.Ejercicio || remesaAny?.Ejercicio;
-                      const plazo = linea.CUOTAS_PLAZOS?.NumeroPlazo;
-
-                      const remesaCobrada = remesaAny?.Estado === "Cobrada";
-
-                      return (
-                        <tr
-  key={linea.IDDetalleRemesa}
-  className={
-    linea.Estado === "Añadida"
-      ? "border-t border-zinc-200 bg-blue-50 hover:bg-blue-100"
-      : "border-t border-zinc-200 hover:bg-red-50"
-  }
->
-                          <td className="px-2 py-0.5 font-medium">
-                            {linea.NUMCENS} · {socioCuota?.Apellidos || ""},{" "}
-                            {socioCuota?.Nombre || ""}
-                          </td>
-
-                          <td className="px-2 py-0.5">
-                            {linea.NUMCENS_Pagador || "-"}
-                          </td>
-
-                          <td className="px-2 py-0.5">
-                            {linea.NUMCENS || "?"}-
-                            {linea.CUOTAS_SOCIOS?.Ejercicio || remesaAny?.Ejercicio || "?"}-
-                            {linea.CUOTAS_PLAZOS?.NumeroPlazo || "?"}
-                          </td>
-
-                          <td className="px-2 py-0.5">
-                            Cuota {ejercicio} · Plazo {plazo}
-                          </td>
-
-                          <td className="px-2 py-0.5">
-  <span
-    className={
-      linea.Estado === "Cobrado"
-        ? "bg-green-100 px-1 py-1 text-xs font-semibold text-green-700"
-        : linea.Estado === "Parcial"
-        ? "bg-yellow-100 px-1 py-1 text-xs font-semibold text-yellow-700"
-        : linea.Estado === "Añadida"
-        ? "bg-blue-100 px-1 py-1 text-xs font-semibold text-blue-700"
-        : linea.Estado === "Devuelto"
-        ? "bg-orange-100 px-1 py-1 text-xs font-semibold text-orange-700"
-        : "bg-red-100 px-1 py-1 text-xs font-semibold text-red-700"
-    }
-  >
-    {linea.Estado || "-"}
-  </span>
-</td>
-
-<td className="px-4 py-3 text-right">
-{remesaAny?.Estado === "Cobrada" ? (
-  <span className="font-medium">
-    {Number(linea.Importe || 0).toFixed(2)} €
-  </span>
-) : (
-  <EditarImporteRemesaInput
-  idDetalleRemesa={linea.IDDetalleRemesa}
-  idRemesa={Number(id)}
-  importeInicial={linea.Importe}
-/>
-)}
-</td>
-
-<td className="px-4 py-3 text-center">
-  {String(linea.Estado || "")
-    .trim()
-    .toLowerCase()
-    .startsWith("cobrad") ? (
-    <span className="text-xs text-zinc-400">
-      NO ED.
-    </span>
-  ) : (
-    <QuitarLineaRemesaButton
-      idDetalleRemesa={linea.IDDetalleRemesa}
-    />
+      <AgregarLineasRemesaButton
+        idRemesa={Number(id)}
+        modo="especial"
+      />
+    </>
   )}
-</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            </section>
-
-          <section className="mt-8 border border-zinc-200 bg-white">
-            <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-                Vista agrupada para banco
-              </h2>
-
-              <ExportarRemesaExcelButton
-                filas={remesaAgrupada}
-                idRemesa={remesaAny?.IDRemesa}
-              />
-            </div>
+</div>
+</div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
+            <table className="w-full text-sm">
+            <thead className="bg-zinc-50 text-left text-sm uppercase text-zinc-600">
                   <tr>
-                    <th className="px-2 py-2">Nombre deudor</th>
-                    <th className="px-2 py-2">Referencia mandato</th>
-                    <th className="px-2 py-2">Cuenta cargo</th>
-                    <th className="px-2 py-2">Concepto</th>
-                    <th className="px-2 py-2">Fecha firma mandato</th>
-                    <th className="px-2 py-2">Referencia adeudo</th>
-                    <th className="px-2 py-2">Fecha vencimiento</th>
-                    <th className="px-2 py-2 text-right">Importe</th>
-                    <th className="px-2 py-2">Tipo adeudo</th>
-                    <th className="px-2 py-2 text-center">Acción</th>
+                  <th className="px-2 py-2">Nombre deudor</th>
+<th className="px-2 py-2">Referencia mandato</th>
+<th className="px-2 py-2">Cuenta cargo</th>
+<th className="px-2 py-2">Concepto</th>
+<th className="px-2 py-2 text-right">Importe</th>
+<th className="px-2 py-2 text-center">Acción</th>
                   </tr>
                 </thead>
 
@@ -478,41 +373,91 @@ const remesaAgrupada: any[] = Object.values(
     key={`${fila.IBAN}-${fila.NombreDeudor}`}
     className="border-t"
   >
-                      <td className="px-2 py-2">{fila.NombreDeudor}</td>
-                      <td className="px-2 py-2">{fila.ReferenciaMandato}</td>
-                      <td className="px-2 py-2">{fila.IBAN}</td>
-                      <td className="px-2 py-2">{fila.Concepto.join(", ")}</td>
-                      <td className="px-2 py-2">{formatearFecha(fila.FechaMandato)}</td>
-                      <td className="px-2 py-2">{fila.ReferenciaAdeudo}</td>
-                      <td className="px-2 py-2">
-  <EditarFechaVencimientoInput
-    idPlazo={fila.IDPlazo}
-    fechaInicial={fila.FechaVencimiento || ""}
-  />
-</td>
-<td className="px-4 py-3 text-right">
-  {fila.Importe.toFixed(2)} €
-</td>
+    <td className="px-2 py-2">
+    <details className="relative">
+        <summary className="cursor-pointer font-medium">
+          {fila.NombreDeudor}
+        </summary>
 
-<td className="px-4 py-3">RCUR</td>
+        <div className="absolute left-0 top-full z-20 mt-1 w-[360px] rounded-md border border-zinc-200 bg-white p-3 shadow-lg">
+  {fila.Lineas?.map((linea: any) => (
+    <div
+      key={linea.IDDetalleRemesa}
+      className="flex items-center justify-between gap-4 border-b border-zinc-100 py-2 last:border-b-0"
+    >
+      <span className="text-xs text-zinc-700">
+        {linea.NUMCENS} ·{" "}
+        {[linea.Apellidos, linea.Nombre]
+          .filter(Boolean)
+          .join(", ")}
+      </span>
 
-<td className="px-4 py-3 text-center">
-  {fila.EstadoAgrupado === "Devuelto" ? (
-    <AnularReciboAgrupadoDevueltoButton
-      idRemesa={Number(id)}
-      numcensPagador={Number(fila.NUMCENS_Pagador)}
-      iban={fila.IBAN}
-    />
+      <div className="flex items-center gap-2">
+  {remesaAny?.Estado === "Cobrada" ? (
+    <span className="whitespace-nowrap text-xs font-semibold">
+      {Number(linea.Importe || 0).toFixed(2)} €
+    </span>
   ) : (
-    <MarcarReciboAgrupadoDevueltoButton
-      idRemesa={Number(id)}
-      numcensPagador={Number(fila.NUMCENS_Pagador)}
-      iban={fila.IBAN}
+    <EditarImporteRemesaInput
+      idDetalleRemesa={linea.IDDetalleRemesa}
+      importeInicial={Number(linea.Importe || 0)}
     />
   )}
+
+  {remesaAny?.Estado !== "Cobrada" && (
+    <QuitarLineaRemesaButton
+      idDetalleRemesa={linea.IDDetalleRemesa}
+    />
+  )}
+</div>
+    </div>
+  ))}
+</div>
+      </details>
+    </td>
+
+    <td className="px-2 py-2">{fila.ReferenciaMandato}</td>
+
+    <td className="px-2 py-2">{fila.IBAN}</td>
+
+    <td className="px-2 py-2">
+  {fila.Concepto.join("-")}/
+  {remesaAny?.Ejercicio}/
+  {fila.Lineas?.[0]?.NumeroPlazo || fila.NumeroPlazo || ""}
 </td>
-                    </tr>
-                  ))}
+
+    <td className="px-4 py-3 text-right">
+      {remesaAny?.Estado === "Cobrada" ? (
+        <span className="font-medium">
+          {Number(fila.Importe || 0).toFixed(2)} €
+        </span>
+      ) : (
+        <EditarImporteReciboRemesaInput
+          idRemesa={Number(id)}
+          iban={fila.IBAN || null}
+          titularCuenta={fila.TitularCuenta || null}
+          importeInicial={Number(fila.Importe || 0)}
+        />
+      )}
+    </td>
+
+    <td className="px-4 py-3 text-center">
+      {fila.EstadoAgrupado === "Devuelto" ? (
+        <AnularReciboAgrupadoDevueltoButton
+          idRemesa={Number(id)}
+          numcensPagador={Number(fila.NUMCENS_Pagador)}
+          iban={fila.IBAN}
+        />
+      ) : (
+        <MarcarReciboAgrupadoDevueltoButton
+          idRemesa={Number(id)}
+          numcensPagador={Number(fila.NUMCENS_Pagador)}
+          iban={fila.IBAN}
+        />
+      )}
+    </td>
+  </tr>
+))}
                 </tbody>
               </table>
             </div>

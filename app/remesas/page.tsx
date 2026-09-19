@@ -337,7 +337,7 @@ export default function RemesasPage() {
                       <th className="px-4 py-3">ID</th>
                       <th className="px-4 py-3">Ejercicio</th>
                       <th className="px-4 py-3">Plazo</th>
-                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Vencimiento</th>
                       <th className="px-4 py-3 text-right">Total</th>
                       <th className="px-4 py-3">Estado</th>
 <th className="px-4 py-3 text-right">Borrar</th>
@@ -365,7 +365,7 @@ export default function RemesasPage() {
       </td>
 
       <td className="px-4 py-3">
-  {formatearFecha(remesa.FechaRemesa)}
+  {formatearFecha(remesa.FechaVencimiento)}
 </td>
 
       <td className="px-4 py-3 text-right">
