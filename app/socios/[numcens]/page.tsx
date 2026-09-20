@@ -5,6 +5,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 import HistorialSocioModal from "../../components/HistorialSocioModal";
 import ExcelSocioButton from "../../components/ExcelSocioButton";
+import LoteriaSocioDesplegable from "../../components/LoteriaSocioDesplegable";
 
 export default async function SocioPage({
   params,
@@ -312,7 +313,7 @@ const textoResponsableLoteria = grupoLoteria
 
   <div className="grid grid-cols-2 lg:grid-cols-6">
   <Bloque
-  label="Fecha nacimiento"
+  label="F. Nacimiento"
   value={
     socioAny["FECHA de NACIMIENTO"]
       ? new Date(socioAny["FECHA de NACIMIENTO"])
@@ -327,53 +328,40 @@ const textoResponsableLoteria = grupoLoteria
     <Bloque label="Código postal" value={socioAny["Código Postal"]} />
     <Bloque label="Ciudad" value={socioAny.Ciudad} />
   </div>
-  <div className="border-t border-zinc-200">
-  <Bloque
-    label="Dirección"
-    value={socioAny.Dirección}
-  />
+  <div className="flex items-center gap-3 border-t border-zinc-200 px-4 py-3">
+  <span className="text-xs font-semibold uppercase text-zinc-500">
+    Dirección
+  </span>
+
+  <span className="text-sm text-zinc-900">
+    {socioAny.Dirección || "-"}
+  </span>
 </div>
 </section>
 
-<section className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+<section className="mb-8">
   <div className="border border-zinc-200 bg-white">
-    <div className="bg-zinc-100 px-4 py-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-        Configuración socio
-      </h2>
-    </div>
+  <div className="bg-zinc-100 px-4 py-3">
+  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
+    Configuración socio
+  </h2>
+</div>
 
-    <div className="grid grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 lg:grid-cols-5">
       <Bloque label="Comisión" value={socioAny.Comision} />
       <Bloque label="Sexo" value={socioAny.SEXE} />
       <Bloque label="Banda" value={socioAny.EsBanda ? "Sí" : "No"} />
       <Bloque label="Cargo" value={socioAny.CARREG} />
-    </div>
-  </div>
 
-  <div className="border border-zinc-200 bg-white">
-  <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-    Lotería
-  </h2>
-
-  {grupoLoteria && (
-    <Link
-      href={`/loterias/socios-loteria/${grupoLoteria.ID}`}
-      className="bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
-    >
-      Gestionar lotería
-    </Link>
-  )}
-</div>
-
-    <div className="grid grid-cols-2 lg:grid-cols-6">
-      <Bloque label="Lotería" value={socioAny.ConLoteria ? "Sí" : "No"} />
-      <Bloque label="Resp." value={textoResponsableLoteria} />
-      <Bloque label="Falla" value={grupoLoteria?.PapeletasFalla || 0} />
-<Bloque label="Virgen" value={grupoLoteria?.PapeletasVirgen || 0} />
-<Bloque label="Navidad" value={grupoLoteria?.PapeletasNavidad || 0} />
-<Bloque label="Niño" value={grupoLoteria?.PapeletasNino || 0} />
+      <LoteriaSocioDesplegable
+  conLoteria={Boolean(socioAny.ConLoteria)}
+  falla={Number(grupoLoteria?.PapeletasFalla || 0)}
+  virgen={Number(grupoLoteria?.PapeletasVirgen || 0)}
+  navidad={Number(grupoLoteria?.PapeletasNavidad || 0)}
+  nino={Number(grupoLoteria?.PapeletasNino || 0)}
+  responsable={textoResponsableLoteria}
+  numcens={Number(numcens)}
+/>
     </div>
   </div>
 </section>
@@ -389,7 +377,7 @@ const textoResponsableLoteria = grupoLoteria
     </p>
   </div>
 
-  <div className="grid grid-cols-2 lg:grid-cols-5">
+  <div className="grid grid-cols-2 lg:grid-cols-[0.8fr_1.2fr_2fr_0.8fr_0.6fr]">
   <Bloque
     label="Cuota actual"
     value={
@@ -424,12 +412,16 @@ const textoResponsableLoteria = grupoLoteria
   />
 </div>
 
-<div className="border-t border-zinc-200">
-  <Bloque
-    label="Pagador"
-    value={textoPagador}
-  />
+<div className="flex items-center gap-3 border-t border-zinc-200 px-4 py-3">
+  <span className="text-xs font-semibold uppercase text-zinc-500">
+    Pagador
+  </span>
+
+  <span className="text-sm text-zinc-900">
+    {textoPagador}
+  </span>
 </div>
+
 </section>
           <section className="mb-10 border border-zinc-200 bg-white">
           <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">

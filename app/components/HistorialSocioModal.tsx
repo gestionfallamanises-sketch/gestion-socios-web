@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import EditarCargoHistorial from "./EditarCargoHistorial";
+import AnadirHistorialSocioModal from "./AnadirHistorialSocioModal";
 
 export default function HistorialSocioModal({
   numcens,
@@ -19,31 +20,50 @@ export default function HistorialSocioModal({
   const [historial, setHistorial] = useState<any[]>([]);
   const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
   const [cargando, setCargando] = useState(false);
+  const [antiguedadActual, setAntiguedadActual] = useState<string | null>(
+    antiguedad
+  );
 
-  async function abrirHistorial() {
-    setAbierto(true);
+  async function cargarHistorial() {
     setCargando(true);
-
-    const [{ data: historialData }, { data: ejercicioData }] =
-      await Promise.all([
-        supabase
-          .from("HISTORIAL_SOCIOS")
-          .select(
-            "ID, NUMCENS, Ejercicio, Fecha_Alta_Baja, Estado, Cargo, CategoriaCargo"
-          )
-          .eq("NUMCENS", numcens)
-          .order("Ejercicio", { ascending: true }),
-
-        supabase
-          .from("EJERCICIOS")
-          .select("Ejercicio")
-          .eq("Activo", true)
-          .maybeSingle(),
-      ]);
-
+  
+    const [
+      { data: historialData },
+      { data: ejercicioData },
+      { data: antiguedadData },
+    ] = await Promise.all([
+      supabase
+        .from("HISTORIAL_SOCIOS")
+        .select(
+          "ID, NUMCENS, Ejercicio, Fecha_Alta_Baja, Estado, Cargo, CategoriaCargo"
+        )
+        .eq("NUMCENS", numcens)
+        .order("Ejercicio", { ascending: true }),
+  
+      supabase
+        .from("EJERCICIOS")
+        .select("Ejercicio")
+        .eq("Activo", true)
+        .maybeSingle(),
+  
+      supabase
+        .from("SOCIOS_ANTIGUEDAD_CALCULADA")
+        .select("Antiguedad_Calculada")
+        .eq("NUMCENS", numcens)
+        .maybeSingle(),
+    ]);
+  
     setHistorial(historialData || []);
     setEjercicioActivo(ejercicioData?.Ejercicio ?? null);
+    setAntiguedadActual(
+      antiguedadData?.Antiguedad_Calculada ?? antiguedad
+    );
     setCargando(false);
+  }
+  
+  async function abrirHistorial() {
+    setAbierto(true);
+    await cargarHistorial();
   }
 
   const mitad = Math.ceil(historial.length / 2);
@@ -53,6 +73,7 @@ export default function HistorialSocioModal({
   function imprimirHistorial() {
     window.print();
   }
+  
   
   function exportarHistorial() {
     const filas = historial.map((movimiento) => ({
@@ -147,7 +168,7 @@ export default function HistorialSocioModal({
       {abierto && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
-          onClick={() => setAbierto(false)}
+          onClick={() => window.location.reload()}
         >
           <div
   id="historial-modal"
@@ -164,30 +185,42 @@ export default function HistorialSocioModal({
                   <span className="font-semibold uppercase">
                     {apellidos}, {nombre}
                   </span>{" "}
-                  · NUMCENS {numcens} · Antigüedad: {antiguedad || "-"}
+                  · NUMCENS {numcens} · Antigüedad: {antiguedadActual || "-"}
                 </p>
               </div>
 
               <div className="no-print flex items-center gap-2">
-  <button
-    type="button"
-    onClick={exportarHistorial}
-    className="border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
-  >
-    Excel
-  </button>
+              
+              <AnadirHistorialSocioModal
+  numcens={numcens}
+  onGuardado={(nuevoMovimiento) => {
+    setHistorial((actual) =>
+      [...actual, nuevoMovimiento].sort(
+        (a, b) => Number(a.Ejercicio) - Number(b.Ejercicio)
+      )
+    );
+  }}
+/>
+ 
+<button
+  type="button"
+  onClick={exportarHistorial}
+  className="h-[38px] border border-zinc-300 bg-zinc-200 px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-300"
+>
+  Excel
+</button>
+
+<button
+  type="button"
+  onClick={imprimirHistorial}
+  className="h-[38px] bg-red-900 px-3 text-sm font-medium text-white hover:bg-red-950"
+>
+  Imprimir
+</button>
 
   <button
     type="button"
-    onClick={imprimirHistorial}
-    className="bg-red-900 px-3 py-2 text-sm font-medium text-white hover:bg-red-950"
-  >
-    Imprimir
-  </button>
-
-  <button
-    type="button"
-    onClick={() => setAbierto(false)}
+    onClick={() => window.location.reload()}
     className="flex h-8 w-8 items-center justify-center text-xl text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900"
     aria-label="Cerrar"
   >

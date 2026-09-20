@@ -3,12 +3,15 @@
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import GrupoLoteriaModal from "@/app/components/GrupoLoteriaModal";
 import { normalizarTexto } from "@/lib/texto";
 
 export default function SociosLoteriaPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+const numcensDesdeFicha = searchParams.get("numcens");
+const volverDesdeFicha = searchParams.get("volver");
 
     const [mostrarModal, setMostrarModal] = useState(false);
     const [socios, setSocios] = useState<any[]>([]);
@@ -59,6 +62,57 @@ useEffect(() => {
       cargarReglasPapeletas();
     }
   }, [ejercicioActivo]);
+
+  useEffect(() => {
+    if (!numcensDesdeFicha || socios.length === 0) return;
+  
+    let cancelado = false;
+  
+    async function abrirModalDesdeFicha() {
+      const socio = socios.find(
+        (s: any) => Number(s.NUMCENS) === Number(numcensDesdeFicha)
+      );
+  
+      if (!socio || cancelado) return;
+  
+      const { data: detalle, error } = await (supabase as any)
+        .from("SOCIOS_LOTERIA_DETALLE")
+        .select("IDSocioLoteria")
+        .eq("NUMCENS", Number(numcensDesdeFicha))
+        .maybeSingle();
+  
+      if (error) {
+        console.error("Error buscando grupo del socio:", error);
+        return;
+      }
+  
+      // YA TIENE GRUPO → EDITAR
+      if (detalle?.IDSocioLoteria) {
+        const grupo = gruposLoteria.find(
+          (g: any) =>
+            Number(g.ID) === Number(detalle.IDSocioLoteria)
+        );
+  
+        if (grupo) {
+          await editarGrupo(grupo);
+          return;
+        }
+      }
+  
+      // NO TIENE GRUPO → NUEVO
+      setGrupoEditando(null);
+      setResponsableSeleccionado(socio);
+      setBusquedaResponsable(textoSocio(socio));
+      setSociosIncluidos([socio]);
+      setMostrarModal(true);
+    }
+  
+    abrirModalDesdeFicha();
+  
+    return () => {
+      cancelado = true;
+    };
+  }, [numcensDesdeFicha, socios, gruposLoteria]);
 
   async function cargarEjercicioActivo() {
     const { data, error } = await (supabase as any)
@@ -283,14 +337,20 @@ const nombreInvertido = normalizarTexto(
         }
       
         alert("Grupo actualizado correctamente");
-      
-        limpiarFormulario();
-        setGrupoEditando(null);
-        setMostrarModal(false);
-        cargarGruposLoteria();
-        cargarNumcensYaUsados();
-      
-        return;
+
+limpiarFormulario();
+setGrupoEditando(null);
+setMostrarModal(false);
+
+if (volverDesdeFicha) {
+  router.push(volverDesdeFicha);
+  return;
+}
+
+cargarGruposLoteria();
+cargarNumcensYaUsados();
+
+return;
       }
       
     const { data: grupo, error: errorGrupo } = await (supabase as any)
@@ -329,11 +389,17 @@ const nombreInvertido = normalizarTexto(
     }
   
     alert("Grupo de lotería guardado correctamente");
-  
-    limpiarFormulario();
-    setMostrarModal(false);
-    cargarGruposLoteria();
-    cargarNumcensYaUsados();
+
+limpiarFormulario();
+setMostrarModal(false);
+
+if (volverDesdeFicha) {
+  router.push(volverDesdeFicha);
+  return;
+}
+
+cargarGruposLoteria();
+cargarNumcensYaUsados();
   }
 
   async function guardarExterno() {
@@ -579,6 +645,17 @@ const nombreB = normalizarTexto(b.ResponsableOrden || "");
       : nombreB.localeCompare(nombreA);
   });
 
+
+  function cerrarModalLoteria() {
+    limpiarFormulario();
+    setGrupoEditando(null);
+    setMostrarModal(false);
+  
+    if (volverDesdeFicha) {
+      router.push(volverDesdeFicha);
+    }
+  }
+
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <Sidebar />
@@ -798,7 +875,13 @@ setObservaciones={setObservaciones}
 limpiarFormulario={limpiarFormulario}
 
 setGrupoEditando={setGrupoEditando}
-setMostrarModal={setMostrarModal}
+setMostrarModal={(valor: boolean) => {
+  if (valor) {
+    setMostrarModal(true);
+  } else {
+    cerrarModalLoteria();
+  }
+}}
 
 guardarGrupoLoteria={guardarGrupoLoteria}
 />
