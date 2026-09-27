@@ -23,8 +23,9 @@ const entregaVacia = {
   Devueltas: 0,
 
   Serie: "",
+Recibo: "",
 
-  Observaciones: "",
+Observaciones: "",
 };
 
 function euros(valor: number) {
@@ -319,8 +320,9 @@ const [direccionOrden, setDireccionOrden] =
           Papeletas: Number(entrega.Papeletas || 0),
           Devueltas: Number(entrega.Devueltas || 0),
           Serie: entrega.Serie || null,
-          
-          Observaciones: entrega.Observaciones || null,
+Recibo: entrega.Recibo || null,
+
+Observaciones: entrega.Observaciones || null,
         };
       
         let error;
@@ -452,8 +454,9 @@ const pendienteCobro = entregas.reduce((suma, fila) => {
       FechaEntrega: fila.FechaEntrega || "",
       Papeletas: Number(fila.Papeletas || 0),
       Devueltas: Number(fila.Devueltas || 0),
-      Serie: fila.Serie || "",
-      Observaciones: fila.Observaciones || "",
+Serie: fila.Serie || "",
+Recibo: fila.Recibo || "",
+Observaciones: fila.Observaciones || "",
     });
   
     if (fila.NUMCENS) {

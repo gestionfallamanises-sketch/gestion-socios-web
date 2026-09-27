@@ -84,7 +84,7 @@ eliminarPago,
 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
 
   <div>
     <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
@@ -160,6 +160,25 @@ eliminarPago,
       className="w-full border border-zinc-300 px-2 py-1 text-sm"
     />
   </div>
+
+  <div>
+  <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
+    Recibo nº
+  </label>
+
+  <input
+    type="text"
+    value={entrega.Recibo ?? ""}
+    onChange={(e) =>
+      setEntrega({
+        ...entrega,
+        Recibo: e.target.value,
+      })
+    }
+    placeholder="Nº recibo"
+    className="w-full border border-zinc-300 px-2 py-1 text-sm"
+  />
+</div>
 
 </div>
 

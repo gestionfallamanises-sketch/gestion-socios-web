@@ -62,8 +62,15 @@ async function cerrarSesion() {
   Loterías
 </Link>
 
-        <Link
-          href="/configuracion"
+<Link
+  href="/monedero"
+  className="block rounded-lg px-4 py-2 hover:bg-zinc-600"
+>
+  Monedero
+</Link>
+
+<Link
+  href="/configuracion"
           className="block rounded-lg px-4 py-2 hover:bg-zinc-600"
         >
           Configuración

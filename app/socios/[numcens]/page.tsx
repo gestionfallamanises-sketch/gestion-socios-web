@@ -6,6 +6,7 @@ import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 import HistorialSocioModal from "../../components/HistorialSocioModal";
 import ExcelSocioButton from "../../components/ExcelSocioButton";
 import LoteriaSocioDesplegable from "../../components/LoteriaSocioDesplegable";
+import MonederoSocioDesplegable from "../../components/MonederoSocioDesplegable";
 
 export default async function SocioPage({
   params,
@@ -101,6 +102,14 @@ export default async function SocioPage({
   : { data: null };
 
 const resumenCuotaActualAny = resumenCuotaActual as any;
+
+const { data: monedero } = await supabase
+  .from("MONEDEROS")
+  .select("IDMonedero, Saldo, Activo, TokenQR")
+  .eq("NUMCENS", Number(socioAny.NUMCENS))
+  .maybeSingle();
+
+const monederoAny = monedero as any;
 
 const totalPagadoReal = Number(resumenCuotaActualAny?.TotalPagado || 0);
 const totalPendienteReal = Number(resumenCuotaActualAny?.Pendiente || 0);
@@ -599,6 +608,17 @@ const textoResponsableLoteria = grupoLoteria
       {totalPendienteReal.toFixed(2)} €
       </div>
     </div>
+
+    <MonederoSocioDesplegable
+  numcens={Number(socioAny.NUMCENS)}
+  nombre={socioAny.Nombre || ""}
+  apellidos={socioAny.Apellidos || ""}
+  monederoId={monederoAny?.IDMonedero ?? null}
+  tokenQR={monederoAny?.TokenQR ?? null}
+  tieneMonedero={Boolean(monederoAny)}
+  saldo={Number(monederoAny?.Saldo || 0)}
+  activo={Boolean(monederoAny?.Activo)}
+/>
   </div>
 </section>
 
