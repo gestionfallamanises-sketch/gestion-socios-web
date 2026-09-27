@@ -2,12 +2,12 @@
 
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import GrupoLoteriaModal from "@/app/components/GrupoLoteriaModal";
 import { normalizarTexto } from "@/lib/texto";
 
-export default function SociosLoteriaPage() {
+function SociosLoteriaContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 const numcensDesdeFicha = searchParams.get("numcens");
@@ -1047,5 +1047,18 @@ guardarGrupoLoteria={guardarGrupoLoteria}
 )}
       </main>
     </div>
+  );
+}
+export default function SociosLoteriaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-zinc-100">
+          <p className="text-sm text-zinc-500">Cargando...</p>
+        </div>
+      }
+    >
+      <SociosLoteriaContent />
+    </Suspense>
   );
 }
