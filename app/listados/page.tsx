@@ -35,6 +35,7 @@ const [orden, setOrden] = useState("NOMBRE");
     const [socios, setSocios] = useState<any[]>([]);
 const [error, setError] = useState<string | null>(null);
 const [cuotas, setCuotas] = useState<any[]>([]);
+const [formasPagoSocios, setFormasPagoSocios] = useState<any[]>([]);
 const [ejercicios, setEjercicios] = useState<any[]>([]);
 const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<number | null>(null);
 const [filtroTipoCuota, setFiltroTipoCuota] = useState("TODOS");
@@ -42,8 +43,36 @@ const [filtroPendiente, setFiltroPendiente] = useState("TODOS");
 const [filtroFormaPago, setFiltroFormaPago] = useState("TODAS");
 const [filtroEstadoCuota, setFiltroEstadoCuota] = useState("TODOS");
 const [pagadores, setPagadores] = useState<any[]>([]);
+const [pagadoresEditados, setPagadoresEditados] = useState<
+  Record<number, any>
+>({});
+
+const [guardandoPagador, setGuardandoPagador] = useState<number | null>(null);
+
+const [mensajePagador, setMensajePagador] = useState<{
+  numcens: number;
+  tipo: "ok" | "error";
+  texto: string;
+} | null>(null);
 const [filtroMetodoPagador, setFiltroMetodoPagador] = useState("TODOS");
 const [filtroIBAN, setFiltroIBAN] = useState("TODOS");
+const [pagadoresSocioEditados, setPagadoresSocioEditados] = useState<
+  Record<number, number>
+>({});
+const [editandoPagadorSocio, setEditandoPagadorSocio] =
+  useState<number | null>(null);
+
+const [busquedaNuevoPagador, setBusquedaNuevoPagador] =
+  useState("");
+
+const [guardandoPagadorSocio, setGuardandoPagadorSocio] =
+  useState<number | null>(null);
+
+const [mensajePagadorSocio, setMensajePagadorSocio] = useState<{
+  numcens: number;
+  tipo: "ok" | "error";
+  texto: string;
+} | null>(null);
 const [fechaNacimientoDesde, setFechaNacimientoDesde] = useState("");
 const [fechaNacimientoHasta, setFechaNacimientoHasta] = useState("");
 const [cargos, setCargos] = useState<any[]>([]);
@@ -280,6 +309,24 @@ useEffect(() => {
   }, [ejercicioSeleccionado]);
 
   useEffect(() => {
+    async function fetchFormasPagoSocios() {
+      const { data, error } = await supabase
+        .from("FORMAS_PAGO_SOCIOS")
+        .select("NUMCENS, NUMCENS_Pagador")
+        .eq("Activo", true);
+  
+      if (error) {
+        setError(error.message);
+        return;
+      }
+  
+      setFormasPagoSocios(data || []);
+    }
+  
+    fetchFormasPagoSocios();
+  }, []);
+
+  useEffect(() => {
     async function fetchPagadores() {
       const { data, error } = await supabase
         .from("v_pagadores")
@@ -449,41 +496,34 @@ const sociosBaja = socios
       });
 
       const pagadorSocios = cuotas
-      
-      .filter((cuota) => {
-        const socioRelacionado = socios.find(
-          (socio) => Number(socio.NUMCENS) === Number(cuota.NUMCENS)
-        );
-        
-        const numcensPagador =
-          cuota.NUMCENS_Pagador || cuota.NUMCENS;
-        
-        const socioPagador = socios.find(
-          (socio) => Number(socio.NUMCENS) === Number(numcensPagador)
-        );
-        
-        if (
-          !socioRelacionado ||
-          socioRelacionado.Estado !== "Activo" ||
-          !socioPagador ||
-          socioPagador.Estado !== "Activo"
-        ) {
-          return false;
-        }
-        const coincideMetodo =
-          filtroMetodoPagador === "TODOS" ||
-          cuota.Metodo === filtroMetodoPagador;
-      
-        const textoBusqueda = normalizarTexto(
-          `${cuota.PagadorNombre || ""} ${cuota.NUMCENS_Pagador || ""} ${cuota.Apellidos || ""} ${cuota.Nombre || ""} ${cuota.NUMCENS || ""}`
-        );
-      
-        const coincideBusqueda =
-          normalizarTexto(busquedaSocio) === "" ||
-          textoBusqueda.includes(normalizarTexto(busquedaSocio));
-      
-        return coincideMetodo && coincideBusqueda;
-      })
+  .filter((cuota) => {
+    const socioRelacionado = socios.find(
+      (socio) => Number(socio.NUMCENS) === Number(cuota.NUMCENS)
+    );
+
+    // El socio debe estar activo.
+    // El pagador puede estar activo o de baja.
+    if (
+      !socioRelacionado ||
+      socioRelacionado.Estado !== "Activo"
+    ) {
+      return false;
+    }
+
+    const coincideMetodo =
+      filtroMetodoPagador === "TODOS" ||
+      cuota.Metodo === filtroMetodoPagador;
+
+    const textoBusqueda = normalizarTexto(
+      `${cuota.PagadorNombre || ""} ${cuota.NUMCENS_Pagador || ""} ${cuota.Apellidos || ""} ${cuota.Nombre || ""} ${cuota.NUMCENS || ""}`
+    );
+
+    const coincideBusqueda =
+      normalizarTexto(busquedaSocio) === "" ||
+      textoBusqueda.includes(normalizarTexto(busquedaSocio));
+
+    return coincideMetodo && coincideBusqueda;
+  })
   .sort((a, b) => {
     const pagadorA = String(a.PagadorNombre || a.NUMCENS_Pagador || "");
     const pagadorB = String(b.PagadorNombre || b.NUMCENS_Pagador || "");
@@ -552,6 +592,245 @@ const sociosMostrados = sociosBase
     const nombreB = `${b.Apellidos || ""}, ${b.Nombre || ""}`.toLowerCase();
     return nombreA.localeCompare(nombreB);
   });
+
+  function cambiarDatoPagador(
+    numcens: number,
+    campo: string,
+    valor: string | number
+  ) {
+    setPagadoresEditados((actual) => ({
+      ...actual,
+      [numcens]: {
+        ...(actual[numcens] || {}),
+        [campo]: valor,
+      },
+    }));
+  
+    setMensajePagador(null);
+  }
+  
+  async function guardarPagador(numcens: number) {
+    const cambios = pagadoresEditados[numcens];
+  
+    if (!cambios) return;
+  
+    setGuardandoPagador(numcens);
+    setMensajePagador(null);
+  
+    try {
+      // ─────────────────────────────
+      // 1. DATOS BANCARIOS
+      // ─────────────────────────────
+      if (
+        cambios.IBAN !== undefined ||
+        cambios.TitularCuenta !== undefined
+      ) {
+        const { data: bancoActual, error: errorBuscarBanco } = await supabase
+          .from("DATOS_BANCARIOS")
+          .select("*")
+          .eq("NUMCENS", numcens)
+          .maybeSingle();
+  
+        if (errorBuscarBanco) throw errorBuscarBanco;
+  
+        const ibanFinal =
+          cambios.IBAN !== undefined
+            ? cambios.IBAN
+            : bancoActual?.IBAN || "";
+  
+        const titularFinal =
+          cambios.TitularCuenta !== undefined
+            ? cambios.TitularCuenta
+            : bancoActual?.TitularCuenta || "";
+  
+        if (bancoActual) {
+          const { error } = await supabase
+            .from("DATOS_BANCARIOS")
+            .update({
+              IBAN: ibanFinal,
+              TitularCuenta: titularFinal || null,
+            })
+            .eq("NUMCENS", numcens);
+  
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from("DATOS_BANCARIOS")
+            .insert({
+              NUMCENS: numcens,
+              IBAN: ibanFinal,
+              TitularCuenta: titularFinal || null,
+            });
+  
+          if (error) throw error;
+        }
+      }
+  
+      // ─────────────────────────────
+      // 2. FORMA DE PAGO
+      // ─────────────────────────────
+      if (cambios.Metodo !== undefined) {
+        const { data: formaActual, error: errorFormaActual } = await supabase
+          .from("FORMAS_PAGO_SOCIOS")
+          .select("*")
+          .eq("NUMCENS", numcens)
+          .eq("Activo", true)
+          .maybeSingle();
+  
+        if (errorFormaActual) throw errorFormaActual;
+  
+        if (!formaActual) {
+          throw new Error(
+            "No se ha encontrado una forma de pago activa para este pagador."
+          );
+        }
+  
+        const { error: errorDesactivar } = await supabase
+          .from("FORMAS_PAGO_SOCIOS")
+          .update({ Activo: false })
+          .eq("NUMCENS", numcens)
+          .eq("Activo", true);
+  
+        if (errorDesactivar) throw errorDesactivar;
+  
+        const numeroPlazos = Number(formaActual.NumeroPlazos || 1);
+  
+        const { error: errorInsertar } = await supabase
+          .from("FORMAS_PAGO_SOCIOS")
+          .insert({
+            NUMCENS: numcens,
+            Metodo: cambios.Metodo,
+            NumeroPlazos: numeroPlazos,
+            Fraccionado: numeroPlazos > 1,
+            Activo: true,
+            NUMCENS_Pagador:
+              formaActual.NUMCENS_Pagador ?? numcens,
+            Observaciones: formaActual.Observaciones ?? null,
+          });
+  
+        if (errorInsertar) throw errorInsertar;
+      }
+  
+      // Actualizamos la fila que ya tenemos en pantalla.
+      setPagadores((actual) =>
+        actual.map((p) =>
+          Number(p.Pagador) === numcens
+            ? {
+                ...p,
+                ...cambios,
+              }
+            : p
+        )
+      );
+  
+      // Quitamos los cambios pendientes de esa fila.
+      setPagadoresEditados((actual) => {
+        const copia = { ...actual };
+        delete copia[numcens];
+        return copia;
+      });
+  
+      setMensajePagador({
+        numcens,
+        tipo: "ok",
+        texto: "Guardado",
+      });
+    } catch (err: any) {
+      setMensajePagador({
+        numcens,
+        tipo: "error",
+        texto: err?.message || "Error al guardar",
+      });
+    } finally {
+      setGuardandoPagador(null);
+    }
+  }
+
+  async function guardarPagadorSocio(numcensSocio: number) {
+    const nuevoPagador = pagadoresSocioEditados[numcensSocio];
+  
+    if (nuevoPagador === undefined) return;
+  
+    setGuardandoPagadorSocio(numcensSocio);
+    setMensajePagadorSocio(null);
+  
+    try {
+      const { error } = await supabase
+        .from("FORMAS_PAGO_SOCIOS")
+        .update({
+          NUMCENS_Pagador: Number(nuevoPagador),
+        })
+        .eq("NUMCENS", numcensSocio)
+        .eq("Activo", true);
+  
+      if (error) throw error;
+      setFormasPagoSocios((actual) =>
+        actual.map((forma) =>
+          Number(forma.NUMCENS) === numcensSocio
+            ? {
+                ...forma,
+                NUMCENS_Pagador: Number(nuevoPagador),
+              }
+            : forma
+        )
+      );
+  
+      // Actualizamos también el listado en pantalla
+      const datosNuevoPagador = socios.find(
+        (socio) =>
+          Number(socio.NUMCENS) === Number(nuevoPagador)
+      );
+  
+      setCuotas((actual: any[]) =>
+        actual.map((cuota: any) =>
+          Number(cuota.NUMCENS) === numcensSocio
+            ? {
+                ...cuota,
+                NUMCENS_Pagador: Number(nuevoPagador),
+                PagadorNombre: datosNuevoPagador
+                  ? `${datosNuevoPagador.Apellidos || ""}, ${
+                      datosNuevoPagador.Nombre || ""
+                    }`
+                  : cuota.PagadorNombre,
+              }
+            : cuota
+        )
+      );
+  
+      // Quitamos el cambio pendiente
+      setPagadoresSocioEditados((actual) => {
+        const copia = { ...actual };
+        delete copia[numcensSocio];
+        return copia;
+      });
+  
+      setMensajePagadorSocio({
+        numcens: numcensSocio,
+        tipo: "ok",
+        texto: "Guardado",
+      });
+    } catch (err: any) {
+      setMensajePagadorSocio({
+        numcens: numcensSocio,
+        tipo: "error",
+        texto: err?.message || "Error al guardar",
+      });
+    } finally {
+      setGuardandoPagadorSocio(null);
+    }
+  }
+
+  function cambiarPagadorSocio(
+    numcensSocio: number,
+    numcensPagador: number
+  ) {
+    setPagadoresSocioEditados((actual) => ({
+      ...actual,
+      [numcensSocio]: numcensPagador,
+    }));
+  
+    setMensajePagadorSocio(null);
+  }
 
   function tipoCuotaSocio(numcens: any) {
     const cuota = cuotas.find(
@@ -1203,6 +1482,9 @@ XLSX.writeFile(
         <th className="px-4 py-3">Titular</th>
         <th className="px-4 py-3 whitespace-nowrap">IBAN</th>
         <th className="w-16 px-4 py-3 text-right">Socios</th>
+        <th className="w-24 px-4 py-3 text-center print:hidden">
+  Guardar
+</th>
       </>
     ) : listado === "CARGOS" ? (
       <>
@@ -1346,69 +1628,323 @@ XLSX.writeFile(
       </tr>
     ))
   ) : listado === "PAGADOR_SOCIOS" ? (
-    pagadorSocios.map((cuota) => (
-      <tr
-        key={cuota.IDCuotaSocio}
-        className="border-t border-zinc-200 hover:bg-red-50"
+    pagadorSocios.map((cuota) => {
+      const numcensSocio = Number(cuota.NUMCENS);
+
+      const formaPagoActual = formasPagoSocios.find(
+        (forma) =>
+          Number(forma.NUMCENS) === numcensSocio
+      );
+      
+      const pagadorActual =
+        formaPagoActual?.NUMCENS_Pagador != null
+          ? Number(formaPagoActual.NUMCENS_Pagador)
+          : numcensSocio;
+  
+      const nuevoPagador =
+        pagadoresSocioEditados[numcensSocio];
+  
+      const socioNuevoPagador =
+        nuevoPagador !== undefined
+          ? socios.find(
+              (socio) =>
+                Number(socio.NUMCENS) === Number(nuevoPagador)
+            )
+          : null;
+  
+          const socioPagadorActual = socios.find(
+            (socio) =>
+              Number(socio.NUMCENS) === Number(pagadorActual)
+          );
+          
+          const nombrePagadorMostrado = socioNuevoPagador
+            ? `${socioNuevoPagador.Apellidos || ""}, ${
+                socioNuevoPagador.Nombre || ""
+              }`
+            : socioPagadorActual
+            ? `${socioPagadorActual.Apellidos || ""}, ${
+                socioPagadorActual.Nombre || ""
+              }`
+            : "Mismo socio";
+          
+          const numcensPagadorMostrado =
+            nuevoPagador ?? pagadorActual;
+  
+      return (
+        <tr
+          key={cuota.IDCuotaSocio}
+          className="border-t border-zinc-200 hover:bg-red-50"
+        >
+          <td className="px-4 py-3 text-zinc-600">
+            {numcensPagadorMostrado}
+          </td>
+  
+          <td className="px-4 py-3 font-medium text-zinc-900">
+          <div className="flex items-center gap-1.5">
+  <button
+    type="button"
+    onClick={() => {
+      if (editandoPagadorSocio === numcensSocio) {
+        setEditandoPagadorSocio(null);
+        setBusquedaNuevoPagador("");
+      } else {
+        setEditandoPagadorSocio(numcensSocio);
+        setBusquedaNuevoPagador("");
+      }
+    }}
+    className="flex h-4 w-4 shrink-0 items-center justify-center text-[11px] leading-none text-zinc-400 hover:text-red-600"
+    title="Cambiar pagador"
+  >
+    ✎
+  </button>
+
+  <span>{nombrePagadorMostrado}</span>
+  {nuevoPagador !== undefined && (
+  <>
+    <button
+      type="button"
+      onClick={() => guardarPagadorSocio(numcensSocio)}
+      disabled={guardandoPagadorSocio === numcensSocio}
+      className="ml-2 rounded bg-red-900 px-2 py-1 text-xs font-medium text-white hover:bg-red-800 disabled:opacity-50"
+    >
+      {guardandoPagadorSocio === numcensSocio
+        ? "Guardando..."
+        : "Guardar"}
+    </button>
+
+    {mensajePagadorSocio?.numcens === numcensSocio && (
+      <span
+        className={`ml-1 text-xs ${
+          mensajePagadorSocio.tipo === "ok"
+            ? "text-green-600"
+            : "text-red-600"
+        }`}
       >
-        <td className="px-4 py-3 text-zinc-600">
-          {cuota.NUMCENS_Pagador || cuota.NUMCENS || "-"}
-        </td>
+        {mensajePagadorSocio.texto}
+      </span>
+    )}
+  </>
+)}
+</div>
+  
+            {editandoPagadorSocio === numcensSocio && (
+              <div className="relative mt-2">
+                <input
+                  type="text"
+                  value={busquedaNuevoPagador}
+                  onChange={(e) =>
+                    setBusquedaNuevoPagador(e.target.value)
+                  }
+                  placeholder="Buscar por nombre o NUMCENS..."
+                  className="w-72 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-red-500"
+                  autoFocus
+                />
+  
+                {busquedaNuevoPagador.trim() !== "" && (
+                  <div className="absolute left-0 top-full z-50 mt-1 max-h-52 w-80 overflow-y-auto rounded-md border border-zinc-200 bg-white shadow-lg">
+                    {socios
+                      .filter((socio) => {
+                        const texto = normalizarTexto(
+                          `${socio.NUMCENS} ${
+                            socio.Apellidos || ""
+                          } ${socio.Nombre || ""}`
+                        );
+  
+                        return texto.includes(
+                          normalizarTexto(busquedaNuevoPagador)
+                        );
+                      })
+                      .slice(0, 20)
+                      .map((socio) => (
+                        <button
+                          key={socio.NUMCENS}
+                          type="button"
+                          onClick={() => {
+                            cambiarPagadorSocio(
+                              numcensSocio,
+                              Number(socio.NUMCENS)
+                            );
+  
+                            setEditandoPagadorSocio(null);
+                            setBusquedaNuevoPagador("");
+                          }}
+                          className="block w-full px-3 py-2 text-left text-sm font-normal hover:bg-red-50"
+                        >
+                          <span className="font-medium">
+                            {socio.Apellidos}, {socio.Nombre}
+                          </span>
+  
+                          <span className="ml-2 text-xs text-zinc-400">
+                            Nº {socio.NUMCENS}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </td>
+  
+          <td className="px-4 py-3 text-zinc-600">
+            {cuota.NUMCENS}
+          </td>
+  
+          <td className="px-4 py-3 font-medium text-zinc-900">
+            <LinkSocio numcens={cuota.NUMCENS}>
+              {cuota.Apellidos}, {cuota.Nombre}
+            </LinkSocio>
+          </td>
+  
+          <td className="px-4 py-3 text-zinc-600">
+            {cuota.Metodo || "-"}
+          </td>
+  
+          <td className="px-4 py-3 text-right">
+            {Number(cuota.Importe || 0).toFixed(2)} €
+          </td>
+        </tr>
+      );
+    })
 
-        <td className="px-4 py-3 font-medium text-zinc-900">
-          {cuota.PagadorNombre || "Mismo socio"}
-        </td>
-
-        <td className="px-4 py-3 text-zinc-600">
-          {cuota.NUMCENS}
-        </td>
-
-        <td className="px-4 py-3 font-medium text-zinc-900">
-          <LinkSocio numcens={cuota.NUMCENS}>
-            {cuota.Apellidos}, {cuota.Nombre}
-          </LinkSocio>
-        </td>
-
-        <td className="px-4 py-3 text-zinc-600">
-          {cuota.Metodo || "-"}
-        </td>
-
-        <td className="px-4 py-3 text-right">
-          {Number(cuota.Importe || 0).toFixed(2)} €
-        </td>
-      </tr>
-    ))
   ) : listado === "PAGADORES" ? (
-    pagadoresFiltrados.map((pagador) => (
-      <tr
-        key={`${pagador.Pagador}-${pagador.Metodo}`}
-        className="border-t border-zinc-200 hover:bg-red-50"
-      >
-        <td className="px-4 py-3 text-zinc-600">
-          {pagador.Pagador}
-        </td>
+    pagadoresFiltrados.map((pagador) => {
+      const idPagador = Number(pagador.Pagador);
+  
+      const editado = pagadoresEditados[idPagador] || {};
+  
+      const metodo =
+        editado.Metodo !== undefined
+          ? editado.Metodo
+          : pagador.Metodo || "";
+  
+      const titular =
+        editado.TitularCuenta !== undefined
+          ? editado.TitularCuenta
+          : pagador.TitularCuenta || "";
+  
+      const iban =
+        editado.IBAN !== undefined
+          ? editado.IBAN
+          : pagador.IBAN || "";
+  
+      return (
+        <tr
+          key={`${pagador.Pagador}-${pagador.Metodo}`}
+          className="border-t border-zinc-200 hover:bg-red-50"
+        >
+          <td className="px-4 py-3 text-zinc-600">
+            {pagador.Pagador}
+          </td>
+  
+          <td className="px-4 py-3 font-medium text-zinc-900">
+  <LinkSocio numcens={idPagador}>
+    {pagador.NombrePagador || "-"}
+  </LinkSocio>
+</td>
+  
+          <td className="px-4 py-3">
+  <div className="relative inline-flex items-center">
+    <select
+      value={metodo}
+      onChange={(e) =>
+        cambiarDatoPagador(
+          idPagador,
+          "Metodo",
+          e.target.value
+        )
+      }
+      className="cursor-pointer appearance-none bg-transparent pr-4 text-sm text-zinc-700 outline-none"
+    >
+      <option value="">-</option>
+      <option value="Banco">Banco</option>
+      <option value="Efectivo">Efectivo</option>
+    </select>
 
-        <td className="px-4 py-3 font-medium text-zinc-900">
-          {pagador.NombrePagador || "-"}
-        </td>
+    <span className="pointer-events-none absolute right-0 text-[10px] text-zinc-400">
+      ▼
+    </span>
+  </div>
+</td>
+  
+<td className="px-4 py-3">
+  <div className="flex items-center gap-1">
+    <input
+      type="text"
+      value={titular}
+      onChange={(e) =>
+        cambiarDatoPagador(
+          idPagador,
+          "TitularCuenta",
+          e.target.value
+        )
+      }
+      className="min-w-0 flex-1 bg-transparent text-sm text-zinc-700 outline-none hover:bg-zinc-50 focus:bg-zinc-50"
+    />
 
-        <td className="px-4 py-3 text-zinc-600">
-          {pagador.Metodo || "-"}
-        </td>
+    <span
+      className="text-xs text-zinc-400 print:hidden"
+      title="Editable"
+    >
+      ✎
+    </span>
+  </div>
+</td>
+  
+<td className="px-4 py-3">
+  <div className="flex items-center gap-1 whitespace-nowrap">
+    <input
+      type="text"
+      value={iban}
+      onChange={(e) =>
+        cambiarDatoPagador(
+          idPagador,
+          "IBAN",
+          e.target.value
+        )
+      }
+      className="min-w-[210px] bg-transparent text-sm text-zinc-700 outline-none hover:bg-zinc-50 focus:bg-zinc-50"
+    />
 
-        <td className="px-4 py-3 text-zinc-600">
-          {pagador.TitularCuenta || "-"}
-        </td>
-
-        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-          {pagador.IBAN || "-"}
-        </td>
-
-        <td className="px-4 py-3 text-right font-medium">
-          {pagador.NumeroSocios || 0}
-        </td>
-      </tr>
-    ))
+    <span
+      className="text-xs text-zinc-400 print:hidden"
+      title="Editable"
+    >
+      ✎
+    </span>
+  </div>
+</td>
+  
+          <td className="px-4 py-3 text-right font-medium">
+            {pagador.NumeroSocios || 0}
+          </td>
+          <td className="px-4 py-3 text-center print:hidden">
+  {pagadoresEditados[idPagador] ? (
+    <button
+      type="button"
+      onClick={() => guardarPagador(idPagador)}
+      disabled={guardandoPagador === idPagador}
+      className="text-sm font-semibold text-red-900 hover:text-red-700 disabled:opacity-50"
+    >
+      {guardandoPagador === idPagador
+        ? "Guardando..."
+        : "Guardar"}
+    </button>
+  ) : mensajePagador?.numcens === idPagador ? (
+    <span
+      className={`text-xs font-medium ${
+        mensajePagador.tipo === "ok"
+          ? "text-green-700"
+          : "text-red-700"
+      }`}
+    >
+      {mensajePagador.tipo === "ok" ? "✓ " : "⚠ "}
+      {mensajePagador.texto}
+    </span>
+  ) : null}
+</td>
+        </tr>
+      );
+    })
   ) : listado === "CARGOS" ? (
     cargosFiltrados.map((fila) => (
       <tr
