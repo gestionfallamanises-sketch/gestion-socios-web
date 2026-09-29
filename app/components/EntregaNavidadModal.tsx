@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 
 export default function EntregaNavidadModal(props: any) {
     const {
@@ -84,102 +85,163 @@ eliminarPago,
 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <div className="space-y-3">
 
-  <div>
-    <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-      Fecha entrega
-    </label>
+  {/* DATOS GENERALES */}
+  <div className="grid grid-cols-2 gap-3">
+    <div>
+      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
+        Fecha entrega
+      </label>
 
-    <input
-      type="date"
-      value={entrega.FechaEntrega ?? ""}
-      onChange={(e) =>
-        setEntrega({
-          ...entrega,
-          FechaEntrega: e.target.value,
-        })
-      }
-      className="w-full border border-zinc-300 px-2 py-1 text-sm"
-    />
+      <input
+        type="date"
+        value={entrega.FechaEntrega ?? ""}
+        onChange={(e) =>
+          setEntrega({
+            ...entrega,
+            FechaEntrega: e.target.value,
+          })
+        }
+        className="w-full border border-zinc-300 px-2 py-1 text-sm"
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
+        Recibo nº
+      </label>
+
+      <input
+        type="text"
+        value={entrega.Recibo ?? ""}
+        onChange={(e) =>
+          setEntrega({
+            ...entrega,
+            Recibo: e.target.value,
+          })
+        }
+        placeholder="Nº recibo"
+        className="w-full border border-zinc-300 px-2 py-1 text-sm"
+      />
+    </div>
   </div>
 
-  <div>
-    <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-      Papeletas
-    </label>
+  {/* PAPELETAS */}
+  <div className="overflow-hidden border border-zinc-200">
 
-    <input
-      type="number"
-      min={0}
-      value={entrega.Papeletas}
-      onChange={(e) =>
-        setEntrega({
-          ...entrega,
-          Papeletas: Number(e.target.value),
-        })
-      }
-      className="w-full border border-zinc-300 px-2 py-1 text-sm"
-    />
+    <div className="grid grid-cols-[90px_1fr_1fr_1.3fr] bg-zinc-100 text-xs font-semibold uppercase text-zinc-600">
+      <div className="px-3 py-2">Tipo</div>
+      <div className="px-3 py-2 text-center">Papeletas</div>
+      <div className="px-3 py-2 text-center">Devueltas</div>
+      <div className="px-3 py-2 text-center">Serie</div>
+    </div>
+
+    {/* FALLA */}
+    <div className="grid grid-cols-[90px_1fr_1fr_1.3fr] items-center border-t border-zinc-200">
+      <div className="px-3 py-2 text-sm font-semibold text-red-900">
+        FALLA
+      </div>
+
+      <div className="p-2">
+        <input
+          type="number"
+          min={0}
+          value={entrega.PapeletasFalla ?? 0}
+          onChange={(e) =>
+            setEntrega({
+              ...entrega,
+              PapeletasFalla: Number(e.target.value),
+            })
+          }
+          className="w-full border border-zinc-300 px-2 py-1 text-sm"
+        />
+      </div>
+
+      <div className="p-2">
+        <input
+          type="number"
+          min={0}
+          value={entrega.DevueltasFalla ?? 0}
+          onChange={(e) =>
+            setEntrega({
+              ...entrega,
+              DevueltasFalla: Number(e.target.value),
+            })
+          }
+          className="w-full border border-zinc-300 px-2 py-1 text-sm"
+        />
+      </div>
+
+      <div className="p-2">
+        <input
+          type="text"
+          value={entrega.SerieFalla ?? ""}
+          onChange={(e) =>
+            setEntrega({
+              ...entrega,
+              SerieFalla: e.target.value,
+            })
+          }
+          placeholder="001-500"
+          className="w-full border border-zinc-300 px-2 py-1 text-sm"
+        />
+      </div>
+    </div>
+
+    {/* VIRGEN */}
+    <div className="grid grid-cols-[90px_1fr_1fr_1.3fr] items-center border-t border-zinc-200">
+      <div className="px-3 py-2 text-sm font-semibold text-red-900">
+        VIRGEN
+      </div>
+
+      <div className="p-2">
+        <input
+          type="number"
+          min={0}
+          value={entrega.PapeletasVirgen ?? 0}
+          onChange={(e) =>
+            setEntrega({
+              ...entrega,
+              PapeletasVirgen: Number(e.target.value),
+            })
+          }
+          className="w-full border border-zinc-300 px-2 py-1 text-sm"
+        />
+      </div>
+
+      <div className="p-2">
+        <input
+          type="number"
+          min={0}
+          value={entrega.DevueltasVirgen ?? 0}
+          onChange={(e) =>
+            setEntrega({
+              ...entrega,
+              DevueltasVirgen: Number(e.target.value),
+            })
+          }
+          className="w-full border border-zinc-300 px-2 py-1 text-sm"
+        />
+      </div>
+
+      <div className="p-2">
+        <input
+          type="text"
+          value={entrega.SerieVirgen ?? ""}
+          onChange={(e) =>
+            setEntrega({
+              ...entrega,
+              SerieVirgen: e.target.value,
+            })
+          }
+          placeholder="001-500"
+          className="w-full border border-zinc-300 px-2 py-1 text-sm"
+        />
+      </div>
+    </div>
+
   </div>
-
-  <div>
-    <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-      Devueltas
-    </label>
-
-    <input
-      type="number"
-      min={0}
-      value={entrega.Devueltas ?? 0}
-      onChange={(e) =>
-        setEntrega({
-          ...entrega,
-          Devueltas: Number(e.target.value),
-        })
-      }
-      className="w-full border border-zinc-300 px-2 py-1 text-sm"
-    />
-  </div>
-
-  <div>
-    <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-      Serie
-    </label>
-
-    <input
-      type="text"
-      value={entrega.Serie ?? ""}
-      onChange={(e) =>
-        setEntrega({
-          ...entrega,
-          Serie: e.target.value,
-        })
-      }
-      placeholder="001-500"
-      className="w-full border border-zinc-300 px-2 py-1 text-sm"
-    />
-  </div>
-
-  <div>
-  <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-    Recibo nº
-  </label>
-
-  <input
-    type="text"
-    value={entrega.Recibo ?? ""}
-    onChange={(e) =>
-      setEntrega({
-        ...entrega,
-        Recibo: e.target.value,
-      })
-    }
-    placeholder="Nº recibo"
-    className="w-full border border-zinc-300 px-2 py-1 text-sm"
-  />
-</div>
-
 </div>
 
             <div className="border border-zinc-200">
