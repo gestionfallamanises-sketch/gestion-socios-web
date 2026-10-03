@@ -32,12 +32,17 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname.startsWith("/login");
+  const isMonederoPublico =
+  request.nextUrl.pathname === "/mi-monedero" ||
+  request.nextUrl.pathname.startsWith("/mi-monedero/");
 
   if (
     process.env.NODE_ENV === "production" &&
     !user &&
-    !isLoginPage
+    !isLoginPage &&
+    !isMonederoPublico
   ) {
+
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -61,7 +66,7 @@ export async function proxy(request: NextRequest) {
         request.nextUrl.pathname === "/loterias" ||
         request.nextUrl.pathname.startsWith("/loterias/");
   
-      if (!estaEnLoterias && !isLoginPage) {
+      if (!estaEnLoterias && !isLoginPage && !isMonederoPublico) {
         const url = request.nextUrl.clone();
         url.pathname = "/loterias";
         return NextResponse.redirect(url);
