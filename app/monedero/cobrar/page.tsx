@@ -83,17 +83,24 @@ const [mensajeCobro, setMensajeCobro] = useState("");
     }
   
     const nuevoSaldo = Number(data);
-  
-    setMonedero((actual: any) => ({
-      ...actual,
-      Saldo: nuevoSaldo,
-    }));
-  
-    setImporteCobro("");
-    setMensajeCobro(
-      `Cobro realizado correctamente. Nuevo saldo: ${nuevoSaldo.toFixed(2)} €`
-    );
-  }
+
+setMonedero((actual: any) => ({
+  ...actual,
+  Saldo: nuevoSaldo,
+}));
+
+setImporteCobro("");
+
+setMensajeCobro(
+  `Cobro realizado correctamente: ${importe.toFixed(2)} €. Nuevo saldo: ${nuevoSaldo.toFixed(2)} €`
+);
+
+setTimeout(() => {
+  setMensajeCobro("");
+  setCodigoLeido("");
+  setMonedero(null);
+}, 3000);
+}
   
   useEffect(() => {
     if (!escaneando) return;
