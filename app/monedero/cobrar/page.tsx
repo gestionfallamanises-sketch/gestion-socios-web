@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { supabase } from "../../../lib/supabaseClient";
 
@@ -235,7 +235,7 @@ setTimeout(() => {
       value={importeCobro}
       onChange={(e) => setImporteCobro(e.target.value)}
       placeholder="0,00"
-      className="min-w-0 flex-1 border border-zinc-300 px-3 py-3 text-lg outline-none focus:border-red-900"
+      className="min-w-0 flex-1 border border-zinc-300 bg-white px-3 py-3 text-xl font-semibold text-zinc-900 outline-none focus:border-red-900"
     />
 
     <span className="text-lg text-zinc-600">€</span>
