@@ -330,13 +330,6 @@ setCargando(false);
       
         return socios
         .filter((socio) => {
-        const yaTieneEntrega = entregas.some(
-          (fila: any) =>
-            Number(fila.NUMCENS) === Number(socio.NUMCENS)
-        );
-        
-        if (yaTieneEntrega) return false;
-
             const nombreCompleto = normalizarTexto(
               `${socio.Apellidos || ""} ${socio.Nombre || ""}`
             );
@@ -364,6 +357,15 @@ setCargando(false);
             (fila: any) =>
               Number(fila.NUMCENS) === Number(socio.NUMCENS)
           ) || null;
+
+          if (registroExistente) {
+            alert(
+              `Este socio ya tiene entregas registradas.\n\n` +
+                `Falla: ${Number(registroExistente.PapeletasFalla || 0)} papeletas\n` +
+                `Virgen: ${Number(registroExistente.PapeletasVirgen || 0)} papeletas\n\n` +
+                `La nueva entrega se añadirá a estas cantidades.`
+            );
+          }
       
         setRegistroPrincipalSeleccionado(registroExistente);
       
@@ -1152,7 +1154,7 @@ configuracion.BeneficioPapeletaVirgen;
     }
 
     const confirmar = window.confirm(
-      "¿Seguro que quieres eliminar esta entrega?"
+      "¿Seguro que quieres eliminar esta compra?"
     );
   
     if (!confirmar) return;
@@ -1181,7 +1183,7 @@ configuracion.BeneficioPapeletaVirgen;
 
   async function eliminarEntrega(id: number) {
     const confirmar = window.confirm(
-      "¿Seguro que quieres eliminar esta entrega?"
+      "¿Seguro que quieres eliminar esta compra?"
     );
   
     if (!confirmar) return;
@@ -1380,84 +1382,114 @@ const pendienteB = Math.max(
     }
   }
   function exportarExcel() {
-  const datos = entregasOrdenadas.map((fila: any) => {
-    const socio = socios.find(
-      (s: any) => Number(s.NUMCENS) === Number(fila.NUMCENS)
-    );
-
-    const nombre =
-      fila.NombreExterno ||
-      `${socio?.Apellidos || ""}, ${socio?.Nombre || ""}`;
-
-    // FALLA
-    const papeletasFalla = Number(fila.PapeletasFalla || 0);
-    const devueltasFalla = Number(fila.DevueltasFalla || 0);
-
-    const vendidasFalla = Math.max(
-      0,
-      papeletasFalla - devueltasFalla
-    );
-
-    // VIRGEN
-    const papeletasVirgen = Number(fila.PapeletasVirgen || 0);
-    const devueltasVirgen = Number(fila.DevueltasVirgen || 0);
-
-    const vendidasVirgen = Math.max(
-      0,
-      papeletasVirgen - devueltasVirgen
-    );
-
-    // TOTAL VENDIDAS
-    const vendidasTotal =
-      vendidasFalla + vendidasVirgen;
-
-    // IMPORTES
-    const totalFalla =
-      vendidasFalla *
-      Number(configuracion.ImportePapeletaFalla || 0);
-
-    const totalVirgen =
-      vendidasVirgen *
-      Number(configuracion.ImportePapeletaVirgen || 0);
-
-    const total = totalFalla + totalVirgen;
-
-    const pagado = totalPagadoEntrega(fila.ID);
-
-    const pendiente = Math.max(
-      0,
-      total - pagado
-    );
-
-    return {
-      socio: nombre,
-      numcens: fila.NUMCENS || "",
-      fecha: fila.FechaEntrega || "",
-      recibo: fila.Recibo || "",
-
-      // FALLA
-      entregadasFalla: papeletasFalla,
-      devueltasFalla,
-      vendidasFalla,
-      serieFalla: fila.SerieFalla || "",
-
-      // VIRGEN
-      entregadasVirgen: papeletasVirgen,
-      devueltasVirgen,
-      vendidasVirgen,
-      serieVirgen: fila.SerieVirgen || "",
-
-      // TOTALES
-      vendidasTotal,
-      total,
-      pagado,
-      pendiente,
-
-      estado: pendiente > 0 ? "Pendiente" : "Pagado",
-
-      observaciones: fila.Observaciones || "",
-    };
-  });
+    const datos = entregasOrdenadas.flatMap((fila: any) => {
+      const socio = socios.find(
+        (s: any) => Number(s.NUMCENS) === Number(fila.NUMCENS)
+      );
+    
+      const nombre =
+        fila.NombreExterno ||
+        `${socio?.Apellidos || ""}, ${socio?.Nombre || ""}`;
+    
+      const movimientos = movimientosEntregas.filter(
+        (movimiento: any) =>
+          Number(movimiento.IDEntrega) === Number(fila.ID)
+      );
+    
+      const filasMovimientos = movimientos.map((movimiento: any) => {
+        const entregadasFalla = Number(
+          movimiento.PapeletasFalla || 0
+        );
+        const devueltasFalla = Number(
+          movimiento.DevueltasFalla || 0
+        );
+        const vendidasFalla = Math.max(
+          0,
+          entregadasFalla - devueltasFalla
+        );
+    
+        const entregadasVirgen = Number(
+          movimiento.PapeletasVirgen || 0
+        );
+        const devueltasVirgen = Number(
+          movimiento.DevueltasVirgen || 0
+        );
+        const vendidasVirgen = Math.max(
+          0,
+          entregadasVirgen - devueltasVirgen
+        );
+    
+        const vendidasTotal =
+          vendidasFalla + vendidasVirgen;
+    
+        const importe =
+          vendidasFalla *
+            Number(configuracion.ImportePapeletaFalla || 0) +
+          vendidasVirgen *
+            Number(configuracion.ImportePapeletaVirgen || 0);
+    
+        return {
+          movimiento,
+          entregadasFalla,
+          devueltasFalla,
+          vendidasFalla,
+          entregadasVirgen,
+          devueltasVirgen,
+          vendidasVirgen,
+          vendidasTotal,
+          importe,
+        };
+      });
+    
+      const total = filasMovimientos.reduce(
+        (suma: number, movimiento: any) =>
+          suma + movimiento.importe,
+        0
+      );
+    
+      const pagado = totalPagadoEntrega(fila.ID);
+      const pendiente = Math.max(0, total - pagado);
+    
+      return filasMovimientos.map(
+        (movimiento: any, index: number) => ({
+          socio: index === 0 ? nombre : "",
+          numcens: index === 0 ? fila.NUMCENS || "" : "",
+    
+          fecha: movimiento.movimiento.FechaEntrega || "",
+          recibo: movimiento.movimiento.Recibo || "",
+    
+          entregadasFalla: movimiento.entregadasFalla,
+          devueltasFalla: movimiento.devueltasFalla,
+          vendidasFalla: movimiento.vendidasFalla,
+          serieFalla:
+            movimiento.movimiento.SerieFalla || "",
+    
+          entregadasVirgen: movimiento.entregadasVirgen,
+          devueltasVirgen: movimiento.devueltasVirgen,
+          vendidasVirgen: movimiento.vendidasVirgen,
+          serieVirgen:
+            movimiento.movimiento.SerieVirgen || "",
+    
+          vendidasTotal: movimiento.vendidasTotal,
+    
+          total: index === 0 ? total : "",
+          pagado: index === 0 ? pagado : "",
+          pendiente: index === 0 ? pendiente : "",
+    
+          estado:
+            index === 0
+              ? pendiente > 0
+                ? "Pendiente"
+                : "Pagado"
+              : "",
+    
+          observaciones:
+            movimiento.movimiento.Observaciones || "",
+    
+          grupoSocio: fila.ID,
+        })
+      );
+    });
 
   descargarExcel({
     nombreArchivo: `navidad-${ejercicioActivo || "ejercicio"}.xlsx`,
@@ -2492,36 +2524,33 @@ movimientoEditando={movimientoEditando}
     
     <div className="overflow-x-auto">
 
-<table className="w-full min-w-[1050px] divide-y divide-zinc-200">
+<table className="w-full table-fixed divide-y divide-zinc-200">
       <thead className="bg-zinc-50">
   <tr>
-    <CabeceraOrdenable
+  <CabeceraOrdenable
   titulo="Socio"
   campo="socio"
   campoOrden={campoOrden}
   direccionOrden={direccionOrden}
   alOrdenar={ordenarPor}
+  className="w-[24%] text-left"
 />
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Sorteo
-    </th>
 
     <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
       Fecha
     </th>
 
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Papeletas
-    </th>
+    <th className="w-[7%] px-1 py-3 text-center text-xs font-semibold uppercase">
+  Entreg.
+</th>
 
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Devueltas
-    </th>
+<th className="w-[7%] px-1 py-3 text-center text-xs font-semibold uppercase">
+  Devuel.
+</th>
 
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Vendidas
-    </th>
+<th className="w-[7%] px-1 py-3 text-center text-xs font-semibold uppercase">
+  Venta
+</th>
 
     <th className="px-2 py-3 text-right text-xs font-semibold uppercase">
   Total
@@ -2540,15 +2569,16 @@ movimientoEditando={movimientoEditando}
   className="text-right"
 />
 
-    <CabeceraOrdenable
+<CabeceraOrdenable
   titulo="Serie"
   campo="serie"
   campoOrden={campoOrden}
   direccionOrden={direccionOrden}
   alOrdenar={ordenarPor}
+  className="w-[16%]"
 />
 
-<th className="sticky right-0 z-30 whitespace-nowrap border-l border-zinc-200 bg-zinc-100 px-3 py-3 text-center text-xs font-semibold uppercase shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.15)]">
+<th className="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold uppercase">
   Acciones
 </th>
   </tr>
@@ -2611,10 +2641,6 @@ movimientoEditando={movimientoEditando}
               </td>
 
               <td className="px-4 py-3 text-center text-sm">
-                {fila.Sorteo}
-              </td>
-
-              <td className="px-4 py-3 text-center text-sm">
               {formatearFecha(fila.FechaEntrega)}
                               </td>
 
@@ -2667,7 +2693,7 @@ movimientoEditando={movimientoEditando}
 
   </div>
 </td>
-              <td className="px-2 py-3 text-center text-xs whitespace-nowrap">
+<td className="min-w-[150px] px-2 py-3 text-center text-xs whitespace-nowrap">
   <div className="whitespace-nowrap text-red-900">
     F: {fila.SerieFalla || "—"}
   </div>
@@ -2677,7 +2703,7 @@ movimientoEditando={movimientoEditando}
   </div>
 </td>
 
-<td className="sticky right-0 z-20 border-l border-zinc-200 bg-white px-3 py-3 text-center shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.15)]">
+<td className="px-2 py-3 text-center">
   <div className="flex justify-center gap-2">
 
     <button

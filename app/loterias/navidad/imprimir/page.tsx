@@ -26,6 +26,7 @@ export default function ImprimirNavidadPage() {
   const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
   const [configuracion, setConfiguracion] = useState<any>(null);
   const [entregas, setEntregas] = useState<any[]>([]);
+  const [movimientosEntregas, setMovimientosEntregas] = useState<any[]>([]);
   const [socios, setSocios] = useState<any[]>([]);
   const [pagosNavidad, setPagosNavidad] = useState<any[]>([]);
 
@@ -62,6 +63,7 @@ export default function ImprimirNavidadPage() {
     const [
       { data: configuracionData, error: errorConfiguracion },
       { data: entregasData, error: errorEntregas },
+      { data: movimientosData, error: errorMovimientos },
       { data: sociosData, error: errorSocios },
       { data: pagosData, error: errorPagos },
     ] = await Promise.all([
@@ -78,6 +80,12 @@ export default function ImprimirNavidadPage() {
         .eq("Ejercicio", ejercicioActual)
         .eq("Sorteo", "Navidad")
         .order("FechaEntrega", { ascending: true }),
+
+        (supabase as any)
+  .from("LOTERIA_NAVIDAD_ENTREGAS_MOVIMIENTOS")
+  .select("*")
+  .eq("Ejercicio", ejercicioActual)
+  .order("FechaEntrega", { ascending: true }),
 
       (supabase as any)
         .from("SOCIOS")
@@ -101,6 +109,12 @@ export default function ImprimirNavidadPage() {
       return;
     }
 
+    if (errorMovimientos) {
+      alert(errorMovimientos.message);
+      setCargando(false);
+      return;
+    }
+
     if (errorSocios) {
       alert(errorSocios.message);
       setCargando(false);
@@ -115,6 +129,7 @@ export default function ImprimirNavidadPage() {
 
     setConfiguracion(configuracionData || null);
     setEntregas(entregasData || []);
+    setMovimientosEntregas(movimientosData || []);
     setSocios(sociosData || []);
     setCargando(false);
     setPagosNavidad(pagosData || []);
@@ -149,28 +164,97 @@ export default function ImprimirNavidadPage() {
       );
   }
 
-  const filas = entregas.map((fila: any) => {
-    const papeletas = Number(fila.Papeletas || 0);
-    const devueltas = Number(fila.Devueltas || 0);
-    const vendidas = Math.max(0, papeletas - devueltas);
-
-    const importeTotal =
-      vendidas * Number(configuracion?.ImportePapeleta || 0);
-
-    const importePagado = totalPagadoEntrega(fila.ID);
-
-    const pendiente = Math.max(
+  const filasBase = movimientosEntregas.map((movimiento: any) => {
+    const principal =
+      entregas.find(
+        (fila: any) =>
+          Number(fila.ID) === Number(movimiento.IDEntrega)
+      ) || null;
+  
+    const papeletasFalla = Number(movimiento.PapeletasFalla || 0);
+    const devueltasFalla = Number(movimiento.DevueltasFalla || 0);
+    const vendidasFalla = Math.max(
       0,
-      importeTotal - importePagado
+      papeletasFalla - devueltasFalla
     );
-
+  
+    const papeletasVirgen = Number(movimiento.PapeletasVirgen || 0);
+    const devueltasVirgen = Number(movimiento.DevueltasVirgen || 0);
+    const vendidasVirgen = Math.max(
+      0,
+      papeletasVirgen - devueltasVirgen
+    );
+  
+    const papeletas = papeletasFalla + papeletasVirgen;
+    const devueltas = devueltasFalla + devueltasVirgen;
+    const vendidas = vendidasFalla + vendidasVirgen;
+  
+    const importeTotal =
+      vendidasFalla *
+        Number(configuracion?.ImportePapeletaFalla || 0) +
+      vendidasVirgen *
+        Number(configuracion?.ImportePapeletaVirgen || 0);
+  
     return {
-      ...fila,
-      nombre: nombreEntrega(fila),
+      ...movimiento,
+  
+      IDMovimiento: movimiento.ID,
+      IDPrincipal: principal?.ID || 0,
+  
+      NUMCENS: principal?.NUMCENS || null,
+      NombreExterno: principal?.NombreExterno || "",
+  
+      nombre: principal ? nombreEntrega(principal) : "—",
+  
+      papeletasFalla,
+      devueltasFalla,
+      vendidasFalla,
+  
+      papeletasVirgen,
+      devueltasVirgen,
+      vendidasVirgen,
+  
       papeletas,
       devueltas,
       vendidas,
+  
+      Serie:
+        `F: ${movimiento.SerieFalla || "—"} / ` +
+        `V: ${movimiento.SerieVirgen || "—"}`,
+  
       importeTotal,
+    };
+  });
+  
+  const filas = filasBase.map((fila: any) => {
+    const filasDelSocio = filasBase.filter(
+      (otra: any) =>
+        Number(otra.IDPrincipal) === Number(fila.IDPrincipal)
+    );
+  
+    const ultimaFila =
+      filasDelSocio[filasDelSocio.length - 1];
+  
+    const esUltimaEntrega =
+      Number(ultimaFila?.IDMovimiento) ===
+      Number(fila.IDMovimiento);
+  
+    const totalSocio = filasDelSocio.reduce(
+      (suma: number, otra: any) =>
+        suma + Number(otra.importeTotal || 0),
+      0
+    );
+  
+    const importePagado = esUltimaEntrega
+      ? totalPagadoEntrega(fila.IDPrincipal)
+      : 0;
+  
+    const pendiente = esUltimaEntrega
+      ? Math.max(0, totalSocio - importePagado)
+      : 0;
+  
+    return {
+      ...fila,
       importePagado,
       pendiente,
     };
@@ -182,6 +266,49 @@ export default function ImprimirNavidadPage() {
       "es"
     )
   );
+
+  const gruposSocios = filasOrdenadas.reduce(
+    (grupos: any[], fila: any) => {
+      let grupo = grupos.find(
+        (g: any) =>
+          Number(g.IDPrincipal) === Number(fila.IDPrincipal)
+      );
+  
+      if (!grupo) {
+        grupo = {
+          IDPrincipal: fila.IDPrincipal,
+          nombre: fila.nombre,
+          entregas: [],
+        };
+  
+        grupos.push(grupo);
+      }
+  
+      grupo.entregas.push(fila);
+  
+      return grupos;
+    },
+    []
+  );
+
+  const gruposSociosConTotales = gruposSocios.map((grupo: any) => {
+    const total = grupo.entregas.reduce(
+      (suma: number, entrega: any) =>
+        suma + Number(entrega.importeTotal || 0),
+      0
+    );
+  
+    const pagado = totalPagadoEntrega(grupo.IDPrincipal);
+  
+    const pendiente = Math.max(0, total - pagado);
+  
+    return {
+      ...grupo,
+      total,
+      pagado,
+      pendiente,
+    };
+  });
 
   const resumen = {
     entregas: filas.length,
@@ -277,24 +404,44 @@ export default function ImprimirNavidadPage() {
             </p>
 
             <p>
-              <span className="font-semibold">Número:</span>{" "}
-              {configuracion?.Numero || "—"}
-            </p>
+  <span className="font-semibold">Número Falla:</span>{" "}
+  {configuracion?.NumeroFalla || "—"}
+</p>
 
-            <p>
-              <span className="font-semibold">Nº décimos:</span>{" "}
-              {Number(configuracion?.Decimos || 0)}
-            </p>
+<p>
+  <span className="font-semibold">Número Virgen:</span>{" "}
+  {configuracion?.NumeroVirgen || "—"}
+</p>
 
-            <p>
-              <span className="font-semibold">Precio décimo:</span>{" "}
-              {euros(configuracion?.PrecioDecimo || 0)}
-            </p>
+<p>
+  <span className="font-semibold">Décimos Falla:</span>{" "}
+  {Number(configuracion?.DecimosFalla || 0)}
+</p>
 
-            <p>
-              <span className="font-semibold">Importe papeleta:</span>{" "}
-              {euros(configuracion?.ImportePapeleta || 0)}
-            </p>
+<p>
+  <span className="font-semibold">Décimos Virgen:</span>{" "}
+  {Number(configuracion?.DecimosVirgen || 0)}
+</p>
+
+<p>
+  <span className="font-semibold">Precio décimo Falla:</span>{" "}
+  {euros(configuracion?.PrecioDecimoFalla || 0)}
+</p>
+
+<p>
+  <span className="font-semibold">Precio décimo Virgen:</span>{" "}
+  {euros(configuracion?.PrecioDecimoVirgen || 0)}
+</p>
+
+<p>
+  <span className="font-semibold">Importe papeleta Falla:</span>{" "}
+  {euros(configuracion?.ImportePapeletaFalla || 0)}
+</p>
+
+<p>
+  <span className="font-semibold">Importe papeleta Virgen:</span>{" "}
+  {euros(configuracion?.ImportePapeletaVirgen || 0)}
+</p>
           </div>
         </div>
 
@@ -370,45 +517,69 @@ export default function ImprimirNavidadPage() {
                 </td>
               </tr>
             ) : (
-              filasOrdenadas.map((fila: any) => (
-                <tr key={fila.ID}>
-                  <td className="border border-zinc-300 px-2 py-2">
-                    {fila.nombre}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-center">
-                    {formatearFecha(fila.FechaEntrega)}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-center">
-                    {fila.Serie || "—"}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-right">
-                    {fila.papeletas}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-right">
-                    {fila.devueltas}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-right">
-                    {fila.vendidas}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-right">
-                    {euros(fila.importeTotal)}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-right">
-                    {euros(fila.importePagado)}
-                  </td>
-
-                  <td className="border border-zinc-300 px-2 py-2 text-right">
-                    {euros(fila.pendiente)}
-                  </td>
-                </tr>
-              ))
+              gruposSociosConTotales.map((grupo: any) =>
+                grupo.entregas.map((fila: any, index: number) => (
+                  <tr key={fila.IDMovimiento}>
+                    {index === 0 && (
+                      <td
+                        rowSpan={grupo.entregas.length}
+                        className="border border-zinc-300 px-2 py-2 align-middle font-medium"
+                      >
+                        {grupo.nombre}
+                      </td>
+                    )}
+              
+                    <td className="border border-zinc-300 px-2 py-2 text-center">
+                      {formatearFecha(fila.FechaEntrega)}
+                    </td>
+              
+                    <td className="border border-zinc-300 px-2 py-2 text-center">
+                      <div>F: {fila.SerieFalla || "—"}</div>
+                      <div>V: {fila.SerieVirgen || "—"}</div>
+                    </td>
+              
+                    <td className="border border-zinc-300 px-2 py-2 text-right">
+                      <div>F: {fila.papeletasFalla}</div>
+                      <div>V: {fila.papeletasVirgen}</div>
+                    </td>
+              
+                    <td className="border border-zinc-300 px-2 py-2 text-right">
+                      <div>F: {fila.devueltasFalla}</div>
+                      <div>V: {fila.devueltasVirgen}</div>
+                    </td>
+              
+                    <td className="border border-zinc-300 px-2 py-2 text-right">
+                      <div>F: {fila.vendidasFalla}</div>
+                      <div>V: {fila.vendidasVirgen}</div>
+                    </td>
+              
+                    {index === 0 && (
+                      <>
+                        <td
+                          rowSpan={grupo.entregas.length}
+                          className="border border-zinc-300 px-2 py-2 text-right align-middle font-medium"
+                        >
+                          {euros(grupo.total)}
+                        </td>
+              
+                        <td
+                          rowSpan={grupo.entregas.length}
+                          className="border border-zinc-300 px-2 py-2 text-right align-middle"
+                        >
+                          {euros(grupo.pagado)}
+                        </td>
+              
+                        <td
+                          rowSpan={grupo.entregas.length}
+                          className="border border-zinc-300 px-2 py-2 text-right align-middle font-medium"
+                        >
+                          {euros(grupo.pendiente)}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))
+              )
             )}
           </tbody>
 

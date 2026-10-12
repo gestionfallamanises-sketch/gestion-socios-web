@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 type TipoColumna = "texto" | "numero" | "fecha" | "moneda";
 
@@ -78,13 +78,22 @@ export function exportarExcel({
   return;
 }
 
-      if (
-        columna.tipo === "numero" ||
-        columna.tipo === "moneda"
-      ) {
-        resultado[columna.titulo] = Number(valor || 0);
-        return;
-      }
+if (
+  columna.tipo === "numero" ||
+  columna.tipo === "moneda"
+) {
+  if (
+    valor === "" ||
+    valor === null ||
+    valor === undefined
+  ) {
+    resultado[columna.titulo] = "";
+  } else {
+    resultado[columna.titulo] = Number(valor);
+  }
+
+  return;
+}
 
       resultado[columna.titulo] = valor ?? "";
     });
@@ -131,6 +140,54 @@ export function exportarExcel({
       }
     }
   });
+
+  let grupoAnterior: any = null;
+let indiceGrupo = -1;
+
+for (let indiceFila = 1; indiceFila <= rango.e.r; indiceFila++) {
+  const filaOriginal: any = datos[indiceFila - 1];
+  const grupoActual = filaOriginal?.grupoSocio;
+
+  if (grupoActual === undefined || grupoActual === null) {
+    continue;
+  }
+
+  if (grupoActual !== grupoAnterior) {
+    indiceGrupo++;
+    grupoAnterior = grupoActual;
+  }
+
+  // Un socio sí, otro no
+  if (indiceGrupo % 2 === 1) {
+    for (
+      let indiceColumna = 0;
+      indiceColumna <= rango.e.c;
+      indiceColumna++
+    ) {
+      const referencia = XLSX.utils.encode_cell({
+        r: indiceFila,
+        c: indiceColumna,
+      });
+
+      if (!hoja[referencia]) {
+        hoja[referencia] = {
+          t: "s",
+          v: "",
+        };
+      }
+
+      hoja[referencia].s = {
+        ...(hoja[referencia].s || {}),
+        fill: {
+          patternType: "solid",
+          fgColor: {
+            rgb: "F3F4F6",
+          },
+        },
+      };
+    }
+  }
+}
 
   const libro = XLSX.utils.book_new();
 

@@ -803,24 +803,35 @@ const nombreB = normalizarTexto(b.ResponsableOrden || "");
 </td>
         <td className="px-4 py-3 text-center">{grupo.PapeletasFalla}</td>
         <td className="px-4 py-3 text-center">{grupo.PapeletasVirgen}</td>
-        <td className="px-4 py-3 text-center">{grupo.PapeletasNavidad}</td>
-        <td className="px-4 py-3 text-center">{grupo.PapeletasNino}</td>
+        <td className="px-4 py-3 text-center">
+  {grupo.PapeletasNavidadFalla} / {grupo.PapeletasNavidadVirgen}
+</td>
+
+<td className="px-4 py-3 text-center">
+  {grupo.PapeletasNinoFalla} / {grupo.PapeletasNinoVirgen}
+</td>
         <td className="px-4 py-3 text-center">
   <div className="flex justify-center gap-3">
 
-    <button
-  onClick={() => editarGrupo(grupo)}
-  className="text-sm font-medium text-zinc-700 hover:underline"
->
-  Editar
-</button>
+  <div className="flex justify-center gap-1">
+  <button
+    type="button"
+    onClick={() => editarGrupo(grupo)}
+    title="Editar grupo"
+    className="rounded bg-zinc-100 px-2 py-1 hover:bg-zinc-200"
+  >
+    ✏️
+  </button>
 
-    <button
-      onClick={() => eliminarGrupo(grupo.ID)}
-      className="text-sm font-medium text-red-700 hover:underline"
-    >
-      Eliminar
-    </button>
+  <button
+    type="button"
+    onClick={() => eliminarGrupo(grupo.ID)}
+    title="Eliminar grupo"
+    className="rounded bg-zinc-100 px-2 py-1 hover:bg-red-50"
+  >
+    🗑️
+  </button>
+</div>
   </div>
 </td>
       </tr>
