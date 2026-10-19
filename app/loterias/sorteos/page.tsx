@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
 import ResumenEconomicoSorteos from "@/app/loterias/componentes/ResumenEconomicoSorteos";
 
 export default function ControlSemanalPage() {
@@ -367,6 +368,33 @@ setMostrarModal(false);
       return;
     }
   
+    const numcensResponsables = (grupos || [])
+  .filter(
+    (grupo: any) =>
+      grupo.NUMCENS_Responsable !== null &&
+      grupo.NUMCENS_Responsable !== undefined
+  )
+  .map((grupo: any) => Number(grupo.NUMCENS_Responsable));
+
+let sociosResponsables: any[] = [];
+
+if (numcensResponsables.length > 0) {
+  const { data: sociosData, error: errorSocios } = await (supabase as any)
+    .from("SOCIOS")
+    .select("NUMCENS, Apellidos, Nombre")
+    .in("NUMCENS", numcensResponsables);
+
+  if (errorSocios) {
+    alert(
+      "Sorteo creado, pero error cargando nombres de participantes: " +
+        errorSocios.message
+    );
+    return;
+  }
+
+  sociosResponsables = sociosData || [];
+}
+
     const lineas = (grupos || [])
   .filter((grupo: any) =>
     Number(grupo.PapeletasFalla || 0) > 0 ||
@@ -381,20 +409,54 @@ setMostrarModal(false);
       const precioVentaVirgen =
         Number(sorteo.ImportePapeletaVirgen || 0) +
         Number(sorteo.BeneficioVirgen || 0);
+
+        const esEspecial = sorteo.TipoSorteo === "ESPECIAL";
+
+const papeletasGrupoFalla = Number(
+  grupo.PapeletasFalla || 0
+);
+
+const papeletasGrupoVirgen = esEspecial
+  ? 0
+  : Number(grupo.PapeletasVirgen || 0);
+
+  const socioResponsable = sociosResponsables.find(
+    (socio: any) =>
+      Number(socio.NUMCENS) === Number(grupo.NUMCENS_Responsable)
+  );
+  
+  const nombreParticipante = grupo.EsExterno
+    ? grupo.NombreExterno || "Externo"
+    : socioResponsable
+    ? `${socioResponsable.Apellidos}, ${socioResponsable.Nombre}`
+    : "";
   
       return {
         IDSorteo: sorteo.ID,
         IDGrupoLoteria: grupo.ID,
-        PapeletasFalla: Number(grupo.PapeletasFalla || 0),
-        PapeletasVirgen: Number(grupo.PapeletasVirgen || 0),
-        ImporteFalla: Number((Number(grupo.PapeletasFalla || 0) * precioVentaFalla).toFixed(2)),
-        ImporteVirgen: Number((Number(grupo.PapeletasVirgen || 0) * precioVentaVirgen).toFixed(2)),
+        NUMCENS_Responsable: grupo.EsExterno
+  ? null
+  : grupo.NUMCENS_Responsable || null,
+
+NombreParticipante: nombreParticipante,
+
+EsExterno: Boolean(grupo.EsExterno),
+        PapeletasFalla: papeletasGrupoFalla,
+PapeletasVirgen: papeletasGrupoVirgen,
+
+ImporteFalla: Number(
+  (papeletasGrupoFalla * precioVentaFalla).toFixed(2)
+),
+
+ImporteVirgen: Number(
+  (papeletasGrupoVirgen * precioVentaVirgen).toFixed(2)
+),
         ImportePagado: 0,
         ImportePremio: 0,
         PremioEntregado: false,
         PagadoConfirmado: false,
-        PapeletasPremioFalla: Number(grupo.PapeletasFalla || 0),
-        PapeletasPremioVirgen: Number(grupo.PapeletasVirgen || 0),
+        PapeletasPremioFalla: papeletasGrupoFalla,
+PapeletasPremioVirgen: papeletasGrupoVirgen,
       };
     });
   
@@ -453,8 +515,11 @@ if (idsSorteos.length > 0) {
     .from("LOTERIA_SORTEOS_GRUPOS")
     .select(`
       IDSorteo,
+      PapeletasFalla,
+PapeletasVirgen,
       ImporteFalla,
       ImporteVirgen,
+      ImportePagado,
       ImportePremio,
       PagadoConfirmado,
       PremioEntregado
@@ -473,6 +538,8 @@ if (idsSorteos.length > 0) {
     const resumenes: Record<
       number,
       {
+        papeletasFalla: number;
+papeletasVirgen: number;
         importeTotal: number;
         cobrado: number;
         pendienteCobro: number;
@@ -487,6 +554,8 @@ if (idsSorteos.length > 0) {
     (lineas || []).forEach((l: any) => {
       if (!resumenes[l.IDSorteo]) {
         resumenes[l.IDSorteo] = {
+          papeletasFalla: 0,
+papeletasVirgen: 0,
           importeTotal: 0,
           cobrado: 0,
           pendienteCobro: 0,
@@ -499,6 +568,9 @@ if (idsSorteos.length > 0) {
       }
   
       const resumen = resumenes[l.IDSorteo];
+
+      resumen.papeletasFalla += Number(l.PapeletasFalla || 0);
+resumen.papeletasVirgen += Number(l.PapeletasVirgen || 0);
   
       const importe =
         Number(l.ImporteFalla || 0) +
@@ -510,12 +582,24 @@ if (idsSorteos.length > 0) {
         if (importe > 0) {
           resumen.grupos++;
         
-          if (l.PagadoConfirmado) {
-            resumen.cobrado += importe;
-            resumen.gruposPagados++;
-          } else {
-            resumen.pendienteCobro += importe;
+          const importePagadoReal = Number(l.ImportePagado || 0);
+        
+          const cobradoLinea = l.PagadoConfirmado
+            ? importe
+            : Math.min(importe, importePagadoReal);
+        
+          const pendienteLinea = Math.max(
+            0,
+            importe - cobradoLinea
+          );
+        
+          resumen.cobrado += cobradoLinea;
+          resumen.pendienteCobro += pendienteLinea;
+        
+          if (pendienteLinea > 0) {
             resumen.gruposPendientes++;
+          } else {
+            resumen.gruposPagados++;
           }
         }
   
@@ -698,6 +782,340 @@ if (idsSorteos.length > 0) {
     return `${dia}/${mes}/${anio}`;
   }
 
+  async function exportarSorteoExcel(sorteo: any) {
+    const { data: lineas, error } = await (supabase as any)
+      .from("LOTERIA_SORTEOS_GRUPOS")
+      .select(`
+        NombreParticipante,
+        NUMCENS_Responsable,
+        PapeletasFalla,
+        PapeletasVirgen,
+        ImporteFalla,
+        ImporteVirgen,
+        ImportePagado,
+        ImportePremio,
+        PremioEntregado,
+        PagadoConfirmado
+      `)
+      .eq("IDSorteo", sorteo.ID)
+      .order("NombreParticipante", { ascending: true });
+  
+    if (error) {
+      alert("Error cargando los datos del sorteo: " + error.message);
+      return;
+    }
+  
+    const filas = (lineas || []).map((linea: any) => {
+      const total =
+        Number(linea.ImporteFalla || 0) +
+        Number(linea.ImporteVirgen || 0);
+  
+      const cobrado = linea.PagadoConfirmado
+        ? total
+        : Math.min(
+            total,
+            Math.max(0, Number(linea.ImportePagado || 0))
+          );
+  
+      const pendiente = Math.max(0, total - cobrado);
+  
+      const premioTotal = Number(linea.ImportePremio || 0);
+  
+      const premioEntregado = linea.PremioEntregado
+        ? premioTotal
+        : 0;
+  
+      const premioPendiente = linea.PremioEntregado
+        ? 0
+        : premioTotal;
+  
+      const saldo = pendiente - premioPendiente;
+  
+      return {
+        Socio: linea.NombreParticipante || "",
+        NUMCENS: linea.NUMCENS_Responsable || "",
+        "Pap. Falla": Number(linea.PapeletasFalla || 0),
+        "Pap. Virgen": Number(linea.PapeletasVirgen || 0),
+        Total: total,
+        Cobrado: cobrado,
+        Pendiente: pendiente,
+        "Premio total": premioTotal,
+        "Sin entregar": premioPendiente,
+        Entregado: premioEntregado,
+        Saldo: saldo,
+      };
+    });
+  
+    const decimosFalla = Number(sorteo.DecimosFalla || 0);
+const precioDecimoFalla = Number(sorteo.PrecioDecimoFalla || 0);
+const jugadoPapeletaFalla = Number(sorteo.ImportePapeletaFalla || 0);
+const beneficioPapeletaFalla = Number(sorteo.BeneficioFalla || 0);
+const precioVentaFalla =
+  jugadoPapeletaFalla + beneficioPapeletaFalla;
+
+const pagoAdministracionFalla =
+  decimosFalla * precioDecimoFalla;
+
+const papeletasEmitidasFalla =
+  jugadoPapeletaFalla > 0
+    ? Math.floor(pagoAdministracionFalla / jugadoPapeletaFalla)
+    : 0;
+
+const papeletasSociosFalla = filas.reduce(
+  (sum: number, fila: any) =>
+    sum + Number(fila["Pap. Falla"] || 0),
+  0
+);
+
+const sobrantesFalla = Math.max(
+  0,
+  papeletasEmitidasFalla - papeletasSociosFalla
+);
+
+const restoFalla =
+  pagoAdministracionFalla -
+  papeletasEmitidasFalla * jugadoPapeletaFalla;
+
+const decimosVirgen = Number(sorteo.DecimosVirgen || 0);
+const precioDecimoVirgen = Number(sorteo.PrecioDecimoVirgen || 0);
+const jugadoPapeletaVirgen = Number(sorteo.ImportePapeletaVirgen || 0);
+const beneficioPapeletaVirgen = Number(sorteo.BeneficioVirgen || 0);
+const precioVentaVirgen =
+  jugadoPapeletaVirgen + beneficioPapeletaVirgen;
+
+const pagoAdministracionVirgen =
+  decimosVirgen * precioDecimoVirgen;
+
+const papeletasEmitidasVirgen =
+  jugadoPapeletaVirgen > 0
+    ? Math.floor(pagoAdministracionVirgen / jugadoPapeletaVirgen)
+    : 0;
+
+const papeletasSociosVirgen = filas.reduce(
+  (sum: number, fila: any) =>
+    sum + Number(fila["Pap. Virgen"] || 0),
+  0
+);
+
+const sobrantesVirgen = Math.max(
+  0,
+  papeletasEmitidasVirgen - papeletasSociosVirgen
+);
+
+const restoVirgen =
+  pagoAdministracionVirgen -
+  papeletasEmitidasVirgen * jugadoPapeletaVirgen;
+
+  const recaudacionSociosFalla =
+  papeletasSociosFalla * precioVentaFalla;
+
+const importeJugadoSociosFalla =
+  papeletasSociosFalla * jugadoPapeletaFalla;
+
+const beneficioSociosFalla =
+  papeletasSociosFalla * beneficioPapeletaFalla;
+
+const jugadoSobrantesFalla =
+  sobrantesFalla * jugadoPapeletaFalla + restoFalla;
+
+const beneficioPremioFalla =
+  sobrantesFalla * Number(sorteo.PremioFallaPorPapeleta || 0);
+
+
+const recaudacionSociosVirgen =
+  papeletasSociosVirgen * precioVentaVirgen;
+
+const importeJugadoSociosVirgen =
+  papeletasSociosVirgen * jugadoPapeletaVirgen;
+
+const beneficioSociosVirgen =
+  papeletasSociosVirgen * beneficioPapeletaVirgen;
+
+const jugadoSobrantesVirgen =
+  sobrantesVirgen * jugadoPapeletaVirgen + restoVirgen;
+
+const beneficioPremioVirgen =
+  sobrantesVirgen * Number(sorteo.PremioVirgenPorPapeleta || 0);
+
+  const hoja = XLSX.utils.aoa_to_sheet([]);
+
+  XLSX.utils.sheet_add_json(hoja, filas, {
+    origin: "A24",
+  });
+  
+  XLSX.utils.sheet_add_aoa(
+    hoja,
+    [
+      ["SORTEO", formatearFecha(sorteo.FechaSorteo)],
+      [],
+      ["FALLA", "", "", "VIRGEN"],
+  
+      [
+        "Número",
+        sorteo.NumeroFalla || "",
+        "",
+        "Número",
+        sorteo.TipoSorteo === "ESPECIAL"
+          ? ""
+          : sorteo.NumeroVirgen || "",
+      ],
+  
+      [
+        "Décimos",
+        decimosFalla,
+        "",
+        "Décimos",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : decimosVirgen,
+      ],
+  
+      [
+        "Precio décimo",
+        precioDecimoFalla,
+        "",
+        "Precio décimo",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : precioDecimoVirgen,
+      ],
+  
+      [
+        "Papeletas emitidas",
+        papeletasEmitidasFalla,
+        "",
+        "Papeletas emitidas",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : papeletasEmitidasVirgen,
+      ],
+  
+      [
+        "Precio papeleta venta",
+        precioVentaFalla,
+        "",
+        "Precio papeleta venta",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : precioVentaVirgen,
+      ],
+  
+      [
+        "Papeletas socios",
+        papeletasSociosFalla,
+        "",
+        "Papeletas socios",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : papeletasSociosVirgen,
+      ],
+  
+      [
+        "Importe jugado",
+        jugadoPapeletaFalla,
+        "",
+        "Importe jugado",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : jugadoPapeletaVirgen,
+      ],
+  
+      [
+        "Papeletas sobrantes",
+        sobrantesFalla,
+        "",
+        "Papeletas sobrantes",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : sobrantesVirgen,
+      ],
+  
+      [
+        "Beneficio papeleta",
+        beneficioPapeletaFalla,
+        "",
+        "Beneficio papeleta",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : beneficioPapeletaVirgen,
+      ],
+  
+      [
+        "Premio papeletas",
+        Number(sorteo.PremioFallaPorPapeleta || 0),
+        "",
+        "Premio papeletas",
+        sorteo.TipoSorteo === "ESPECIAL"
+          ? ""
+          : Number(sorteo.PremioVirgenPorPapeleta || 0),
+      ],
+  
+      [],
+      ["CÁLCULOS", "", "", "CÁLCULOS"],
+  
+      [
+        "Pago administración",
+        pagoAdministracionFalla,
+        "",
+        "Pago administración",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : pagoAdministracionVirgen,
+      ],
+  
+      [
+        "Recaudación socios",
+        recaudacionSociosFalla,
+        "",
+        "Recaudación socios",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : recaudacionSociosVirgen,
+      ],
+  
+      [
+        "Importe jugado socios",
+        importeJugadoSociosFalla,
+        "",
+        "Importe jugado socios",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : importeJugadoSociosVirgen,
+      ],
+  
+      [
+        "Jugado sobrantes",
+        jugadoSobrantesFalla,
+        "",
+        "Jugado sobrantes",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : jugadoSobrantesVirgen,
+      ],
+  
+      [
+        "Beneficio socios",
+        beneficioSociosFalla,
+        "",
+        "Beneficio socios",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : beneficioSociosVirgen,
+      ],
+  
+      [
+        "Beneficio premio",
+        beneficioPremioFalla,
+        "",
+        "Beneficio premio",
+        sorteo.TipoSorteo === "ESPECIAL" ? "" : beneficioPremioVirgen,
+      ],
+    ],
+    { origin: "A1" }
+  );
+  
+    hoja["!cols"] = [
+      { wch: 32 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 12 },
+    ];
+  
+    const libro = XLSX.utils.book_new();
+  
+    XLSX.utils.book_append_sheet(
+      libro,
+      hoja,
+      "Sorteo"
+    );
+  
+    XLSX.writeFile(
+      libro,
+      `sorteo_${sorteo.FechaSorteo}.xlsx`
+    );
+  }
+
   function imprimirListadoSorteos() {
     router.push("/loterias/sorteos/imprimir")
   }
@@ -826,21 +1244,41 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
       Fecha
     </th>
 
-    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
-      Sorteo
-    </th>
+    <th className="px-4 py-3 text-center text-xs font-semibold uppercase">
+  Socios
+</th>
 
-    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
-      Números
-    </th>
+    <th className="px-4 py-3 text-center text-xs font-semibold uppercase">
+  Papel. Falla
+</th>
 
-    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
-      Cobros
-    </th>
+<th className="px-4 py-3 text-center text-xs font-semibold uppercase">
+  Papel. Virgen
+</th>
 
-    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">
-      Premios
-    </th>
+<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
+  Total
+</th>
+
+<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
+  Cobrado
+</th>
+
+<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
+  Pendiente
+</th>
+
+<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
+  Premio total
+</th>
+
+<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
+  Sin entregar
+</th>
+
+<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
+  Entregado
+</th>
 
     <th className="px-4 py-3 text-center text-xs font-semibold uppercase">
       Acciones
@@ -852,6 +1290,8 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
 <tbody className="divide-y divide-zinc-200 bg-white">
   {sorteos.map((sorteo) => {
     const resumen: any = resumenesSorteos[sorteo.ID] || {
+      papeletasFalla: 0,
+papeletasVirgen: 0,
       importeTotal: 0,
       cobrado: 0,
       pendienteCobro: 0,
@@ -897,184 +1337,67 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
           >
             {formatearFecha(sorteo.FechaSorteo)}
           </button>
-
-          <div className="mt-1 text-xs text-zinc-500">
-            {sorteo.TipoSorteo === "ESPECIAL"
-              ? "Especial"
-              : "Semanal"}
-          </div>
-
-          <div
-  className={`mt-2 inline-block px-2 py-1 text-xs font-medium ${
-    sorteoCerrado
-      ? "bg-green-100 text-green-800"
-      : hayCobroPendiente && hayPremioPendiente
-      ? "bg-orange-100 text-orange-800"
-      : hayPremioPendiente
-      ? "bg-orange-100 text-orange-800"
-      : "bg-amber-100 text-amber-800"
-  }`}
->
-  {sorteoCerrado
-    ? "Cerrado"
-    : hayCobroPendiente && hayPremioPendiente
-    ? "Cobro y premio pendientes"
-    : hayPremioPendiente
-    ? "Premio pendiente"
-    : "Cobro pendiente"}
-</div>
 </td>
 
-        <td className="px-4 py-3 text-sm">
-          <div>
-            <span className="text-zinc-500">Grupos:</span>{" "}
-            <span className="font-semibold">
-              {resumen.grupos}
-            </span>
-          </div>
+<td className="px-4 py-3 text-center text-sm font-semibold">
+  {resumen.grupos}
+</td>
 
-          <div className="mt-1 text-xs text-zinc-500">
-            Pagados: {resumen.gruposPagados}
-          </div>
+        <td className="px-4 py-3 text-center text-sm font-semibold">
+  {resumen.papeletasFalla}
+</td>
 
-          <div className="text-xs text-zinc-500">
-            Pendientes: {resumen.gruposPendientes}
-          </div>
-        </td>
+<td className="px-4 py-3 text-center text-sm font-semibold">
+  {resumen.papeletasVirgen}
+</td>
 
-        <td className="px-4 py-3 text-sm">
-          <div>
-            <span className="font-medium text-red-900">
-              Falla:
-            </span>{" "}
-            <span className="font-semibold">
-              {sorteo.NumeroFalla || "—"}
-            </span>
-          </div>
+<td className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+  {resumen.importeTotal.toFixed(2)} €
+</td>
 
-          {sorteo.TipoSorteo !== "ESPECIAL" && (
-            <div className="mt-2">
-              <span className="font-medium text-blue-900">
-                Virgen:
-              </span>{" "}
-              <span className="font-semibold">
-                {sorteo.NumeroVirgen || "—"}
-              </span>
-            </div>
-          )}
-        </td>
+<td className="px-4 py-3 text-right text-sm font-semibold text-green-700 whitespace-nowrap">
+  {resumen.cobrado.toFixed(2)} €
+</td>
 
-        <td className="px-4 py-3 text-sm">
-          <div className="flex justify-between gap-5">
-            <span className="text-zinc-500">Total:</span>
-            <span className="font-semibold">
-              {resumen.importeTotal.toFixed(2)} €
-            </span>
-          </div>
-
-          <div className="mt-1 flex justify-between gap-5">
-            <span className="text-zinc-500">Cobrado:</span>
-            <span className="font-semibold text-green-700">
-              {resumen.cobrado.toFixed(2)} €
-            </span>
-          </div>
-
-          <div className="mt-1 flex justify-between gap-5">
-            <span className="text-zinc-500">Pendiente:</span>
-            <span
-              className={`font-semibold ${
-                resumen.pendienteCobro > 0
-                  ? "text-red-700"
-                  : "text-zinc-700"
-              }`}
-            >
-              {resumen.pendienteCobro.toFixed(2)} €
-            </span>
-          </div>
-        </td>
-
-        <td className="px-4 py-3 text-sm">
-
-        <div
-  className={`mb-2 inline-block px-2 py-1 text-xs font-medium ${
-    !hayPremio
-      ? "bg-zinc-100 text-zinc-500"
-      : hayPremioPendiente
-      ? "bg-orange-100 text-orange-800"
-      : "bg-green-100 text-green-800"
+<td
+  className={`px-4 py-3 text-right text-sm font-semibold ${
+    resumen.pendienteCobro > 0
+      ? "text-red-700"
+      : "text-zinc-700"
   }`}
 >
-  {!hayPremio
-    ? "Sin premio"
-    : hayPremioPendiente
-    ? "Premio pendiente"
-    : "Premio entregado"}
-</div>
+  {resumen.pendienteCobro.toFixed(2)} €
+</td>
 
-{premioFallaPorPapeleta > 0 && (
-  <div className="mb-1 flex justify-between gap-5 text-xs">
-    <span className="text-zinc-500">Falla / papeleta:</span>
-    <span className="font-semibold">
-      {premioFallaPorPapeleta.toFixed(2)} €
-    </span>
-  </div>
-)}
+<td className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+  {resumen.premioTotal.toFixed(2)} €
+</td>
 
-{sorteo.TipoSorteo !== "ESPECIAL" &&
-  premioVirgenPorPapeleta > 0 && (
-    <div className="mb-2 flex justify-between gap-5 text-xs">
-      <span className="text-zinc-500">Virgen / papeleta:</span>
-      <span className="font-semibold">
-        {premioVirgenPorPapeleta.toFixed(2)} €
-      </span>
-    </div>
-  )}
-          <div className="flex justify-between gap-5">
-            <span className="text-zinc-500">Total:</span>
-            <span className="font-semibold">
-              {resumen.premioTotal.toFixed(2)} €
-            </span>
-          </div>
+<td
+  className={`px-4 py-3 text-right text-sm font-semibold ${
+    resumen.premioPendiente > 0
+      ? "text-red-700"
+      : "text-zinc-700"
+  }`}
+>
+  {resumen.premioPendiente.toFixed(2)} €
+</td>
 
-          <div className="mt-1 flex justify-between gap-5">
-            <span className="text-zinc-500">
-              Sin entregar:
-            </span>
-
-            <span
-              className={`font-semibold ${
-                resumen.premioPendiente > 0
-                  ? "text-red-700"
-                  : "text-zinc-700"
-              }`}
-            >
-              {resumen.premioPendiente.toFixed(2)} €
-            </span>
-          </div>
-
-          <div className="mt-1 flex justify-between gap-5">
-            <span className="text-zinc-500">
-              Entregado:
-            </span>
-
-            <span className="font-semibold text-green-700">
-              {(
-                resumen.premioTotal -
-                resumen.premioPendiente
-              ).toFixed(2)}{" "}
-              €
-            </span>
-          </div>
-        </td>
+<td className="px-4 py-3 text-right text-sm font-semibold text-green-700">
+  {(
+    resumen.premioTotal -
+    resumen.premioPendiente
+  ).toFixed(2)} €
+</td>
 
         <td className="px-4 py-3">
-          <div className="flex justify-center gap-2">
+        <div className="flex justify-center gap-1">
             <button
               onClick={() =>
                 router.push(`/loterias/sorteos/${sorteo.ID}`)
               }
               title="Ver líneas de socios"
-              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+              className="rounded bg-zinc-100 px-1.5 py-1 text-xs hover:bg-zinc-200"
             >
               👥
             </button>
@@ -1082,7 +1405,7 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
             <button
               onClick={() => editarSorteo(sorteo)}
               title="Editar sorteo"
-              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+              className="rounded bg-zinc-100 px-1.5 py-1 text-xs hover:bg-zinc-200"
             >
               ✏️
             </button>
@@ -1094,17 +1417,15 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
                 )
               }
               title="Imprimir ficha"
-              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+              className="rounded bg-zinc-100 px-1.5 py-1 text-xs hover:bg-zinc-200"
             >
               🖨️
             </button>
 
             <button
-              onClick={() =>
-                alert("Pendiente exportar este sorteo a Excel")
-              }
-              title="Exportar este sorteo"
-              className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200"
+  onClick={() => exportarSorteoExcel(sorteo)}
+  title="Exportar este sorteo"
+              className="rounded bg-zinc-100 px-1.5 py-1 text-xs hover:bg-zinc-200"
             >
               📗
             </button>
@@ -1112,7 +1433,7 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
             <button
               onClick={() => eliminarSorteo(sorteo.ID)}
               title="Eliminar"
-              className="rounded bg-red-100 px-2 py-1 text-sm hover:bg-red-200"
+              className="rounded bg-zinc-100 px-1.5 py-1 text-xs hover:bg-zinc-200"
             >
               🗑️
             </button>

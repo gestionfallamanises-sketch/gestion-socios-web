@@ -8,6 +8,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 import Sidebar from "../../../components/Sidebar";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { supabase } from "../../../../lib/supabase";
+import { createBrowserClient } from "@supabase/ssr";
 
 function limpiarNif(nif: string) {
   return nif.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
@@ -17,6 +18,10 @@ export default function EditarSocioPage() {
   const params = useParams();
   const router = useRouter();
   const numcens = params.numcens as string;
+  const supabaseAutenticado = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const [socio, setSocio] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -405,36 +410,54 @@ IDCuotaManual: socio.IDCuotaManual,
       return;
     }
   }
-  
-  await supabase
-    .from("FORMAS_PAGO_SOCIOS")
-    .update({ Activo: false })
-    .eq("NUMCENS", Number(numcens));
-  
-    const metodoFinal = metodo;
-    const pagadorFinal = pagador
-    ? Number(pagador)
-    : pagadorOriginal || Number(numcens);
 
-  const { error: errorFormaPago } = await supabase
-    .from("FORMAS_PAGO_SOCIOS")
-    .insert({
-      NUMCENS: Number(numcens),
-      Metodo: metodoFinal,
-      NumeroPlazos: numeroPlazos,
-      Fraccionado: numeroPlazos > 1,
-      Activo: true,
-      NUMCENS_Pagador: pagadorFinal,
-      Observaciones: observacionesPago || null,
-    });
-  
-    if (errorFormaPago) {
-      setGuardando(false);
-      setError(errorFormaPago.message);
-      setContinuarGuardado(false);
-setAplicarASociosPagados(false);
-      return;
-    }
+  const metodoFinal = metodo;
+
+const pagadorFinal = pagador
+  ? Number(pagador)
+  : pagadorOriginal || Number(numcens);
+
+  const { data: accesoCuota, error: errorAcceso } =
+  await supabaseAutenticado.rpc("comprobar_acceso_cuota_socio", {
+    p_numcens: Number(numcens),
+    p_ejercicio: 2027,
+  });
+
+if (errorAcceso || accesoCuota !== true) {
+  setGuardando(false);
+  setError(
+    "No se puede acceder a la cuota del socio con la sesión autenticada."
+  );
+  return;
+}
+console.log("INICIO guardar_forma_pago_socio", numcens);
+
+const { error: errorFormaPago } = await supabaseAutenticado.rpc(
+  "guardar_forma_pago_socio",
+  {
+    p_numcens: Number(numcens),
+    p_metodo: metodoFinal,
+    p_numero_plazos:
+      metodoFinal?.toLowerCase() === "efectivo"
+        ? 1
+        : numeroPlazos,
+    p_numcens_pagador: pagadorFinal,
+    p_observaciones: observacionesPago || null,
+  }
+);
+
+console.log("FIN guardar_forma_pago_socio", {
+  numcens,
+  error: errorFormaPago?.message || null,
+});
+
+if (errorFormaPago) {
+  setGuardando(false);
+  setError(errorFormaPago.message);
+  setContinuarGuardado(false);
+  setAplicarASociosPagados(false);
+  return;
+}
 
     await supabase
   .from("PAGADORES_EXTRA_CUOTA")
@@ -501,20 +524,6 @@ if (aplicarASociosPagados && sociosPagadosSeleccionados.length > 0) {
   }
 }
 
-
-const { error: errorRecalculo } = await (supabase as any).rpc(
-  "generar_actualizar_cuotas_completo",
-  {
-    p_ejercicio: ejercicioActivo,
-  }
-);
-    
-    if (errorRecalculo) {
-      setGuardando(false);
-      setError(errorRecalculo.message);
-      return;
-    }
-
     const { data: cuotaActual } = await (supabase as any)
     .from("CUOTAS_SOCIOS")
     .select("IDCuotaSocio")
@@ -522,15 +531,20 @@ const { error: errorRecalculo } = await (supabase as any).rpc(
     .eq("Ejercicio", ejercicioActivo)
     .maybeSingle();
   
-  if (cuotaActual?.IDCuotaSocio) {
-    await (supabase as any).rpc("rehacer_plazos_cuota", {
-      p_id_cuota_socio: cuotaActual.IDCuotaSocio,
-    });
-  
-    await (supabase as any).rpc("recalcular_pendientes_cuota", {
-      p_id_cuota_socio: cuotaActual.IDCuotaSocio,
-    });
-  }
+    if (cuotaActual?.IDCuotaSocio) {
+      const { error: errorPendientes } = await (supabase as any).rpc(
+        "recalcular_pendientes_cuota",
+        {
+          p_id_cuota_socio: cuotaActual.IDCuotaSocio,
+        }
+      );
+    
+      if (errorPendientes) {
+        setGuardando(false);
+        setError(errorPendientes.message);
+        return;
+      }
+    }
     
     setHayCambios(false);
 setGuardando(false);
@@ -854,6 +868,7 @@ router.push(`/socios/${numcens}`);
   onChange={setIban}
 />
 
+{metodo?.toLowerCase() === "banco" && (
   <div>
     <label className="mb-1 block text-xs font-medium uppercase text-zinc-500">
       Número de plazos
@@ -871,6 +886,7 @@ router.push(`/socios/${numcens}`);
       ))}
     </select>
   </div>
+)}
 
   <CampoTexto
     label="Titular cuenta"

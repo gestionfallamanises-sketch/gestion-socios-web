@@ -1011,6 +1011,16 @@ const beneficioSociosVirgen =
 papeletasVendidasVirgen *
 configuracion.BeneficioPapeletaVirgen;
 
+  // Importe de las papeletas entregadas a socios, descontando devoluciones.
+  // Misma base de cálculo que el total de cada recibo de la tabla inferior.
+  const totalEntregadoSocios = entregas.reduce((suma, fila) => {
+    const falla = Math.max(0, Number(fila.PapeletasFalla || 0) - Number(fila.DevueltasFalla || 0));
+    const virgen = Math.max(0, Number(fila.PapeletasVirgen || 0) - Number(fila.DevueltasVirgen || 0));
+    return suma +
+      falla * Number(configuracion.ImportePapeletaFalla || 0) +
+      virgen * Number(configuracion.ImportePapeletaVirgen || 0);
+  }, 0);
+
   const importePagado = entregas.reduce(
     (suma, e) => suma + totalPagadoEntrega(e.ID),
     0
@@ -2459,22 +2469,23 @@ movimientoEditando={movimientoEditando}
 
 </div>
 
-    {/* PENDIENTE TOTAL DEL SORTEO */}
-<div className="mt-2 flex items-center justify-end gap-3 text-sm">
-      <span className="font-medium text-zinc-700">
-        Pendiente de cobro a socios:
-      </span>
-
-      <span
-        className={`text-base font-bold ${
-          pendienteCobro > 0
-            ? "text-red-700"
-            : "text-green-700"
-        }`}
-      >
-        {euros(pendienteCobro)}
-      </span>
-    </div>
+    {/* TOTALES SOCIOS: mismo lugar que el pendiente anterior */}
+<div className="mt-2 flex flex-nowrap items-center justify-end gap-4 whitespace-nowrap text-xs">
+  <div className="flex items-center gap-2">
+    <span className="font-medium text-zinc-700">Total entregado a socios:</span>
+    <span className="font-semibold text-zinc-900">{euros(totalEntregadoSocios)}</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="font-medium text-zinc-700">Total cobrado:</span>
+    <span className="font-semibold text-green-700">{euros(importePagado)}</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="font-medium text-zinc-700">Pendiente de cobro a socios:</span>
+    <span className={`font-bold ${pendienteCobro > 0 ? "text-red-700" : "text-green-700"}`}>
+      {euros(pendienteCobro)}
+    </span>
+  </div>
+</div>
 
   </div>
 </section>

@@ -278,22 +278,6 @@ useEffect(() => {
     const sorteosLista = sorteosData || [];
     setSorteos(sorteosLista);
   
-    const registrosIniciales = sorteosLista.map((sorteo: any) => ({
-      IDSorteo: sorteo.ID,
-      IDGrupoLoteria: Number(params.idGrupo),
-    }));
-  
-    const { error: errorUpsert } = await (supabase as any)
-      .from("LOTERIA_SORTEOS_GRUPOS")
-      .upsert(registrosIniciales, {
-        onConflict: "IDSorteo,IDGrupoLoteria",
-      });
-  
-    if (errorUpsert) {
-      alert("Error creando filas del responsable: " + errorUpsert.message);
-      return;
-    }
-  
     const { data: filasData, error: errorFilas } = await (supabase as any)
       .from("LOTERIA_SORTEOS_GRUPOS")
       .select("*")
@@ -304,49 +288,21 @@ useEffect(() => {
       return;
     }
   
-    const filasCompletas = sorteosLista.map((sorteo: any) => {
-      const fila = filasData?.find(
-        (f: any) => Number(f.IDSorteo) === Number(sorteo.ID)
-      );
-  
-      return {
-        ...fila,
-      
-        IDSorteo: sorteo.ID,
-        FechaSorteo: sorteo.FechaSorteo,
-      
-        PapeletasFalla: Number(fila?.PapeletasFalla || 0),
+    const filasCompletas = (filasData || [])
+  .map((fila: any) => {
+    const sorteo = sorteosLista.find(
+      (s: any) => Number(s.ID) === Number(fila.IDSorteo)
+    );
 
-        PapeletasVirgen:
-        sorteo.TipoSorteo === "ESPECIAL"
-          ? 0
-          : Number(fila?.PapeletasVirgen || 0),
-      
+    if (!sorteo) return null;
 
-ImporteFalla: Number(fila?.ImporteFalla || 0),
-
-ImporteVirgen:
-        sorteo.TipoSorteo === "ESPECIAL"
-          ? 0
-          : Number(fila?.ImporteVirgen || 0),
-
-
-ImportePagado: Number(fila?.ImportePagado || 0),
-
-PapeletasPremioFalla: Number(fila?.PapeletasPremioFalla || 0),
-
-PapeletasPremioVirgen:
-  sorteo.TipoSorteo === "ESPECIAL"
-    ? 0
-    : Number(fila?.PapeletasPremioVirgen || 0),
-
-ImportePremio: Number(fila?.ImportePremio || 0),
-
-PremioEntregado: fila?.PremioEntregado ?? false,
-
-PagadoConfirmado: fila?.PagadoConfirmado ?? false,
-      };
-    });
+    return {
+      ...fila,
+      IDSorteo: sorteo.ID,
+      FechaSorteo: sorteo.FechaSorteo,
+    };
+  })
+  .filter(Boolean);
   
     setFilas(filasCompletas);
   }

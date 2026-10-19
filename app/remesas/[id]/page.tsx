@@ -11,6 +11,7 @@ import MarcarReciboAgrupadoDevueltoButton from "@/app/components/MarcarReciboAgr
 import AnularReciboAgrupadoDevueltoButton from "@/app/components/AnularReciboAgrupadoDevueltoButton";
 import AgregarLineasRemesaButton from "@/app/components/AgregarLineasRemesaButton";
 import { normalizarTexto } from "@/lib/texto";
+import DesgloseReciboFlotante from "@/app/components/DesgloseReciboFlotante";
 
 export default async function RemesaDetallePage({
   params,
@@ -374,46 +375,14 @@ const remesaAgrupada: any[] = Object.values(
     className="border-t"
   >
     <td className="px-2 py-2">
-    <details className="relative">
-        <summary className="cursor-pointer font-medium">
-          {fila.NombreDeudor}
-        </summary>
+    
+    <DesgloseReciboFlotante
+  nombre={fila.NombreDeudor}
+  lineas={fila.Lineas || []}
+  remesaCobrada={remesaAny?.Estado === "Cobrada"}
+  idRemesa={Number(id)}
+/>
 
-        <div className="absolute left-0 top-full z-20 mt-1 w-[360px] rounded-md border border-zinc-200 bg-white p-3 shadow-lg">
-  {fila.Lineas?.map((linea: any) => (
-    <div
-      key={linea.IDDetalleRemesa}
-      className="flex items-center justify-between gap-4 border-b border-zinc-100 py-2 last:border-b-0"
-    >
-      <span className="text-xs text-zinc-700">
-        {linea.NUMCENS} ·{" "}
-        {[linea.Apellidos, linea.Nombre]
-          .filter(Boolean)
-          .join(", ")}
-      </span>
-
-      <div className="flex items-center gap-2">
-  {remesaAny?.Estado === "Cobrada" ? (
-    <span className="whitespace-nowrap text-xs font-semibold">
-      {Number(linea.Importe || 0).toFixed(2)} €
-    </span>
-  ) : (
-    <EditarImporteRemesaInput
-      idDetalleRemesa={linea.IDDetalleRemesa}
-      importeInicial={Number(linea.Importe || 0)}
-    />
-  )}
-
-  {remesaAny?.Estado !== "Cobrada" && (
-    <QuitarLineaRemesaButton
-      idDetalleRemesa={linea.IDDetalleRemesa}
-    />
-  )}
-</div>
-    </div>
-  ))}
-</div>
-      </details>
     </td>
 
     <td className="px-2 py-2">{fila.ReferenciaMandato}</td>

@@ -39,8 +39,30 @@ export default function AgregarLineasRemesaButton({
       return;
     }
 
-    setLineas(data || []);
-    setCargando(false);
+    const lineasRecibidas = data || [];
+
+const idsVistos = new Set<number>();
+
+const lineasUnicas = lineasRecibidas.filter((linea: any) => {
+  const id = Number(linea.IDPlazo);
+
+  if (idsVistos.has(id)) {
+    return false;
+  }
+
+  idsVistos.add(id);
+  return true;
+});
+
+if (lineasUnicas.length !== lineasRecibidas.length) {
+  console.warn(
+    "Plazos duplicados recibidos desde Supabase:",
+    lineasRecibidas.length - lineasUnicas.length
+  );
+}
+
+setLineas(lineasUnicas);
+setCargando(false);
   }
 
   function toggleLinea(idPlazo: number) {
@@ -52,7 +74,9 @@ export default function AgregarLineasRemesaButton({
   }
 
   function seleccionarTodas() {
-    setSeleccionadas(lineas.map((linea) => Number(linea.IDPlazo)));
+    setSeleccionadas([
+      ...new Set(lineas.map((linea) => Number(linea.IDPlazo))),
+    ]);
   }
 
   function limpiarSeleccion() {

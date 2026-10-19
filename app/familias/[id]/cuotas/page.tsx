@@ -25,6 +25,30 @@ export default async function CuotasFamiliaPage({
     const miembrosAny = (miembros as any[]) || [];
     const numsFamilia = miembrosAny.map((s) => s.NUMCENS);
 
+  // Forma de pago vigente: para Efectivo no se usa el importe de
+  // CUOTAS_PLAZOS como saldo, sino el resumen contable real.
+  const { data: formasPago } = numsFamilia.length > 0
+    ? await supabase
+        .from("FORMAS_PAGO_SOCIOS")
+        .select("NUMCENS, Metodo")
+        .in("NUMCENS", numsFamilia)
+        .eq("Activo", true)
+    : { data: [] };
+
+  const metodosPorSocio = new Map<number, string>(
+    ((formasPago as any[]) || []).map((f) => [
+      Number(f.NUMCENS),
+      String(f.Metodo || "").trim().toLowerCase(),
+    ])
+  );
+
+  const { data: ejercicioActivo } = await supabase
+    .from("EJERCICIOS")
+    .select("Ejercicio")
+    .eq("Activo", true)
+    .maybeSingle();
+  const ejercicioVigente = Number((ejercicioActivo as any)?.Ejercicio || 2027);
+
   const { data: cuotas } =
     numsFamilia.length > 0
       ? await supabase
@@ -180,43 +204,48 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
   
   const pendientesPorSocio = cuotasAny
     .map((cuota) => {
+      const resumen = resumenCuotasFamiliaAny.find(
+        (v) => Number(v.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
+      );
+      const pendienteReal = Number(resumen?.Pendiente ?? cuota.Pendiente ?? 0);
+      const esEfectivo =
+        Number(cuota.Ejercicio) === ejercicioVigente &&
+        metodosPorSocio.get(Number(cuota.NUMCENS)) === "efectivo";
+
+      // Efectivo: el plazo interno no representa necesariamente
+      // el pendiente anual. Usar la misma fuente que la ficha individual.
+      if (esEfectivo) {
+        return {
+          socio: `${cuota.Apellidos}, ${cuota.Nombre}`,
+          grupos: [] as { importe: number; cantidad: number }[],
+          totalPendiente: pendienteReal,
+          esEfectivo: true,
+        };
+      }
+
+      // Banco: mantener el desglose existente por importe de plazo.
       const plazosCuota = plazosAny.filter(
         (p) => Number(p.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
       );
-  
       const pendientes = plazosCuota.filter(
-        (p) =>
-          Number(p.Pendiente || 0) > 0 &&
-          p.Estado !== "Pagado"
+        (p) => Number(p.Pendiente || 0) > 0 && p.Estado !== "Pagado"
       );
-  
       const grupos = Object.values(
         pendientes.reduce((acc: any, plazo: any) => {
-          const importeCuota = Number(
-            plazo.Importe || plazo.ImportePlazo || 0
-          );
-          
+          const importeCuota = Number(plazo.Importe || plazo.ImportePlazo || 0);
           const importe = importeCuota.toFixed(2);
-  
-          if (!acc[importe]) {
-            acc[importe] = {
-              importe: importeCuota,
-              cantidad: 0,
-            };
-          }
-  
+          if (!acc[importe]) acc[importe] = { importe: importeCuota, cantidad: 0 };
           acc[importe].cantidad += 1;
           return acc;
         }, {})
-      ) as any[];
-  
+      ) as { importe: number; cantidad: number }[];
       return {
         socio: `${cuota.Apellidos}, ${cuota.Nombre}`,
         grupos,
         totalPendiente: pendientes.reduce(
-          (acc, p) => acc + Number(p.Pendiente || 0),
-          0
+          (acc, p) => acc + Number(p.Pendiente || 0), 0
         ),
+        esEfectivo: false,
       };
     })
     .filter((item) => item.totalPendiente > 0);
@@ -331,7 +360,11 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
                 {item.socio}
               </p>
 
-              {item.grupos.map((grupo: any) => (
+               {item.esEfectivo ? (
+                 <p className="text-zinc-700">
+                   Pendiente de pago: <span className="font-medium">{item.totalPendiente.toFixed(2)} €</span>
+                 </p>
+               ) : item.grupos.map((grupo: any) => (
                 <p key={grupo.importe} className="text-zinc-700">
                   {grupo.cantidad} cuota
                   {grupo.cantidad === 1 ? "" : "s"} pendiente

@@ -1,4 +1,5 @@
 import React from "react";
+import EdicionFichaSocio from "../../components/EdicionFichaSocio";
 import Link from "next/link";
 import Sidebar from "../../components/Sidebar";
 import { supabase } from "../../../lib/supabaseClient";
@@ -245,7 +246,7 @@ const textoResponsableLoteria = grupoLoteria
   </div>
 </div>
 
-          <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
+          <section className="mb-3 border border-zinc-200 bg-white shadow-sm">
   <div className="border-l-4 border-red-900 px-6 py-5">
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div>
@@ -294,145 +295,15 @@ const textoResponsableLoteria = grupoLoteria
   </div>
 </section>
 
-<section className="mb-8 border border-zinc-200 bg-white">
-  <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
-    <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-        Datos personales
-      </h2>
+<EdicionFichaSocio seccion="personal" numcens={Number(numcens)} estado={String(socioAny.Estado || "")}
+ socio={socioAny} banco={datosBancoAny} formaPago={formaPagoAny} />
+<EdicionFichaSocio seccion="configuracion" numcens={Number(numcens)} estado={String(socioAny.Estado || "")}
+ socio={socioAny} banco={datosBancoAny} formaPago={formaPagoAny}
+ loteria={{falla:Number(grupoLoteria?.PapeletasFalla || 0), virgen:Number(grupoLoteria?.PapeletasVirgen || 0), navidad:Number(grupoLoteria?.PapeletasNavidad || 0), nino:Number(grupoLoteria?.PapeletasNino || 0), responsable:textoResponsableLoteria}} />
+<EdicionFichaSocio seccion="pago" numcens={Number(numcens)} estado={String(socioAny.Estado || "")}
+ socio={socioAny} banco={datosBancoAny} formaPago={formaPagoAny} cuota={cuotaActual as any} textoPagador={textoPagador} pagadoresExtra={pagadoresExtraAny}/>
 
-      <p className="text-xs text-zinc-500">
-        Información principal del socio
-      </p>
-    </div>
-
-    {socioAny.Estado?.toLowerCase() !== "baja" ? (
-      <Link
-        href={"/socios/" + socioAny.NUMCENS + "/editar"}
-        className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-      >
-        Editar
-      </Link>
-    ) : (
-      <div className="cursor-not-allowed bg-zinc-400 px-4 py-2 text-sm font-medium text-white">
-        Socio dado de baja
-      </div>
-    )}
-  </div>
-
-  <div className="grid grid-cols-2 lg:grid-cols-6">
-  <Bloque
-  label="F. Nacimiento"
-  value={
-    socioAny["FECHA de NACIMIENTO"]
-      ? new Date(socioAny["FECHA de NACIMIENTO"])
-          .toLocaleDateString("es-ES")
-      : "-"
-  }
-/>
-<Bloque label="Teléfono 1" value={socioAny["Teléfono 1"]} />
-
-<Bloque label="Teléfono 2" value={socioAny["Teléfono 2"]} />
-    <Bloque label="NIF" value={socioAny.NIF} />
-    <Bloque label="Código postal" value={socioAny["Código Postal"]} />
-    <Bloque label="Ciudad" value={socioAny.Ciudad} />
-  </div>
-  <div className="flex items-center gap-3 border-t border-zinc-200 px-4 py-3">
-  <span className="text-xs font-semibold uppercase text-zinc-500">
-    Dirección
-  </span>
-
-  <span className="text-sm text-zinc-900">
-    {socioAny.Dirección || "-"}
-  </span>
-</div>
-</section>
-
-<section className="mb-8">
-  <div className="border border-zinc-200 bg-white">
-  <div className="bg-zinc-100 px-4 py-3">
-  <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-    Configuración socio
-  </h2>
-</div>
-
-    <div className="grid grid-cols-2 lg:grid-cols-5">
-      <Bloque label="Comisión" value={socioAny.Comision} />
-      <Bloque label="Sexo" value={socioAny.SEXE} />
-      <Bloque label="Banda" value={socioAny.EsBanda ? "Sí" : "No"} />
-      <Bloque label="Cargo" value={socioAny.CARREG} />
-
-      <LoteriaSocioDesplegable
-  conLoteria={Boolean(socioAny.ConLoteria)}
-  falla={Number(grupoLoteria?.PapeletasFalla || 0)}
-  virgen={Number(grupoLoteria?.PapeletasVirgen || 0)}
-  navidad={Number(grupoLoteria?.PapeletasNavidad || 0)}
-  nino={Number(grupoLoteria?.PapeletasNino || 0)}
-  responsable={textoResponsableLoteria}
-  numcens={Number(numcens)}
-/>
-    </div>
-  </div>
-</section>
-
-<section className="mb-8 border border-zinc-200 bg-white">
-  <div className="bg-zinc-100 px-4 py-3">
-    <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-      Datos de pago
-    </h2>
-
-    <p className="text-xs text-zinc-500">
-      Banco, forma de pago y cuota actual
-    </p>
-  </div>
-
-  <div className="grid grid-cols-2 lg:grid-cols-[0.8fr_1.2fr_2fr_0.8fr_0.6fr]">
-  <Bloque
-    label="Cuota actual"
-    value={
-      (cuotaActual as any)?.Importe
-        ? Number((cuotaActual as any).Importe).toFixed(2) + " €"
-        : "-"
-    }
-  />
-
-  <Bloque
-    label="Tipo cuota"
-    value={
-      (cuotaActual as any)?.Descripcion ||
-      (cuotaActual as any)?.TipoCuota ||
-      (cuotaActual as any)?.IDCuota
-    }
-  />
-
-  <Bloque
-    label="IBAN"
-    value={datosBancoAny?.IBAN}
-  />
-
-  <Bloque
-    label="Forma pago"
-    value={formaPagoAny?.Metodo || "-"}
-  />
-
-  <Bloque
-    label="Nº plazos"
-    value={formaPagoAny?.NumeroPlazos || "-"}
-  />
-</div>
-
-<div className="flex items-center gap-3 border-t border-zinc-200 px-4 py-3">
-  <span className="text-xs font-semibold uppercase text-zinc-500">
-    Pagador
-  </span>
-
-  <span className="text-sm text-zinc-900">
-    {textoPagador}
-  </span>
-</div>
-
-</section>
-          <section className="mb-10 border border-zinc-200 bg-white">
+<section className="mb-3 border border-zinc-200 bg-white">
           <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
   <div>
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
@@ -622,7 +493,7 @@ const textoResponsableLoteria = grupoLoteria
   </div>
 </section>
 
-<section className="mb-10 border border-zinc-200 bg-white">
+<section className="mb-3 border border-zinc-200 bg-white">
   <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
     <div>
       <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">

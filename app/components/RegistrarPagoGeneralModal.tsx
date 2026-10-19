@@ -211,16 +211,16 @@ const diferencia =
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-3xl border border-zinc-200 bg-white shadow-xl">
-        <div className="border-l-4 border-red-900 px-6 py-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2">
+  <div className="w-full max-w-2xl border border-zinc-200 bg-white shadow-xl">
+  <div className="border-l-4 border-red-900 px-4 py-2">
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-lg font-bold text-red-900">
                 Registrar pago
               </h2>
 
-              <p className="mt-2 text-sm text-zinc-600">
+              <p className="mt-1 text-xs text-zinc-600">
                 Selecciona el tipo de pago que deseas registrar.
               </p>
             </div>
@@ -235,7 +235,7 @@ const diferencia =
           </div>
         </div>
 
-        <div className="space-y-6 p-6">
+        <div className="space-y-2 p-3">
           <div>
             <label className="mb-2 block text-sm font-medium">
               Tipo de pago
@@ -295,7 +295,7 @@ const diferencia =
 )}
 
 {socioSeleccionado && (
-  <div className="grid gap-3 md:grid-cols-3">
+  <div className="grid grid-cols-[24px_1fr_120px_120px] items-center gap-2 border-t py-1.5">
     <div>
       <label className="mb-1 block text-sm font-medium">
         Importe a cuenta
@@ -413,7 +413,7 @@ const diferencia =
                       {sociosPagador.map((socio) => (
                         <tr
                           key={socio.NUMCENS}
-                          className="border-b border-zinc-100"
+                          className="h-9 border-b border-zinc-100"
                         >
                           <td className="text-center">
                             <input
@@ -467,44 +467,46 @@ const diferencia =
                     </tbody>
                   </table>
 
-                  <div className="mt-4 flex flex-col gap-1 text-sm">
-  <p>
-    Importe recibido:{" "}
-    <span className="font-medium">
-      {Number(importeTotal || 0).toFixed(2)} €
-    </span>
-  </p>
+                  <div className="mt-2 flex items-center justify-between gap-4">
+  <div className="flex flex-col gap-0.5 text-sm">
+    <p>
+      Importe recibido:{" "}
+      <span className="font-medium">
+        {Number(importeTotal || 0).toFixed(2)} €
+      </span>
+    </p>
 
-  <p>
-    Total aplicado:{" "}
-    <span className="font-medium">
-      {totalAplicado.toFixed(2)} €
-    </span>
-  </p>
+    <p>
+      Total aplicado:{" "}
+      <span className="font-medium">
+        {totalAplicado.toFixed(2)} €
+      </span>
+    </p>
 
-  <p
-    className={
-      Math.abs(diferencia) < 0.01
-        ? "font-medium text-green-700"
-        : "font-medium text-red-700"
+    <p
+      className={
+        Math.abs(diferencia) < 0.01
+          ? "font-medium text-green-700"
+          : "font-medium text-red-700"
+      }
+    >
+      Diferencia: {diferencia.toFixed(2)} €
+    </p>
+  </div>
+
+  <button
+    type="button"
+    disabled={
+      !importeTotal ||
+      Math.abs(diferencia) >= 0.01 ||
+      totalAplicado <= 0
     }
+    onClick={registrarPagoPagador}
+    className="shrink-0 bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50"
   >
-    Diferencia: {diferencia.toFixed(2)} €
-  </p>
+    Registrar pago
+  </button>
 </div>
-
-<button
-  type="button"
-  disabled={
-    !importeTotal ||
-    Math.abs(diferencia) >= 0.01 ||
-    totalAplicado <= 0
-  }
-  onClick={registrarPagoPagador}
-  className="mt-4 bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50"
->
-  Registrar pago
-</button>
                 </>
               )}
             </div>

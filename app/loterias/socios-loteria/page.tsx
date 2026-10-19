@@ -159,9 +159,29 @@ useEffect(() => {
   }
 
   async function cargarNumcensYaUsados() {
+    const { data: gruposActivos, error: errorGrupos } = await (supabase as any)
+      .from("SOCIOS_LOTERIA")
+      .select("ID")
+      .eq("Activo", true);
+  
+    if (errorGrupos) {
+      alert(errorGrupos.message);
+      return;
+    }
+  
+    const idsActivos = (gruposActivos || []).map(
+      (grupo: any) => Number(grupo.ID)
+    );
+  
+    if (idsActivos.length === 0) {
+      setNumcensYaUsados([]);
+      return;
+    }
+  
     const { data, error } = await (supabase as any)
       .from("SOCIOS_LOTERIA_DETALLE")
-      .select("NUMCENS");
+      .select("NUMCENS")
+      .in("IDSocioLoteria", idsActivos);
   
     if (error) {
       alert(error.message);
@@ -353,27 +373,106 @@ cargarNumcensYaUsados();
 return;
       }
       
-    const { data: grupo, error: errorGrupo } = await (supabase as any)
+      const { data: detallesHistoricos, error: errorHistorico } =
+  await (supabase as any)
+    .from("SOCIOS_LOTERIA_DETALLE")
+    .select("IDSocioLoteria")
+    .eq(
+      "NUMCENS",
+      Number(responsableSeleccionado.NUMCENS)
+    );
+
+if (errorHistorico) {
+  alert(errorHistorico.message);
+  return;
+}
+
+const idsHistoricos = (detallesHistoricos || []).map(
+  (detalle: any) => Number(detalle.IDSocioLoteria)
+);
+
+let grupoHistorico: any = null;
+
+if (idsHistoricos.length > 0) {
+  const { data: grupoAnterior, error: errorGrupoAnterior } =
+    await (supabase as any)
       .from("SOCIOS_LOTERIA")
-      .insert({
-        Ejercicio: ejercicioActivo,
-        NUMCENS_Responsable: responsableSeleccionado.NUMCENS,
-        NumeroMiembros: sociosIncluidos.length,
-        PapeletasFalla: papeletasFalla,
-        PapeletasVirgen: papeletasVirgen,
-        PapeletasNavidad: papeletasNavidad,
-        PapeletasNino: papeletasNino,
-        Observaciones: observaciones || null,
-        Activo: true,
-      })
-      .select()
-      .single();
+      .select("*")
+      .in("ID", idsHistoricos)
+      .eq("Activo", false)
+      .order("ID", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+  if (errorGrupoAnterior) {
+    alert(errorGrupoAnterior.message);
+    return;
+  }
+
+  grupoHistorico = grupoAnterior;
+}
+
+let grupo: any = null;
+let errorGrupo: any = null;
+
+if (grupoHistorico) {
+  const resultado = await (supabase as any)
+    .from("SOCIOS_LOTERIA")
+    .update({
+      Ejercicio: ejercicioActivo,
+      NUMCENS_Responsable: responsableSeleccionado.NUMCENS,
+      NumeroMiembros: sociosIncluidos.length,
+      PapeletasFalla: papeletasFalla,
+      PapeletasVirgen: papeletasVirgen,
+      PapeletasNavidad: papeletasNavidad,
+      PapeletasNino: papeletasNino,
+      Observaciones: observaciones || null,
+      Activo: true,
+    })
+    .eq("ID", grupoHistorico.ID)
+    .select()
+    .single();
+
+  grupo = resultado.data;
+  errorGrupo = resultado.error;
+} else {
+  const resultado = await (supabase as any)
+    .from("SOCIOS_LOTERIA")
+    .insert({
+      Ejercicio: ejercicioActivo,
+      NUMCENS_Responsable: responsableSeleccionado.NUMCENS,
+      NumeroMiembros: sociosIncluidos.length,
+      PapeletasFalla: papeletasFalla,
+      PapeletasVirgen: papeletasVirgen,
+      PapeletasNavidad: papeletasNavidad,
+      PapeletasNino: papeletasNino,
+      Observaciones: observaciones || null,
+      Activo: true,
+    })
+    .select()
+    .single();
+
+  grupo = resultado.data;
+  errorGrupo = resultado.error;
+}
   
     if (errorGrupo) {
       alert(errorGrupo.message);
       return;
     }
   
+    if (grupoHistorico) {
+      const { error: errorBorrarDetalles } = await (supabase as any)
+        .from("SOCIOS_LOTERIA_DETALLE")
+        .delete()
+        .eq("IDSocioLoteria", grupo.ID);
+    
+      if (errorBorrarDetalles) {
+        alert(errorBorrarDetalles.message);
+        return;
+      }
+    }
+    
     const detalles = sociosIncluidos.map((socio) => ({
       IDSocioLoteria: grupo.ID,
       NUMCENS: socio.NUMCENS,
@@ -542,14 +641,16 @@ ResponsableOrden: grupo.EsExterno
 
   async function eliminarGrupo(idGrupo: number) {
     const confirmar = confirm(
-      "¿Eliminar este grupo de lotería? También se eliminarán los socios incluidos."
+      "¿Quitar este grupo de Socios lotería? Se conservará todo su historial de sorteos."
     );
   
     if (!confirmar) return;
   
     const { error } = await (supabase as any)
       .from("SOCIOS_LOTERIA")
-      .delete()
+      .update({
+        Activo: false,
+      })
       .eq("ID", idGrupo);
   
     if (error) {

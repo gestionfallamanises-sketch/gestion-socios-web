@@ -11,6 +11,7 @@ function euros(valor: number) {
 export default function ImprimirSorteoPage() {
   const params = useParams();
   const [sorteo, setSorteo] = useState<any>(null);
+  const [lineas, setLineas] = useState<any[]>([]);
 
   useEffect(() => {
     cargarSorteo();
@@ -29,9 +30,70 @@ export default function ImprimirSorteoPage() {
     }
 
     setSorteo(data);
+    const { data: lineasData, error: errorLineas } = await (supabase as any)
+  .from("LOTERIA_SORTEOS_GRUPOS")
+  .select(`
+    NombreParticipante,
+    NUMCENS_Responsable,
+    PapeletasFalla,
+    PapeletasVirgen,
+    ImporteFalla,
+    ImporteVirgen,
+    ImportePagado,
+    ImportePremio,
+    PremioEntregado,
+    PagadoConfirmado
+  `)
+  .eq("IDSorteo", Number(params.id))
+  .order("NombreParticipante", { ascending: true });
+
+if (errorLineas) {
+  alert(errorLineas.message);
+  return;
+}
+
+setLineas(lineasData || []);
   }
 
   if (!sorteo) return null;
+
+  const filasSocios = lineas.map((linea: any) => {
+    const total =
+      Number(linea.ImporteFalla || 0) +
+      Number(linea.ImporteVirgen || 0);
+  
+    const cobrado = linea.PagadoConfirmado
+      ? total
+      : Math.min(
+          total,
+          Math.max(0, Number(linea.ImportePagado || 0))
+        );
+  
+    const pendiente = Math.max(0, total - cobrado);
+  
+    const premioTotal = Number(linea.ImportePremio || 0);
+  
+    const sinEntregar = linea.PremioEntregado
+      ? 0
+      : premioTotal;
+  
+    const entregado = linea.PremioEntregado
+      ? premioTotal
+      : 0;
+  
+    const saldo = pendiente - sinEntregar;
+  
+    return {
+      ...linea,
+      total,
+      cobrado,
+      pendiente,
+      premioTotal,
+      sinEntregar,
+      entregado,
+      saldo,
+    };
+  });
 
   return (
     <main className="bg-white p-8 text-sm text-zinc-900">
@@ -58,6 +120,112 @@ export default function ImprimirSorteoPage() {
   <Bloque titulo="Virgen" sorteo={sorteo} tipo="Virgen" />
 )}
       </div>
+
+      <section className="mt-8">
+  <h2 className="mb-3 text-lg font-bold">
+    Detalle de socios
+  </h2>
+
+  <table className="w-full border-collapse text-[10px]">
+    <thead>
+      <tr className="bg-zinc-100">
+        <th className="border border-zinc-300 px-2 py-1 text-left">
+          Socio
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-center">
+          NUMCENS
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Pap. F
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Pap. V
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Total
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Cobrado
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Pendiente
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Premio
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Sin entregar
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Entregado
+        </th>
+
+        <th className="border border-zinc-300 px-2 py-1 text-right">
+          Saldo
+        </th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {filasSocios.map((fila: any, index: number) => (
+        <tr key={index}>
+          <td className="border border-zinc-300 px-2 py-1">
+            {fila.NombreParticipante || ""}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-center">
+            {fila.NUMCENS_Responsable || ""}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {Number(fila.PapeletasFalla || 0)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {Number(fila.PapeletasVirgen || 0)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {euros(fila.total)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {euros(fila.cobrado)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {euros(fila.pendiente)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {euros(fila.premioTotal)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {euros(fila.sinEntregar)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right">
+            {euros(fila.entregado)}
+          </td>
+
+          <td className="border border-zinc-300 px-2 py-1 text-right font-semibold">
+            {euros(fila.saldo)}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</section>
 
       <style jsx global>{`
         @media print {

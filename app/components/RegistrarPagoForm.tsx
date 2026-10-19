@@ -19,7 +19,12 @@ export default function RegistrarPagoForm({
   const [loading, setLoading] = useState(false);
 
   async function registrarPago() {
-    if (!importe || Number(importe) <= 0) {
+    if (
+      !importe ||
+      !Number.isFinite(Number(importe)) ||
+      Number(importe) <= 0 ||
+      !/^\d+(\.\d{1,2})?$/.test(importe)
+    ) {
       alert("Introduce un importe válido");
       return;
     }

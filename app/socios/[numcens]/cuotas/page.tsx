@@ -94,6 +94,60 @@ const { data: pagosManuales } =
     : { data: [] };
 
 const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
+const idsRemesas = [
+  ...new Set(
+    aplicacionesRemesaAny
+      .map((r) => r.IDRemesa)
+      .filter((id) => id != null)
+  ),
+];
+
+const { data: fechasRemesas, error: errorFechasRemesas } =
+  idsRemesas.length > 0
+    ? await (supabase as any)
+        .from("REMESAS")
+        .select("IDRemesa, FechaVencimiento")
+        .in("IDRemesa", idsRemesas)
+    : { data: [], error: null };
+
+if (errorFechasRemesas) {
+  throw new Error(errorFechasRemesas.message);
+}
+
+const mapaFechasRemesas = new Map(
+  (fechasRemesas || []).map((r: any) => [
+    Number(r.IDRemesa),
+    r.FechaVencimiento,
+  ])
+);
+// Consultar si los recibos de las remesas están devueltos
+const idsDetallesRemesa = [
+  ...new Set(
+    aplicacionesRemesaAny
+      .map((r) => r.IDDetalleRemesa)
+      .filter((id) => id != null)
+  ),
+];
+
+const { data: detallesRemesa, error: errorDetallesRemesa } =
+  idsDetallesRemesa.length > 0
+    ? await (supabase as any)
+        .from("REMESAS_DETALLE")
+        .select("IDDetalleRemesa, Devuelto, Estado")
+        .in("IDDetalleRemesa", idsDetallesRemesa)
+    : { data: [], error: null };
+
+if (errorDetallesRemesa) {
+  throw new Error(errorDetallesRemesa.message);
+}
+
+const estadoDetallesRemesa = new Map(
+  (detallesRemesa || []).map((d: any) => [
+    Number(d.IDDetalleRemesa),
+    d.Devuelto === true ||
+      String(d.Estado || "").toLowerCase() === "devuelto",
+  ])
+);
 
 const { data: gastosDevolucion } = await (supabase as any)
   .from("PAGOS_MANUALES")
@@ -141,15 +195,19 @@ const totalPendiente =
       const movimientos: any[] = [];
     
       aplicacionesRemesaAny
-        .filter((r) => Number(r.IDPlazo) === Number(idPlazo))
-        .forEach((r) => {
-          movimientos.push({
-            fecha: r.FechaAplicacion,
-            texto: `Remesa ${r.IDRemesa}`,
-            importe: Number(r.ImporteAplicado || 0),
-            tipo: "remesa",
-          });
-        });
+  .filter((r) => Number(r.IDPlazo) === Number(idPlazo))
+  .forEach((r) => {
+    const devuelto =
+      estadoDetallesRemesa.get(Number(r.IDDetalleRemesa)) === true;
+
+    movimientos.push({
+      fecha: mapaFechasRemesas.get(Number(r.IDRemesa)) || r.FechaAplicacion,
+      texto: `Remesa ${r.IDRemesa}`,
+      importe: Number(r.ImporteAplicado || 0),
+      tipo: "remesa",
+      devuelto,
+    });
+  });
     
       pagosManualesAny
         .filter((p) => Number(p.IDPlazo) === Number(idPlazo))
@@ -284,9 +342,13 @@ const resumenPendientes = Object.values(
               />
               <Resumen
   label="Método/plazos"
-  value={`${formaPagoAny?.Metodo || "-"} · ${
-    formaPagoAny?.NumeroPlazos || "-"
-  } plazo${Number(formaPagoAny?.NumeroPlazos || 0) === 1 ? "" : "s"}`}
+  value={
+    formaPagoAny?.Metodo?.toLowerCase() === "efectivo"
+      ? "Efectivo"
+      : `${formaPagoAny?.Metodo || "-"} · ${
+          formaPagoAny?.NumeroPlazos || "-"
+        } plazo${Number(formaPagoAny?.NumeroPlazos || 0) === 1 ? "" : "s"}`
+  }
 />
             </div>
           
@@ -318,27 +380,33 @@ const resumenPendientes = Object.values(
               {formatearFecha(mov.fecha)} · {mov.texto}
             </span>
 
-            <div className="flex items-center">
+            <div className="flex items-center gap-2">
   <span
     className={
       mov.texto === "Sin cobro"
-  ? "font-medium text-orange-700"
-  : mov.tipo === "gasto-devolucion"
-  ? "font-medium text-red-700"
-  : "font-medium text-green-700"
+        ? "font-medium text-orange-700"
+        : mov.devuelto || mov.tipo === "gasto-devolucion"
+        ? "font-medium text-red-700"
+        : "font-medium text-green-700"
     }
   >
     {mov.texto === "Sin cobro"
-  ? "Sin cobro"
-  : `${Number(mov.importe || 0).toFixed(2)} €`}
+      ? "Sin cobro"
+      : `${Number(mov.importe || 0).toFixed(2)} €`}
   </span>
+
+  {mov.tipo === "remesa" && mov.devuelto && (
+    <span className="text-xs font-semibold text-red-700">
+      Devuelto
+    </span>
+  )}
 
   {mov.tipo === "manual" && mov.idPagoManual && (
     <span className="print:hidden">
-    <AnularPagoManualButton
-      idPagoManual={Number(mov.idPagoManual)}
-    />
-  </span>
+      <AnularPagoManualButton
+        idPagoManual={Number(mov.idPagoManual)}
+      />
+    </span>
   )}
 </div>
           </div>
@@ -359,25 +427,35 @@ const resumenPendientes = Object.values(
   </div>
 
   <div className="p-4">
-    {totalCuotasPendientes === 0 ? (
+  {formaPagoAny?.Metodo?.toLowerCase() === "efectivo" ? (
+    totalPendiente <= 0 ? (
       <p className="text-sm font-medium text-green-700">
-        No quedan cuotas pendientes.
+        Cuota completamente pagada.
       </p>
     ) : (
-      <div className="space-y-2 text-sm">
-        {resumenPendientes.map((grupo) => (
-          <p key={grupo.importe}>
-            {grupo.cantidad} cuota
-            {grupo.cantidad === 1 ? "" : "s"} pendiente
-            {grupo.cantidad === 1 ? "" : "s"} de{" "}
-            <span className="font-medium">
-              {Number(grupo.importe || 0).toFixed(2)} €
-            </span>
-          </p>
-        ))}
-      </div>
-    )}
-  </div>
+      <p className="text-sm font-medium text-red-700">
+        Pendiente de pago: {totalPendiente.toFixed(2)} €
+      </p>
+    )
+  ) : totalCuotasPendientes === 0 ? (
+    <p className="text-sm font-medium text-green-700">
+      No quedan cuotas pendientes.
+    </p>
+  ) : (
+    <div className="space-y-2 text-sm">
+      {resumenPendientes.map((grupo) => (
+        <p key={grupo.importe}>
+          {grupo.cantidad} cuota
+          {grupo.cantidad === 1 ? "" : "s"} pendiente
+          {grupo.cantidad === 1 ? "" : "s"} de{" "}
+          <span className="font-medium">
+            {Number(grupo.importe || 0).toFixed(2)} €
+          </span>
+        </p>
+      ))}
+    </div>
+  )}
+</div>
 </section>
 </div>
 
