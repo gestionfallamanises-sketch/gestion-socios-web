@@ -1,5 +1,86 @@
+
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
+
+function contarNumeros(texto: string): number | null {
+  if (!texto?.trim()) return 0;
+  let total = 0;
+  const partes: Array<[number, number]> = [];
+  for (const segmento of texto.split(/[,/;]/)) {
+    const m = segmento.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!m) return null;
+    const desde = Number(m[1]);
+    const hasta = m[2] ? Number(m[2]) : desde;
+    if (hasta < desde || hasta > 2147483646) return null;
+    if (partes.some(([a,b]) => desde <= b && a <= hasta)) return null;
+    partes.push([desde, hasta]);
+    total += hasta - desde + 1;
+  }
+  return total;
+}
+
+type FilaIntervalo = { desde: string; hasta: string };
+
+function leerFilas(serie: string): FilaIntervalo[] {
+  const partes = (serie || "").split(/[,/;]/).map(x => x.trim()).filter(Boolean);
+  if (!partes.length) return [{ desde: "", hasta: "" }];
+  return partes.map(parte => {
+    const m = parte.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    return m ? { desde: m[1], hasta: m[2] || "" } : { desde: parte, hasta: "" };
+  });
+}
+
+function escribirFilas(filas: FilaIntervalo[]): string {
+  return filas.map(f => f.desde.trim()
+    ? `${f.desde.trim()}${f.hasta.trim() ? `-${f.hasta.trim()}` : ""}`
+    : "").filter(Boolean).join(", ");
+}
+
+function EditorIntervalos({ serie, onChange }: {
+  serie: string;
+  onChange: (serie: string) => void;
+}) {
+  const [filas, setFilas] = useState<FilaIntervalo[]>(() => leerFilas(serie));
+
+  // Permite cambiar de entrega en el historial sin arrastrar filas de otra.
+  // Conserva las filas vacías que el usuario acaba de añadir.
+  useEffect(() => {
+    if (escribirFilas(filas) !== (serie || "").trim()) {
+      setFilas(leerFilas(serie));
+    }
+  }, [serie]);
+
+  function actualizar(nuevas: FilaIntervalo[]) {
+    setFilas(nuevas);
+    onChange(escribirFilas(nuevas));
+  }
+
+  return (
+    <div className="space-y-1">
+      {filas.map((fila, i) => (
+        <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_26px] gap-2 items-end">
+          <div>
+            {i === 0 && <label className="mb-1 block text-[11px] font-semibold text-zinc-600">Desde</label>}
+            <input type="text" inputMode="numeric" value={fila.desde} placeholder="0001"
+              onChange={e => actualizar(filas.map((f, n) => n === i ? {...f, desde: e.target.value} : f))}
+              className="w-full min-w-0 border border-zinc-300 bg-white px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            {i === 0 && <label className="mb-1 block text-[11px] font-semibold text-zinc-600">Hasta</label>}
+            <input type="text" inputMode="numeric" value={fila.hasta} placeholder="Opcional"
+              onChange={e => actualizar(filas.map((f, n) => n === i ? {...f, hasta: e.target.value} : f))}
+              className="w-full min-w-0 border border-zinc-300 bg-white px-2 py-1.5 text-sm" />
+          </div>
+          {i > 0 ? <button type="button" title="Quitar intervalo"
+            onClick={() => actualizar(filas.filter((_, n) => n !== i))}
+            className="h-8 text-red-800 hover:bg-red-50">×</button> : <div />}
+        </div>
+      ))}
+      <button type="button" onClick={() => setFilas([...filas, { desde: "", hasta: "" }])}
+        className="mt-1 text-[11px] font-semibold text-red-900 hover:underline">+ Añadir intervalo</button>
+    </div>
+  );
+}
 
 export default function EntregaNavidadModal(props: any) {
     const {
@@ -13,7 +94,12 @@ export default function EntregaNavidadModal(props: any) {
         sociosFiltrados,
         textoSocio,
         seleccionarSocio,
+        seleccionarVendedorExterno,
+        limpiarSeleccionVendedor,
+        vendedoresExternos = [],
         guardarEntrega,
+        precioFalla = 0,
+        precioVirgen = 0,
         editarMovimiento,
         eliminarMovimiento,
         movimientoEditando,
@@ -27,6 +113,11 @@ editarPago,
 eliminarPago,
       } = props;
 
+  const [cobrarAhora, setCobrarAhora] = useState(false);
+  const [importeManual, setImporteManual] = useState("");
+  const [fechaCobro, setFechaCobro] = useState(new Date().toISOString().slice(0,10));
+  const totalNuevaEntrega = Math.max(0, Number(entrega.PapeletasFalla || 0) - Number(entrega.DevueltasFalla || 0)) * Number(precioFalla) + Math.max(0, Number(entrega.PapeletasVirgen || 0) - Number(entrega.DevueltasVirgen || 0)) * Number(precioVirgen);
+  const importeCobro = importeManual === "" ? totalNuevaEntrega : Number(importeManual);
   if (!abierto) return null;
 
   return (
@@ -156,160 +247,88 @@ eliminarPago,
   
               </div>
 
- {/* PAPELETAS FALLA + VIRGEN */}
+   <div className="rounded border border-zinc-200 bg-zinc-50 p-3">
+    <label className="mb-1 block text-xs font-semibold text-zinc-700">
+      Vendedor externo (si no es socio)
+    </label>
+    <input
+      type="text"
+      value={entrega.NUMCENS ? "" : (entrega.NombreExterno || "")}
+      disabled={Boolean(movimientoEditando)}
+      onChange={(e) => {
+        limpiarSeleccionVendedor?.();
+        setBusquedaSocio("");
+        setEntrega({ ...entrega, NUMCENS: null, NombreExterno: e.target.value });
+      }}
+      placeholder="Nombre del vendedor o comprador externo"
+      className="w-full border border-zinc-300 bg-white px-3 py-1.5 text-sm"
+    />
+    {!entrega.NUMCENS && entrega.NombreExterno?.trim() &&
+      vendedoresExternos.filter((fila: any) =>
+        (fila.NombreExterno || "").toLocaleLowerCase("es").includes(entrega.NombreExterno.toLocaleLowerCase("es"))
+      ).slice(0,5).map((fila: any) => (
+        <button type="button" key={fila.ID}
+          onClick={() => seleccionarVendedorExterno(fila)}
+          className="mt-1 mr-2 border border-zinc-200 bg-white px-2 py-1 text-xs hover:bg-zinc-100">
+          Utilizar ficha existente: {fila.NombreExterno}
+        </button>
+      ))}
+    <p className="mt-1 text-[11px] text-zinc-500">Para vender papeletas sueltas, escribe aquí el nombre y registra cada número individual.</p>
+  </div>
+
+{/* PAPELETAS FALLA + VIRGEN */}
 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-
-{/* FALLA */}
-<div className="rounded border border-zinc-200 bg-zinc-50/40 p-3">
-
-  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-700">
-    Falla
-  </div>
-
-  <div className="grid grid-cols-[90px_90px_1fr] gap-2">
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Papeletas
-      </label>
-
-      <input
-        type="number"
-        min={0}
-        value={entrega.PapeletasFalla ?? 0}
-        onChange={(e) =>
-          setEntrega({
-            ...entrega,
-            PapeletasFalla: Number(e.target.value),
-          })
-        }
-        className="w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-      />
+  {([
+    { titulo: "Falla", serie: "SerieFalla", papeletas: "PapeletasFalla", devueltas: "DevueltasFalla" },
+    { titulo: "Virgen", serie: "SerieVirgen", papeletas: "PapeletasVirgen", devueltas: "DevueltasVirgen" },
+  ] as const).map(tipo => (
+    <div key={tipo.titulo} className="rounded border border-zinc-200 bg-zinc-50/40 p-3">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-700">{tipo.titulo}</div>
+      <div className="grid grid-cols-[78px_78px_minmax(0,1fr)] gap-2 items-start">
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold text-zinc-600">Papeletas</label>
+          <input type="number" min={0} value={entrega[tipo.papeletas] ?? 0}
+            onChange={e => setEntrega((anterior: any) => ({...anterior, [tipo.papeletas]: Number(e.target.value)}))}
+            className="w-full min-w-0 border border-zinc-300 bg-white px-2 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold text-zinc-600">Devueltas</label>
+          <input type="number" min={0} value={entrega[tipo.devueltas] ?? 0}
+            onChange={e => setEntrega((anterior: any) => ({...anterior, [tipo.devueltas]: Number(e.target.value)}))}
+            className="w-full min-w-0 border border-zinc-300 bg-white px-2 py-1.5 text-sm" />
+        </div>
+        <EditorIntervalos serie={entrega[tipo.serie] || ""}
+          onChange={serie => {
+            const cantidad = contarNumeros(serie);
+            setEntrega((anterior: any) => ({...anterior, [tipo.serie]: serie,
+              ...(cantidad !== null ? {[tipo.papeletas]: cantidad} : {})}));
+          }} />
+      </div>
     </div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Devueltas
-      </label>
-
-      <input
-        type="number"
-        min={0}
-        value={entrega.DevueltasFalla ?? 0}
-        onChange={(e) =>
-          setEntrega({
-            ...entrega,
-            DevueltasFalla: Number(e.target.value),
-          })
-        }
-        className="w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-      />
-    </div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Serie
-      </label>
-
-      <input
-        type="text"
-        value={entrega.SerieFalla ?? ""}
-        onChange={(e) =>
-          setEntrega({
-            ...entrega,
-            SerieFalla: e.target.value,
-          })
-        }
-        placeholder="001-500"
-        className="w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-      />
-    </div>
-
-  </div>
+  ))}
 </div>
 
-{/* VIRGEN */}
-<div className="rounded border border-zinc-200 bg-zinc-50/40 p-3">
-
-  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-700">
-    Virgen
+{!movimientoEditando && (
+  <div className="mt-2 flex flex-wrap items-center gap-3 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs">
+    <label className="flex items-center gap-2 font-medium">
+      <input type="checkbox" checked={cobrarAhora} onChange={(e) => setCobrarAhora(e.target.checked)} /> Cobrar ahora
+    </label>
+    {cobrarAhora && <>
+      <label>Importe € <input type="number" min={0.01} step="0.01" value={importeManual === "" ? totalNuevaEntrega.toFixed(2) : importeManual}
+        onChange={(e) => setImporteManual(e.target.value)} className="ml-1 w-24 border border-zinc-300 px-2 py-1" /></label>
+      <label>Fecha <input type="date" value={fechaCobro} onChange={(e) => setFechaCobro(e.target.value)} className="ml-1 border border-zinc-300 px-2 py-1" /></label>
+    </>}
   </div>
-
-  <div className="grid grid-cols-[90px_90px_1fr] gap-2">
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Papeletas
-      </label>
-
-      <input
-        type="number"
-        min={0}
-        value={entrega.PapeletasVirgen ?? 0}
-        onChange={(e) =>
-          setEntrega({
-            ...entrega,
-            PapeletasVirgen: Number(e.target.value),
-          })
-        }
-        className="w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-      />
-    </div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Devueltas
-      </label>
-
-      <input
-        type="number"
-        min={0}
-        value={entrega.DevueltasVirgen ?? 0}
-        onChange={(e) =>
-          setEntrega({
-            ...entrega,
-            DevueltasVirgen: Number(e.target.value),
-          })
-        }
-        className="w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-      />
-    </div>
-
-    <div>
-      <label className="mb-1 block text-[11px] font-semibold text-zinc-600">
-        Serie
-      </label>
-
-      <input
-        type="text"
-        value={entrega.SerieVirgen ?? ""}
-        onChange={(e) =>
-          setEntrega({
-            ...entrega,
-            SerieVirgen: e.target.value,
-          })
-        }
-        placeholder="001-500"
-        className="w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-      />
-    </div>
-
-  </div>
-  
-  
-</div>
-
-</div>
-
+)}
 <div className="mt-3 flex justify-end">
   <button
     type="button"
-    onClick={guardarEntrega}
+    onClick={async () => { const ok = await guardarEntrega(cobrarAhora && !movimientoEditando ? { importe: importeCobro, fecha: fechaCobro } : null); if (ok) { setCobrarAhora(false); setImporteManual(""); } }}
     className="rounded bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
   >
     {movimientoEditando
       ? "💾 Guardar cambios"
-      : "💾 Guardar entrega"}
+      : cobrarAhora ? "💾 Guardar y cobrar" : "💾 Guardar entrega"}
   </button>
 </div>
 

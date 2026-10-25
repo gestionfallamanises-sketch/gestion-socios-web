@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -28,6 +29,27 @@ const entregaVacia = {
   Recibo: "",
   Observaciones: "",
 };
+
+// Acepta un número suelto, varios intervalos o ambos: 0012-0020 / 0031.
+function analizarSeries(texto: string): { cantidad: number; error: string | null } {
+  if (!texto.trim()) return { cantidad: 0, error: null };
+  let cantidad = 0;
+  const rangos: Array<[number, number]> = [];
+  for (const elemento of texto.split(/[,/;]/)) {
+    const valor = elemento.trim();
+    const coincide = valor.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!coincide) return { cantidad: 0, error: `Numeración no válida: ${valor}` };
+    const inicio = Number(coincide[1]);
+    const fin = coincide[2] ? Number(coincide[2]) : inicio;
+    if (!Number.isSafeInteger(inicio) || !Number.isSafeInteger(fin) || inicio < 0 || fin < inicio || fin > 2147483646) {
+      return { cantidad: 0, error: `Intervalo incorrecto: ${valor}` };
+    }
+    if (rangos.some(([a,b]) => inicio <= b && a <= fin)) return { cantidad: 0, error: `Intervalos repetidos dentro de la entrega: ${valor}` };
+    rangos.push([inicio,fin]);
+    cantidad += fin - inicio + 1;
+  }
+  return { cantidad, error: null };
+}
 
 function euros(valor: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -638,20 +660,58 @@ setCargando(false);
         return true;
       }
 
-      async function guardarEntrega() {
+      function seleccionarVendedorExterno(fila: any) {
+    setRegistroPrincipalSeleccionado(fila);
+    setEntregaEditando(fila);
+    setMovimientoEditando(null);
+    setBusquedaSocio("");
+    setEntrega({
+      ...entregaVacia,
+      NUMCENS: null,
+      NombreExterno: fila.NombreExterno || "",
+      FechaEntrega: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  async function guardarEntrega(cobroInmediato: { importe: number; fecha: string } | null = null): Promise<boolean> {
   if (!ejercicioActivo) {
     alert("No se ha encontrado un ejercicio activo.");
-    return;
+    return false;
   }
 
   if (!entrega.NUMCENS && !entrega.NombreExterno.trim()) {
     alert("Selecciona un socio o registra una persona externa.");
-    return;
+    return false;
   }
 
   if (!entrega.FechaEntrega) {
     alert("Selecciona la fecha de entrega.");
-    return;
+    return false;
+  }
+
+  const fallaSerie = analizarSeries(entrega.SerieFalla || "");
+  const virgenSerie = analizarSeries(entrega.SerieVirgen || "");
+  if (fallaSerie.error || virgenSerie.error) {
+    alert(fallaSerie.error || virgenSerie.error);
+    return false;
+  }
+  for (const [tipo, serie, cantidad] of [
+    ["Falla", fallaSerie, Number(entrega.PapeletasFalla || 0)],
+    ["Virgen", virgenSerie, Number(entrega.PapeletasVirgen || 0)],
+  ] as const) {
+    if (cantidad > 0 && serie.cantidad === 0) {
+      alert(`Indica los números de las papeletas de ${tipo}.`);
+      return false;
+    }
+    // Las dos entregas históricas pendientes quedan sin tocar si se guarda
+    // algún otro dato. Al corregir sus series se exigirá cuadrar cantidades.
+    const serieOriginal = tipo === "Falla" ? movimientoEditando?.SerieFalla : movimientoEditando?.SerieVirgen;
+    const serieModificada = !movimientoEditando ||
+      (tipo === "Falla" ? entrega.SerieFalla : entrega.SerieVirgen) !== (serieOriginal || "");
+    if (serieModificada && cantidad !== serie.cantidad) {
+      alert(`${tipo}: has indicado ${cantidad} papeletas, pero la numeración corresponde a ${serie.cantidad}.`);
+      return false;
+    }
   }
 
   const papeletasFalla = Number(entrega.PapeletasFalla || 0);
@@ -666,61 +726,91 @@ setCargando(false);
 
   if (papeletasFalla <= 0 && papeletasVirgen <= 0) {
     alert("Indica al menos una papeleta de Falla o Virgen.");
-    return;
+    return false;
   }
 
   if (devueltasFalla > papeletasFalla) {
     alert(
       "Las papeletas devueltas de Falla no pueden superar las entregadas."
     );
-    return;
+    return false;
   }
 
   if (devueltasVirgen > papeletasVirgen) {
     alert(
       "Las papeletas devueltas de Virgen no pueden superar las entregadas."
     );
-    return;
+    return false;
   }
 
-  let idRegistroPrincipal =
-    registroPrincipalSeleccionado?.ID || null;
-
-  // Si el socio ya tenía ficha pero por algún motivo
-  // no está en registroPrincipalSeleccionado, la buscamos.
-  if (!idRegistroPrincipal && entrega.NUMCENS) {
-    const registroExistente = entregas.find(
-      (fila: any) =>
-        Number(fila.NUMCENS) === Number(entrega.NUMCENS)
-    );
-
-    if (registroExistente?.ID) {
-      idRegistroPrincipal = registroExistente.ID;
+  if (cobroInmediato) {
+    const maximo = (papeletasFalla - devueltasFalla) * Number(configuracion.ImportePapeletaFalla || 0)
+      + (papeletasVirgen - devueltasVirgen) * Number(configuracion.ImportePapeletaVirgen || 0);
+    if (!Number.isFinite(cobroInmediato.importe) || cobroInmediato.importe <= 0 || cobroInmediato.importe > maximo + 0.001 || !cobroInmediato.fecha) {
+      alert(`El cobro debe ser mayor que cero y no superar ${maximo.toFixed(2)} €.`);
+      return false;
     }
   }
 
-  // Si todavía no existe ficha principal, la creamos.
-  if (!idRegistroPrincipal) {
-    const { data: nuevaFicha, error: errorFicha } = await (
-      supabase as any
-    )
+  // Resolvemos siempre la ficha principal con los datos ACTUALES del formulario.
+  // No confiamos solo en el estado local: puede haber quedado desfasado tras un error
+  // o si la ficha se creó desde otra sesión.
+  let idRegistroPrincipal: number | null = null;
+  const numcensActual = entrega.NUMCENS == null ? null : Number(entrega.NUMCENS);
+
+  if (numcensActual !== null) {
+    const { data: fichaExistente, error: errorBuscarFicha } = await (supabase as any)
+      .from("LOTERIA_SORTEO_NAVIDAD")
+      .select("ID,Sorteo,NUMCENS")
+      .eq("Ejercicio", ejercicioActivo)
+      .eq("NUMCENS", numcensActual)
+      .maybeSingle();
+
+    if (errorBuscarFicha) {
+      alert("No se ha podido comprobar la ficha del socio: " + errorBuscarFicha.message);
+      return false;
+    }
+    if (fichaExistente) {
+      if (fichaExistente.Sorteo !== "Navidad") {
+        alert("Este socio ya tiene una ficha del ejercicio asociada a otro sorteo. No se ha creado ni modificado ninguna entrega.");
+        return false;
+      }
+      idRegistroPrincipal = Number(fichaExistente.ID);
+    }
+  } else {
+    const nombreExterno = normalizarTexto(entrega.NombreExterno.trim());
+    const { data: candidatos, error: errorBuscarExterno } = await (supabase as any)
+      .from("LOTERIA_SORTEO_NAVIDAD")
+      .select("ID,NombreExterno")
+      .eq("Ejercicio", ejercicioActivo)
+      .eq("Sorteo", "Navidad")
+      .is("NUMCENS", null);
+    if (errorBuscarExterno) {
+      alert("No se ha podido comprobar la ficha del vendedor externo: " + errorBuscarExterno.message);
+      return false;
+    }
+    const existente = (candidatos || []).find((fila: any) =>
+      normalizarTexto(String(fila.NombreExterno || "").trim()) === nombreExterno
+    );
+    if (existente) idRegistroPrincipal = Number(existente.ID);
+  }
+
+  // Solo creamos una ficha si la búsqueda anterior confirma que no existe.
+  if (idRegistroPrincipal === null) {
+    const { data: nuevaFicha, error: errorFicha } = await (supabase as any)
       .from("LOTERIA_SORTEO_NAVIDAD")
       .insert({
         Ejercicio: ejercicioActivo,
-        NUMCENS: entrega.NUMCENS,
-        NombreExterno: entrega.NombreExterno || null,
+        NUMCENS: numcensActual,
+        NombreExterno: numcensActual === null ? entrega.NombreExterno.trim() : null,
         Sorteo: "Navidad",
-
         FechaEntrega: entrega.FechaEntrega,
-
         PapeletasFalla: 0,
         DevueltasFalla: 0,
         SerieFalla: null,
-
         PapeletasVirgen: 0,
         DevueltasVirgen: 0,
         SerieVirgen: null,
-
         Recibo: null,
         Observaciones: null,
       })
@@ -728,14 +818,25 @@ setCargando(false);
       .single();
 
     if (errorFicha) {
-      alert(
-        "Error creando la ficha del socio: " +
-          errorFicha.message
-      );
-      return;
+      // Si otro usuario creó la ficha a la vez, recuperamos la existente.
+      if (numcensActual !== null && errorFicha.code === "23505") {
+        const { data: fichaConcurrente, error: errorRecuperar } = await (supabase as any)
+          .from("LOTERIA_SORTEO_NAVIDAD")
+          .select("ID,Sorteo")
+          .eq("Ejercicio", ejercicioActivo)
+          .eq("NUMCENS", numcensActual)
+          .maybeSingle();
+        if (!errorRecuperar && fichaConcurrente?.Sorteo === "Navidad") {
+          idRegistroPrincipal = Number(fichaConcurrente.ID);
+        }
+      }
+      if (idRegistroPrincipal === null) {
+        alert("Error creando la ficha del socio: " + errorFicha.message);
+        return false;
+      }
+    } else {
+      idRegistroPrincipal = Number(nuevaFicha.ID);
     }
-
-    idRegistroPrincipal = nuevaFicha.ID;
   }
 
   // Creamos el movimiento concreto de esta entrega.
@@ -774,11 +875,76 @@ if (movimientoEditando?.ID) {
 }
 
   if (errorMovimiento) {
-    alert(
-      "Error guardando el movimiento: " +
-        errorMovimiento.message
-    );
-    return;
+    // El trigger de Supabase indica el tipo y el ID de la entrega en conflicto.
+    const mensajeError = String(errorMovimiento.message || "");
+    const conflicto = mensajeError.match(/(Falla|Virgen): numeraci[oó]n ya asignada en la entrega ID (\d+)/i);
+    if (conflicto) {
+      const tipo = conflicto[1].toLowerCase() === "falla" ? "Falla" : "Virgen";
+      const idMovimiento = Number(conflicto[2]);
+      let anterior = movimientosEntregas.find((m: any) => Number(m.ID) === idMovimiento);
+      if (!anterior) {
+        const { data } = await (supabase as any)
+          .from("LOTERIA_NAVIDAD_ENTREGAS_MOVIMIENTOS")
+          .select("ID,IDEntrega,FechaEntrega,SerieFalla,SerieVirgen")
+          .eq("ID", idMovimiento)
+          .maybeSingle();
+        anterior = data;
+      }
+      let ficha = entregas.find((e: any) => Number(e.ID) === Number(anterior?.IDEntrega));
+      if (!ficha && anterior?.IDEntrega) {
+        const { data } = await (supabase as any)
+          .from("LOTERIA_SORTEO_NAVIDAD")
+          .select("ID,NUMCENS,NombreExterno")
+          .eq("ID", anterior.IDEntrega)
+          .maybeSingle();
+        ficha = data;
+      }
+      let propietario = ficha?.NombreExterno?.trim() || "";
+      if (!propietario && ficha?.NUMCENS != null) {
+        const socio = socios.find((s: any) => Number(s.NUMCENS) === Number(ficha.NUMCENS));
+        propietario = socio ? `${socio.Nombre || ""} ${socio.Apellidos || ""}`.trim() : `Socio NUMCENS ${ficha.NUMCENS}`;
+      }
+      if (!propietario) propietario = `entrega ID ${idMovimiento}`;
+
+      // Para mostrar un número concreto, buscamos la intersección de intervalos.
+      const separar = (texto: string): Array<[number, number]> =>
+        (texto || "").split(/[,/;]/).map((parte) => {
+          const m = parte.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+          return m ? [Number(m[1]), Number(m[2] || m[1])] as [number, number] : null;
+        }).filter((r): r is [number, number] => r !== null);
+      const nuevos = separar(tipo === "Falla" ? entrega.SerieFalla : entrega.SerieVirgen);
+      const anteriores = separar(tipo === "Falla" ? anterior?.SerieFalla : anterior?.SerieVirgen);
+      let numero: number | null = null;
+      for (const [a,b] of nuevos) {
+        for (const [c,d] of anteriores) {
+          if (a <= d && c <= b) { numero = Math.max(a,c); break; }
+        }
+        if (numero !== null) break;
+      }
+      const fecha = anterior?.FechaEntrega
+        ? String(anterior.FechaEntrega).split("-").reverse().join("/") : "";
+      alert(`NUMERACIÓN DUPLICADA — ${tipo.toUpperCase()}\n\n` +
+        (numero !== null ? `Papeleta: ${String(numero).padStart(4, "0")}\n` : "") +
+        `Asignada a: ${propietario}\n` +
+        (fecha ? `Fecha de entrega: ${fecha}\n` : "") +
+        `\nNo se ha guardado esta entrega.`);
+    } else {
+      alert("Error guardando el movimiento: " + mensajeError);
+    }
+    return false;
+  }
+
+  if (cobroInmediato) {
+    const { error: errorCobro } = await (supabase as any)
+      .from("LOTERIA_NAVIDAD_PAGOS")
+      .insert({ IDEntrega: idRegistroPrincipal, FechaPago: cobroInmediato.fecha,
+        Importe: cobroInmediato.importe, Observaciones: null });
+    if (errorCobro) {
+      alert("La entrega SÍ se ha guardado, pero NO el cobro: " + errorCobro.message +
+        ". Registra el pago desde la ficha; NO vuelvas a guardar las mismas papeletas.");
+      await cargarDatos();
+      return true;
+    }
   }
 
   const actualizado =
@@ -786,7 +952,7 @@ if (movimientoEditando?.ID) {
       idRegistroPrincipal
     );
 
-  if (!actualizado) return;
+  if (!actualizado) return false;
 
   await cargarDatos();
 
@@ -813,6 +979,7 @@ if (movimientoEditando?.ID) {
     Sorteo: "Navidad",
     FechaEntrega: new Date().toISOString().slice(0, 10),
   });
+  return true;
 }
 
       async function guardarConfiguracion() {
@@ -1211,6 +1378,16 @@ configuracion.BeneficioPapeletaVirgen;
     await cargarDatos();
   }
 
+  // Recibos de todas las entregas de una misma ficha, no solo del último movimiento.
+  function recibosDeFicha(idFicha: number): string[] {
+    return Array.from(new Set(
+      movimientosEntregas
+        .filter((m: any) => Number(m.IDEntrega) === Number(idFicha))
+        .map((m: any) => String(m.Recibo ?? "").trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+  }
+
   const entregasFiltradas = entregas.filter((fila: any) => {
     const socio = socios.find(
       (s: any) => Number(s.NUMCENS) === Number(fila.NUMCENS)
@@ -1251,37 +1428,25 @@ configuracion.BeneficioPapeletaVirgen;
   
     if (!textoBusqueda) return true;
   
-    const contenido = normalizarTexto(
-      [
-        nombre,
-        fila.NUMCENS,
-        fila.NombreExterno,
     
-        fila.SerieFalla,
-        fila.SerieVirgen,
-    
-        fila.FechaEntrega,
-    
-        papeletasFalla,
-        devueltasFalla,
-        vendidasFalla,
-    
-        papeletasVirgen,
-        devueltasVirgen,
-        vendidasVirgen,
-    
-        importePagado,
-        pendiente,
-    
-        pendiente > 0 ? "pendiente" : "pagado",
-    
-        devueltasFalla > 0 || devueltasVirgen > 0
-          ? "devueltas devolucion"
-          : "",
-      ].join(" ")
-    );
-  
-    return contenido.includes(textoBusqueda);
+const recibos = movimientosEntregas
+.filter((m: any) => Number(m.IDEntrega) === Number(fila.ID))
+.map((m: any) => String(m.Recibo ?? "").trim())
+.filter(Boolean);
+
+const nombreCompleto = normalizarTexto(nombre);
+
+if (/^\d+$/.test(textoBusqueda)) {
+return (
+  recibos.some(
+    (recibo: string) => Number(recibo) === Number(textoBusqueda)
+  ) ||
+  String(fila.NUMCENS ?? "") === textoBusqueda
+);
+}
+
+return nombreCompleto.includes(textoBusqueda);
+
   });
 
   const entregasOrdenadas = [...entregasFiltradas].sort(
@@ -1360,21 +1525,27 @@ const pendienteB = Math.max(
         comparacion = nombreA.localeCompare(nombreB, "es");
       }
   
-      if (campoOrden === "serie") {
-        const serieA = `${a.SerieFalla || ""} ${a.SerieVirgen || ""}`;
-        const serieB = `${b.SerieFalla || ""} ${b.SerieVirgen || ""}`;
-      
-        comparacion = serieA.localeCompare(
-          serieB,
-          "es",
-          { numeric: true }
-        );
+      if (campoOrden === "recibo") {
+        const recibosA = recibosDeFicha(a.ID);
+        const recibosB = recibosDeFicha(b.ID);
+        const primeroA = recibosA[0] ?? String(a.Recibo ?? "").trim();
+        const primeroB = recibosB[0] ?? String(b.Recibo ?? "").trim();
+        // Los registros sin recibo van detrás en ambos sentidos.
+        if (!primeroA && primeroB) return 1;
+        if (primeroA && !primeroB) return -1;
+        comparacion = primeroA.localeCompare(primeroB, "es", { numeric: true });
+        if (comparacion === 0) comparacion = nombreA.localeCompare(nombreB, "es");
       }
-  
+
       if (campoOrden === "pendiente") {
         comparacion = pendienteA - pendienteB;
       }
   
+      if (campoOrden === "recibo") {
+        const sinA = !recibosDeFicha(a.ID).length && !String(a.Recibo ?? "").trim();
+        const sinB = !recibosDeFicha(b.ID).length && !String(b.Recibo ?? "").trim();
+        if (sinA !== sinB) return sinA ? 1 : -1;
+      }
       return direccionOrden === "asc"
         ? comparacion
         : -comparacion;
@@ -1889,7 +2060,17 @@ setRegistroPrincipalSeleccionado(null);
   sociosFiltrados={sociosFiltrados}
   textoSocio={textoSocio}
   seleccionarSocio={seleccionarSocio}
+  seleccionarVendedorExterno={seleccionarVendedorExterno}
+  limpiarSeleccionVendedor={() => {
+    if (!movimientoEditando) {
+      setRegistroPrincipalSeleccionado(null);
+      setEntregaEditando(null);
+    }
+  }}
+  vendedoresExternos={entregas.filter((fila: any) => !fila.NUMCENS && fila.NombreExterno)}
   guardarEntrega={guardarEntrega}
+  precioFalla={configuracion.ImportePapeletaFalla}
+  precioVirgen={configuracion.ImportePapeletaVirgen}
 editarMovimiento={editarMovimiento}
 eliminarMovimiento={eliminarMovimiento}
 movimientoEditando={movimientoEditando}
@@ -2500,7 +2681,7 @@ movimientoEditando={movimientoEditando}
 
       <input
         type="text"
-        placeholder="Buscar socio, serie, fecha, pendiente..."
+        placeholder="Buscar socio, NUMCENS, recibo, fecha..."
         value={busquedaEntregas}
         onChange={(e) => setBusquedaEntregas(e.target.value)}
         className="w-80 border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
@@ -2537,63 +2718,38 @@ movimientoEditando={movimientoEditando}
 
 <table className="w-full table-fixed divide-y divide-zinc-200">
       <thead className="bg-zinc-50">
-  <tr>
-  <CabeceraOrdenable
-  titulo="Socio"
-  campo="socio"
-  campoOrden={campoOrden}
-  direccionOrden={direccionOrden}
-  alOrdenar={ordenarPor}
-  className="w-[24%] text-left"
-/>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Fecha
-    </th>
-
-    <th className="w-[7%] px-1 py-3 text-center text-xs font-semibold uppercase">
-  Entreg.
-</th>
-
-<th className="w-[7%] px-1 py-3 text-center text-xs font-semibold uppercase">
-  Devuel.
-</th>
-
-<th className="w-[7%] px-1 py-3 text-center text-xs font-semibold uppercase">
-  Venta
-</th>
-
-    <th className="px-2 py-3 text-right text-xs font-semibold uppercase">
-  Total
-</th>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Pagado
-    </th>
-
-    <CabeceraOrdenable
-  titulo="Pendiente"
-  campo="pendiente"
-  campoOrden={campoOrden}
-  direccionOrden={direccionOrden}
-  alOrdenar={ordenarPor}
-  className="text-right"
-/>
-
-<CabeceraOrdenable
-  titulo="Serie"
-  campo="serie"
-  campoOrden={campoOrden}
-  direccionOrden={direccionOrden}
-  alOrdenar={ordenarPor}
-  className="w-[16%]"
-/>
-
-<th className="whitespace-nowrap px-2 py-3 text-center text-xs font-semibold uppercase">
-  Acciones
-</th>
-  </tr>
-</thead>
+        <tr>
+          <CabeceraOrdenable
+            titulo="Socio / vendedor"
+            campo="socio"
+            campoOrden={campoOrden}
+            direccionOrden={direccionOrden}
+            alOrdenar={ordenarPor}
+            className="w-[26%] text-left"
+          />
+          <CabeceraOrdenable
+            titulo="Recibo"
+            campo="recibo"
+            campoOrden={campoOrden}
+            direccionOrden={direccionOrden}
+            alOrdenar={ordenarPor}
+            className="w-[14%] text-center"
+          />
+          <th className="px-2 py-3 text-center text-xs font-semibold uppercase">Fecha</th>
+          <th className="px-2 py-3 text-center text-xs font-semibold uppercase">Venta</th>
+          <th className="px-2 py-3 text-right text-xs font-semibold uppercase">Total</th>
+          <th className="px-2 py-3 text-right text-xs font-semibold uppercase">Pagado</th>
+          <CabeceraOrdenable
+            titulo="Pendiente"
+            campo="pendiente"
+            campoOrden={campoOrden}
+            direccionOrden={direccionOrden}
+            alOrdenar={ordenarPor}
+            className="text-right"
+          />
+          <th className="px-2 py-3 text-center text-xs font-semibold uppercase">Acciones</th>
+        </tr>
+      </thead>
 
       <tbody className="divide-y divide-zinc-200 bg-white">
       {entregasOrdenadas.map((fila) => {
@@ -2651,27 +2807,16 @@ movimientoEditando={movimientoEditando}
                 </div>
               </td>
 
-              <td className="px-4 py-3 text-center text-sm">
-              {formatearFecha(fila.FechaEntrega)}
-                              </td>
-
-                              <td className="px-4 py-3 text-center text-sm">
-  <div className="font-medium text-red-900">
-    F: {Number(fila.PapeletasFalla || 0)}
-  </div>
-  <div className="font-medium text-blue-900">
-    V: {Number(fila.PapeletasVirgen || 0)}
-  </div>
-</td>
-
-<td className="px-4 py-3 text-center text-sm">
-  <div className="text-red-900">
-    F: {Number(fila.DevueltasFalla || 0)}
-  </div>
-  <div className="text-blue-900">
-    V: {Number(fila.DevueltasVirgen || 0)}
-  </div>
-</td>
+              <td className="px-2 py-3 text-center text-sm">
+                {(() => {
+                  const recibos = recibosDeFicha(fila.ID);
+                  const mostrados = recibos.length ? recibos : (fila.Recibo ? [String(fila.Recibo)] : []);
+                  return mostrados.length ? mostrados.join(", ") : "—";
+                })()}
+              </td>
+              <td className="px-2 py-3 text-center text-sm">
+                {formatearFecha(fila.FechaEntrega)}
+              </td>
 
 <td className="px-4 py-3 text-center text-sm font-medium">
   {vendidasFalla + vendidasVirgen}
@@ -2681,7 +2826,7 @@ movimientoEditando={movimientoEditando}
   {euros(importeTotal)}
 </td>
 
-<td className="px-4 py-3 text-center text-sm">
+<td className="px-2 py-3 text-right text-sm">
   {euros(importePagado)}
 </td>
 
@@ -2704,16 +2849,6 @@ movimientoEditando={movimientoEditando}
 
   </div>
 </td>
-<td className="min-w-[150px] px-2 py-3 text-center text-xs whitespace-nowrap">
-  <div className="whitespace-nowrap text-red-900">
-    F: {fila.SerieFalla || "—"}
-  </div>
-
-  <div className="whitespace-nowrap text-blue-900">
-    V: {fila.SerieVirgen || "—"}
-  </div>
-</td>
-
 <td className="px-2 py-3 text-center">
   <div className="flex justify-center gap-2">
 
