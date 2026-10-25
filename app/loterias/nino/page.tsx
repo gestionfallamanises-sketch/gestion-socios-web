@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -28,6 +29,27 @@ const entregaVacia = {
   Observaciones: "",
 };
 
+// Acepta un número suelto, varios intervalos o ambos: 0012-0020 / 0031.
+function analizarSeries(texto: string): { cantidad: number; error: string | null } {
+  if (!texto.trim()) return { cantidad: 0, error: null };
+  let cantidad = 0;
+  const rangos: Array<[number, number]> = [];
+  for (const elemento of texto.split(/[,/;]/)) {
+    const valor = elemento.trim();
+    const coincide = valor.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!coincide) return { cantidad: 0, error: `Numeración no válida: ${valor}` };
+    const inicio = Number(coincide[1]);
+    const fin = coincide[2] ? Number(coincide[2]) : inicio;
+    if (!Number.isSafeInteger(inicio) || !Number.isSafeInteger(fin) || inicio < 0 || fin < inicio || fin > 2147483646) {
+      return { cantidad: 0, error: `Intervalo incorrecto: ${valor}` };
+    }
+    if (rangos.some(([a,b]) => inicio <= b && a <= fin)) return { cantidad: 0, error: `Intervalos repetidos dentro de la entrega: ${valor}` };
+    rangos.push([inicio,fin]);
+    cantidad += fin - inicio + 1;
+  }
+  return { cantidad, error: null };
+}
+
 function euros(valor: number) {
   return new Intl.NumberFormat("es-ES", {
     style: "currency",
@@ -37,7 +59,6 @@ function euros(valor: number) {
 
 export default function NinoPage() {
 
-  const [mostrarNino, setMostrarNino] = useState(false);
   
   const [socios, setSocios] = useState<any[]>([]);
   
@@ -45,11 +66,21 @@ export default function NinoPage() {
   
   const [modalAbierto, setModalAbierto] = useState(false);
   const [entregaEditando, setEntregaEditando] = useState<any>(null);
+
+  const [registroPrincipalSeleccionado, setRegistroPrincipalSeleccionado] =
+  useState<any>(null);
   
+  const [movimientoEditando, setMovimientoEditando] =
+  useState<any>(null);
+
   const [busquedaSocio, setBusquedaSocio] = useState("");
   const [busquedaEntregas, setBusquedaEntregas] = useState("");
 
   const [entregas, setEntregas] = useState<any[]>([]);
+
+  const [movimientosEntregas, setMovimientosEntregas] =
+  useState<any[]>([]);
+
   const [entrega, setEntrega] = useState(entregaVacia);
   const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
 
@@ -59,7 +90,16 @@ export default function NinoPage() {
 const [direccionOrden, setDireccionOrden] =
   useState<"asc" | "desc">("asc");
 
-  const [pagosNino, setpagosNino] = useState<any[]>([]);
+  const [pagosNino, setPagosNino] = useState<any[]>([]);
+
+  const [modalAdministracionAbierto, setModalAdministracionAbierto] =
+  useState(false);
+
+const [entregasAdministracion, setEntregasAdministracion] =
+  useState<any[]>([]);
+
+const [pagosAdministracion, setPagosAdministracion] =
+  useState<any[]>([]);
 
   const [configuracion, setConfiguracion] = useState({
     FechaSorteo: "",
@@ -112,23 +152,32 @@ const [direccionOrden, setDireccionOrden] =
     if (errorEjercicio) {
       console.error(errorEjercicio);
     }
-    const ejercicioActual = Number(ejercicioData?.Ejercicio || 0);
+    const ejercicioActivo = Number(ejercicioData?.Ejercicio || 0);
 
-    setEjercicioActivo(ejercicioActual);
+    setEjercicioActivo(ejercicioActivo);
 
     const [
-      { data: entregasData, error: errorEntregas },
-      { data: sociosData, error: errorSocios },
-      { data: sociosLoteriaData, error: errorSociosLoteria },
-      { data: configuracionData, error: errorConfiguracion },
-      { data: pagosData, error: errorPagos },
-    ] = await Promise.all([
+  { data: entregasData, error: errorEntregas },
+  { data: movimientosData, error: errorMovimientos },
+  { data: sociosData, error: errorSocios },
+  { data: sociosLoteriaData, error: errorSociosLoteria },
+  { data: configuracionData, error: errorConfiguracion },
+  { data: pagosData, error: errorPagos },
+  { data: entregasAdminData, error: errorEntregasAdmin },
+  { data: pagosAdminData, error: errorPagosAdmin },
+] = await Promise.all([
           supabase
   .from("LOTERIA_SORTEO_NINO")
   .select("*")
-  .eq("Ejercicio", ejercicioActual)
+  .eq("Ejercicio", ejercicioActivo)
   .eq("Sorteo", "Niño")
   .order("FechaEntrega", { ascending: false }),
+
+  supabase
+  .from("LOTERIA_NINO_ENTREGAS_MOVIMIENTOS")
+  .select("*")
+  .eq("Ejercicio", ejercicioActivo)
+  .order("FechaEntrega", { ascending: true }),
       
           supabase
             .from("SOCIOS")
@@ -141,7 +190,7 @@ const [direccionOrden, setDireccionOrden] =
             supabase
   .from("LOTERIA_NINO_CONFIGURACION")
   .select("*")
-  .eq("Ejercicio", ejercicioActual)
+  .eq("Ejercicio", ejercicioActivo)
   .eq("Sorteo", "Niño")
   .maybeSingle(),
 
@@ -149,12 +198,36 @@ const [direccionOrden, setDireccionOrden] =
     .from("LOTERIA_NINO_PAGOS")
     .select("*")
     .order("FechaPago", { ascending: true }),
+
+    supabase
+    .from("LOTERIA_NINO_ADMIN_ENTREGAS")
+    .select("*")
+    .eq("Ejercicio", ejercicioActivo)
+    .order("Fecha", { ascending: false }),
+  
+  supabase
+    .from("LOTERIA_NINO_ADMIN_PAGOS")
+    .select("*")
+    .eq("Ejercicio", ejercicioActivo)
+    .order("Fecha", { ascending: true }),
         ]);
       
+        if (errorEntregasAdmin) {
+          console.error("Error cargando entregas de Administración:", errorEntregasAdmin);
+        }
+        
+        if (errorPagosAdmin) {
+          console.error("Error cargando pagos de Administración:", errorPagosAdmin);
+        }
+
         if (errorEntregas) {
           console.error(errorEntregas);
         }
       
+        if (errorMovimientos) {
+          console.error("Error cargando movimientos de entregas:", errorMovimientos);
+        }
+
         if (errorSocios) {
           console.error(errorSocios);
         }
@@ -173,9 +246,13 @@ const [direccionOrden, setDireccionOrden] =
         }
 
         setEntregas(entregasData || []);
+        setMovimientosEntregas(movimientosData || []);
         setSocios(sociosData || []);
         setSociosLoteria(sociosLoteriaData || []);
-        setpagosNino(pagosData || []);
+        setPagosNino(pagosData || []);
+
+        setEntregasAdministracion(entregasAdminData || []);
+setPagosAdministracion(pagosAdminData || []);
 
         const config: any = configuracionData;
 
@@ -199,8 +276,8 @@ if (config) {
   });
 } else {
   setConfiguracion({
-    FechaSorteo: ejercicioActual
-      ? `${ejercicioActual}-01-06`
+    FechaSorteo: ejercicioActivo
+      ? `${ejercicioActivo}-01-06`
       : "",
 
     NumeroFalla: "",
@@ -271,7 +348,7 @@ setCargando(false);
         const busquedaNormalizada = normalizarTexto(texto.trim());
       
         return socios
-          .filter((socio) => {
+        .filter((socio) => {
             const nombreCompleto = normalizarTexto(
               `${socio.Apellidos || ""} ${socio.Nombre || ""}`
             );
@@ -294,16 +371,39 @@ setCargando(false);
       function seleccionarSocio(socio: any) {
         const ficha = obtenerSocioLoteria(socio.NUMCENS);
       
+        const registroExistente =
+          entregas.find(
+            (fila: any) =>
+              Number(fila.NUMCENS) === Number(socio.NUMCENS)
+          ) || null;
+
+          if (registroExistente) {
+            alert(
+              `Este socio ya tiene entregas registradas.\n\n` +
+                `Falla: ${Number(registroExistente.PapeletasFalla || 0)} papeletas\n` +
+                `Virgen: ${Number(registroExistente.PapeletasVirgen || 0)} papeletas\n\n` +
+                `La nueva entrega se añadirá a estas cantidades.`
+            );
+          }
+      
+        setRegistroPrincipalSeleccionado(registroExistente);
+      
         setEntrega({
           ...entrega,
           NUMCENS: socio.NUMCENS,
           NombreExterno: "",
       
-          PapeletasFalla: Number(ficha?.PapeletasNinoFalla || 0),
+          PapeletasFalla: registroExistente
+            ? 0
+            : Number(ficha?.PapeletasNinoFalla || 0),
+      
           DevueltasFalla: 0,
           SerieFalla: "",
       
-          PapeletasVirgen: Number(ficha?.PapeletasNinoVirgen || 0),
+          PapeletasVirgen: registroExistente
+            ? 0
+            : Number(ficha?.PapeletasNinoVirgen || 0),
+      
           DevueltasVirgen: 0,
           SerieVirgen: "",
         });
@@ -311,94 +411,587 @@ setCargando(false);
         setBusquedaSocio(textoSocio(socio));
       }
 
-
-      async function guardarEntrega() {
-        if (!ejercicioActivo) {
-          alert("No se ha encontrado un ejercicio activo.");
-          return;
-        }
+      async function guardarEntregaAdministracion(datos: any) {
+        const precioDecimo =
+          datos.Tipo === "VIRGEN"
+            ? Number(configuracion.PrecioDecimoVirgen || 0)
+            : Number(configuracion.PrecioDecimoFalla || 0);
       
-        if (!entrega.NUMCENS && !entrega.NombreExterno.trim()) {
-          alert("Selecciona un socio o registra una persona externa.");
-          return;
-        }
+        const importe =
+          Number(datos.Decimos || 0) * precioDecimo;
       
-        if (!entrega.FechaEntrega) {
-          alert("Selecciona la fecha de entrega.");
-          return;
-        }
-      
-        const papeletasFalla = Number(entrega.PapeletasFalla || 0);
-        const devueltasFalla = Number(entrega.DevueltasFalla || 0);
-      
-        const papeletasVirgen = Number(entrega.PapeletasVirgen || 0);
-        const devueltasVirgen = Number(entrega.DevueltasVirgen || 0);
-      
-        if (papeletasFalla <= 0 && papeletasVirgen <= 0) {
-          alert("Indica al menos una papeleta de Falla o Virgen.");
-          return;
-        }
-      
-        if (devueltasFalla > papeletasFalla) {
-          alert(
-            "Las papeletas devueltas de Falla no pueden superar las entregadas."
-          );
-          return;
-        }
-      
-        if (devueltasVirgen > papeletasVirgen) {
-          alert(
-            "Las papeletas devueltas de Virgen no pueden superar las entregadas."
-          );
-          return;
-        }
-      
-        const datos = {
-          Ejercicio: ejercicioActivo,
-          NUMCENS: entrega.NUMCENS,
-          NombreExterno: entrega.NombreExterno || null,
-          Sorteo: "Niño",
-          FechaEntrega: entrega.FechaEntrega,
-        
-          // FALLA
-          PapeletasFalla: Number(entrega.PapeletasFalla || 0),
-          DevueltasFalla: Number(entrega.DevueltasFalla || 0),
-          SerieFalla: entrega.SerieFalla || null,
-        
-          // VIRGEN
-          PapeletasVirgen: Number(entrega.PapeletasVirgen || 0),
-          DevueltasVirgen: Number(entrega.DevueltasVirgen || 0),
-          SerieVirgen: entrega.SerieVirgen || null,
-        
-          // DATOS COMUNES DEL RECIBO
-          Recibo: entrega.Recibo || null,
-          Observaciones: entrega.Observaciones || null,
-        };
-        let error;
-      
-        if (entregaEditando?.ID) {
-          ({ error } = await (supabase as any)
-            .from("LOTERIA_SORTEO_NINO")
-            .update(datos)
-            .eq("ID", entregaEditando.ID));
-        } else {
-          ({ error } = await (supabase as any)
-            .from("LOTERIA_SORTEO_NINO")
-            .insert(datos));
-        }
+        const { error } = await supabase
+          .from("LOTERIA_NINO_ADMIN_ENTREGAS")
+          .insert({
+  Ejercicio: ejercicioActivo,
+  Fecha: datos.Fecha,
+  Tipo: datos.Tipo,
+  Decimos: Number(datos.Decimos || 0),
+  PapeletasEmitidas: Number(datos.PapeletasEmitidas || 0),
+  Importe: importe,
+  Observaciones: datos.Observaciones || null,
+} as any);
       
         if (error) {
-          alert("Error guardando la entrega: " + error.message);
-          return;
+          alert(error.message);
+          return false;
         }
       
         await cargarDatos();
       
-        setModalAbierto(false);
-        setEntregaEditando(null);
-        setBusquedaSocio("");
-        setEntrega(entregaVacia);
+        return true;
       }
+
+      async function actualizarEntregaAdministracion(
+        idEntrega: number,
+        datos: any
+      ) {
+        const precioDecimo =
+          datos.Tipo === "VIRGEN"
+            ? Number(configuracion.PrecioDecimoVirgen || 0)
+            : Number(configuracion.PrecioDecimoFalla || 0);
+      
+        const importe =
+          Number(datos.Decimos || 0) * precioDecimo;
+      
+        const { error } = await (
+          supabase.from("LOTERIA_NINO_ADMIN_ENTREGAS") as any
+        )
+          .update({
+            Fecha: datos.Fecha,
+            Tipo: datos.Tipo,
+            Decimos: Number(datos.Decimos || 0),
+            PapeletasEmitidas: Number(datos.PapeletasEmitidas || 0),
+            Importe: importe,
+            Observaciones: datos.Observaciones || null,
+          })
+          .eq("ID", idEntrega)
+          .eq("Ejercicio", ejercicioActivo);
+      
+        if (error) {
+          alert(error.message);
+          return false;
+        }
+      
+        await cargarDatos();
+      
+        return true;
+      }
+
+      async function eliminarEntregaAdministracion(id: number) {
+        const confirmar = window.confirm(
+          "¿Seguro que quieres eliminar esta entrega de la Administración?"
+        );
+      
+        if (!confirmar) return false;
+      
+        const { error } = await (supabase as any)
+          .from("LOTERIA_NINO_ADMIN_ENTREGAS")
+          .delete()
+          .eq("ID", id);
+      
+        if (error) {
+          alert(error.message);
+          return false;
+        }
+      
+        await cargarDatos();
+        return true;
+      }
+
+      async function guardarPagoAdministracion(datos: any) {
+        const importe = Number(datos.Importe || 0);
+      
+        if (importe <= 0) {
+          alert("Introduce un importe válido.");
+          return false;
+        }
+      
+        const { error } = await (supabase as any)
+          .from("LOTERIA_NINO_ADMIN_PAGOS")
+          .insert({
+            IDEntrega: null,
+            Ejercicio: ejercicioActivo,
+            Fecha: datos.Fecha,
+            Importe: importe,
+            Observaciones: datos.Observaciones || null,
+          });
+      
+        if (error) {
+          alert(error.message);
+          return false;
+        }
+      
+        await cargarDatos();
+        return true;
+      }
+
+      async function actualizarPagoAdministracion(id: number, datos: any) {
+        const importe = Number(datos.Importe || 0);
+      
+        if (importe <= 0) {
+          alert("Introduce un importe válido.");
+          return false;
+        }
+      
+        const { error } = await (supabase as any)
+          .from("LOTERIA_NINO_ADMIN_PAGOS")
+          .update({
+            Fecha: datos.Fecha,
+            Importe: importe,
+            Observaciones: datos.Observaciones || null,
+          })
+          .eq("ID", id);
+      
+        if (error) {
+          alert(error.message);
+          return false;
+        }
+      
+        await cargarDatos();
+        return true;
+      }
+
+      async function eliminarPagoAdministracion(id: number) {
+        const confirmar = window.confirm(
+          "¿Seguro que quieres eliminar este pago a la Administración?"
+        );
+      
+        if (!confirmar) return false;
+      
+        const { error } = await (supabase as any)
+          .from("LOTERIA_NINO_ADMIN_PAGOS")
+          .delete()
+          .eq("ID", id);
+      
+        if (error) {
+          alert(error.message);
+          return false;
+        }
+      
+        await cargarDatos();
+        return true;
+      }
+      
+      async function recalcularTotalesRegistroPrincipal(idRegistro: number) {
+        const { data: movimientos, error: errorMovimientos } = await (
+          supabase as any
+        )
+          .from("LOTERIA_NINO_ENTREGAS_MOVIMIENTOS")
+          .select("*")
+          .eq("IDEntrega", idRegistro)
+          .order("FechaEntrega", { ascending: false })
+          .order("ID", { ascending: false });
+      
+        if (errorMovimientos) {
+          alert(
+            "Error recalculando los movimientos: " +
+              errorMovimientos.message
+          );
+          return false;
+        }
+      
+        const lista = movimientos || [];
+      
+        const totalPapeletasFalla = lista.reduce(
+          (suma: number, movimiento: any) =>
+            suma + Number(movimiento.PapeletasFalla || 0),
+          0
+        );
+      
+        const totalDevueltasFalla = lista.reduce(
+          (suma: number, movimiento: any) =>
+            suma + Number(movimiento.DevueltasFalla || 0),
+          0
+        );
+      
+        const totalPapeletasVirgen = lista.reduce(
+          (suma: number, movimiento: any) =>
+            suma + Number(movimiento.PapeletasVirgen || 0),
+          0
+        );
+      
+        const totalDevueltasVirgen = lista.reduce(
+          (suma: number, movimiento: any) =>
+            suma + Number(movimiento.DevueltasVirgen || 0),
+          0
+        );
+      
+        const ultimoMovimiento = lista[0] || null;
+      
+        const { error: errorActualizar } = await (
+          supabase as any
+        )
+          .from("LOTERIA_SORTEO_NINO")
+          .update({
+            PapeletasFalla: totalPapeletasFalla,
+            DevueltasFalla: totalDevueltasFalla,
+            PapeletasVirgen: totalPapeletasVirgen,
+            DevueltasVirgen: totalDevueltasVirgen,
+      
+            FechaEntrega:
+              ultimoMovimiento?.FechaEntrega ||
+              entregas.find((e: any) => Number(e.ID) === Number(idRegistro))?.FechaEntrega ||
+              new Date().toISOString().slice(0, 10),
+      
+            SerieFalla:
+              ultimoMovimiento?.SerieFalla || null,
+      
+            SerieVirgen:
+              ultimoMovimiento?.SerieVirgen || null,
+      
+            Recibo:
+              ultimoMovimiento?.Recibo || null,
+      
+            Observaciones:
+              ultimoMovimiento?.Observaciones || null,
+          })
+          .eq("ID", idRegistro);
+      
+        if (errorActualizar) {
+          alert(
+            "Error actualizando los totales del socio: " +
+              errorActualizar.message
+          );
+          return false;
+        }
+      
+        return true;
+      }
+
+      function seleccionarVendedorExterno(fila: any) {
+    setRegistroPrincipalSeleccionado(fila);
+    setEntregaEditando(fila);
+    setMovimientoEditando(null);
+    setBusquedaSocio("");
+    setEntrega({
+      ...entregaVacia,
+      NUMCENS: null,
+      NombreExterno: fila.NombreExterno || "",
+      FechaEntrega: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  async function guardarEntrega(cobroInmediato: { importe: number; fecha: string } | null = null): Promise<boolean> {
+  if (!ejercicioActivo) {
+    alert("No se ha encontrado un ejercicio activo.");
+    return false;
+  }
+
+  if (!entrega.NUMCENS && !entrega.NombreExterno.trim()) {
+    alert("Selecciona un socio o registra una persona externa.");
+    return false;
+  }
+
+  if (!entrega.FechaEntrega) {
+    alert("Selecciona la fecha de entrega.");
+    return false;
+  }
+
+  const fallaSerie = analizarSeries(entrega.SerieFalla || "");
+  const virgenSerie = analizarSeries(entrega.SerieVirgen || "");
+  if (fallaSerie.error || virgenSerie.error) {
+    alert(fallaSerie.error || virgenSerie.error);
+    return false;
+  }
+  for (const [tipo, serie, cantidad] of [
+    ["Falla", fallaSerie, Number(entrega.PapeletasFalla || 0)],
+    ["Virgen", virgenSerie, Number(entrega.PapeletasVirgen || 0)],
+  ] as const) {
+    if (cantidad > 0 && serie.cantidad === 0) {
+      alert(`Indica los números de las papeletas de ${tipo}.`);
+      return false;
+    }
+    // Al editar, validar también cualquier nueva serie o cantidad.
+    const serieOriginal = tipo === "Falla" ? movimientoEditando?.SerieFalla : movimientoEditando?.SerieVirgen;
+    const serieModificada = !movimientoEditando ||
+      (tipo === "Falla" ? entrega.SerieFalla : entrega.SerieVirgen) !== (serieOriginal || "");
+    if (serieModificada && cantidad !== serie.cantidad) {
+      alert(`${tipo}: has indicado ${cantidad} papeletas, pero la numeración corresponde a ${serie.cantidad}.`);
+      return false;
+    }
+  }
+
+  const papeletasFalla = Number(entrega.PapeletasFalla || 0);
+  const devueltasFalla = Number(entrega.DevueltasFalla || 0);
+
+  const papeletasVirgen = Number(
+    entrega.PapeletasVirgen || 0
+  );
+  const devueltasVirgen = Number(
+    entrega.DevueltasVirgen || 0
+  );
+
+  if (papeletasFalla <= 0 && papeletasVirgen <= 0) {
+    alert("Indica al menos una papeleta de Falla o Virgen.");
+    return false;
+  }
+
+  if (devueltasFalla > papeletasFalla) {
+    alert(
+      "Las papeletas devueltas de Falla no pueden superar las entregadas."
+    );
+    return false;
+  }
+
+  if (devueltasVirgen > papeletasVirgen) {
+    alert(
+      "Las papeletas devueltas de Virgen no pueden superar las entregadas."
+    );
+    return false;
+  }
+
+  if (cobroInmediato) {
+    const maximo = (papeletasFalla - devueltasFalla) * Number(configuracion.ImportePapeletaFalla || 0)
+      + (papeletasVirgen - devueltasVirgen) * Number(configuracion.ImportePapeletaVirgen || 0);
+    if (!Number.isFinite(cobroInmediato.importe) || cobroInmediato.importe <= 0 || cobroInmediato.importe > maximo + 0.001 || !cobroInmediato.fecha) {
+      alert(`El cobro debe ser mayor que cero y no superar ${maximo.toFixed(2)} €.`);
+      return false;
+    }
+  }
+
+  // Durante la edición de un movimiento no está permitido cambiar el propietario.
+  if (movimientoEditando?.ID) {
+    const fichaOriginal = entregas.find((f: any) =>
+      Number(f.ID) === Number(movimientoEditando.IDEntrega)
+    );
+    if (!fichaOriginal ||
+        String(fichaOriginal.NUMCENS ?? "") !== String(entrega.NUMCENS ?? "") ||
+        normalizarTexto(String(fichaOriginal.NombreExterno || "")) !== normalizarTexto(String(entrega.NombreExterno || ""))) {
+      alert("No se puede cambiar el socio al editar una entrega. Bórrala y regístrala en la ficha correcta.");
+      return false;
+    }
+  }
+
+  // Resolvemos siempre la ficha principal con los datos ACTUALES del formulario.
+  // No confiamos solo en el estado local: puede haber quedado desfasado tras un error
+  // o si la ficha se creó desde otra sesión.
+  let idRegistroPrincipal: number | null = null;
+  const numcensActual = entrega.NUMCENS == null ? null : Number(entrega.NUMCENS);
+
+  if (numcensActual !== null) {
+    const { data: fichaExistente, error: errorBuscarFicha } = await (supabase as any)
+      .from("LOTERIA_SORTEO_NINO")
+      .select("ID,Sorteo,NUMCENS")
+      .eq("Ejercicio", ejercicioActivo)
+      .eq("NUMCENS", numcensActual)
+      .maybeSingle();
+
+    if (errorBuscarFicha) {
+      alert("No se ha podido comprobar la ficha del socio: " + errorBuscarFicha.message);
+      return false;
+    }
+    if (fichaExistente) {
+      if (fichaExistente.Sorteo !== "Niño") {
+        alert("Este socio ya tiene una ficha del ejercicio asociada a otro sorteo. No se ha creado ni modificado ninguna entrega.");
+        return false;
+      }
+      idRegistroPrincipal = Number(fichaExistente.ID);
+    }
+  } else {
+    const nombreExterno = normalizarTexto(entrega.NombreExterno.trim());
+    const { data: candidatos, error: errorBuscarExterno } = await (supabase as any)
+      .from("LOTERIA_SORTEO_NINO")
+      .select("ID,NombreExterno")
+      .eq("Ejercicio", ejercicioActivo)
+      .eq("Sorteo", "Niño")
+      .is("NUMCENS", null);
+    if (errorBuscarExterno) {
+      alert("No se ha podido comprobar la ficha del vendedor externo: " + errorBuscarExterno.message);
+      return false;
+    }
+    const existente = (candidatos || []).find((fila: any) =>
+      normalizarTexto(String(fila.NombreExterno || "").trim()) === nombreExterno
+    );
+    if (existente) idRegistroPrincipal = Number(existente.ID);
+  }
+
+  // Solo creamos una ficha si la búsqueda anterior confirma que no existe.
+  if (idRegistroPrincipal === null) {
+    const { data: nuevaFicha, error: errorFicha } = await (supabase as any)
+      .from("LOTERIA_SORTEO_NINO")
+      .insert({
+        Ejercicio: ejercicioActivo,
+        NUMCENS: numcensActual,
+        NombreExterno: numcensActual === null ? entrega.NombreExterno.trim() : null,
+        Sorteo: "Niño",
+        FechaEntrega: entrega.FechaEntrega,
+        PapeletasFalla: 0,
+        DevueltasFalla: 0,
+        SerieFalla: null,
+        PapeletasVirgen: 0,
+        DevueltasVirgen: 0,
+        SerieVirgen: null,
+        Recibo: null,
+        Observaciones: null,
+      })
+      .select("ID")
+      .single();
+
+    if (errorFicha) {
+      // Si otro usuario creó la ficha a la vez, recuperamos la existente.
+      if (numcensActual !== null && errorFicha.code === "23505") {
+        const { data: fichaConcurrente, error: errorRecuperar } = await (supabase as any)
+          .from("LOTERIA_SORTEO_NINO")
+          .select("ID,Sorteo")
+          .eq("Ejercicio", ejercicioActivo)
+          .eq("NUMCENS", numcensActual)
+          .maybeSingle();
+        if (!errorRecuperar && fichaConcurrente?.Sorteo === "Niño") {
+          idRegistroPrincipal = Number(fichaConcurrente.ID);
+        }
+      }
+      if (idRegistroPrincipal === null) {
+        alert("Error creando la ficha del socio: " + errorFicha.message);
+        return false;
+      }
+    } else {
+      idRegistroPrincipal = Number(nuevaFicha.ID);
+    }
+  }
+
+  // Creamos el movimiento concreto de esta entrega.
+  let errorMovimiento;
+
+const datosMovimiento = {
+  IDEntrega: idRegistroPrincipal,
+  Ejercicio: ejercicioActivo,
+  FechaEntrega: entrega.FechaEntrega,
+
+  PapeletasFalla: papeletasFalla,
+  DevueltasFalla: devueltasFalla,
+  SerieFalla: entrega.SerieFalla || null,
+
+  PapeletasVirgen: papeletasVirgen,
+  DevueltasVirgen: devueltasVirgen,
+  SerieVirgen: entrega.SerieVirgen || null,
+
+  Recibo: entrega.Recibo || null,
+  Observaciones: entrega.Observaciones || null,
+};
+
+if (movimientoEditando?.ID) {
+  ({ error: errorMovimiento } = await (
+    supabase as any
+  )
+    .from("LOTERIA_NINO_ENTREGAS_MOVIMIENTOS")
+    .update(datosMovimiento)
+    .eq("ID", movimientoEditando.ID));
+} else {
+  ({ error: errorMovimiento } = await (
+    supabase as any
+  )
+    .from("LOTERIA_NINO_ENTREGAS_MOVIMIENTOS")
+    .insert(datosMovimiento));
+}
+
+  if (errorMovimiento) {
+    // El trigger de Supabase indica el tipo y el ID de la entrega en conflicto.
+    const mensajeError = String(errorMovimiento.message || "");
+    const conflicto = mensajeError.match(/(Falla|Virgen): numeraci[oó]n ya asignada en la entrega ID (\d+)/i);
+    if (conflicto) {
+      const tipo = conflicto[1].toLowerCase() === "falla" ? "Falla" : "Virgen";
+      const idMovimiento = Number(conflicto[2]);
+      let anterior = movimientosEntregas.find((m: any) => Number(m.ID) === idMovimiento);
+      if (!anterior) {
+        const { data } = await (supabase as any)
+          .from("LOTERIA_NINO_ENTREGAS_MOVIMIENTOS")
+          .select("ID,IDEntrega,FechaEntrega,SerieFalla,SerieVirgen")
+          .eq("ID", idMovimiento)
+          .maybeSingle();
+        anterior = data;
+      }
+      let ficha = entregas.find((e: any) => Number(e.ID) === Number(anterior?.IDEntrega));
+      if (!ficha && anterior?.IDEntrega) {
+        const { data } = await (supabase as any)
+          .from("LOTERIA_SORTEO_NINO")
+          .select("ID,NUMCENS,NombreExterno")
+          .eq("ID", anterior.IDEntrega)
+          .maybeSingle();
+        ficha = data;
+      }
+      let propietario = ficha?.NombreExterno?.trim() || "";
+      if (!propietario && ficha?.NUMCENS != null) {
+        const socio = socios.find((s: any) => Number(s.NUMCENS) === Number(ficha.NUMCENS));
+        propietario = socio ? `${socio.Nombre || ""} ${socio.Apellidos || ""}`.trim() : `Socio NUMCENS ${ficha.NUMCENS}`;
+      }
+      if (!propietario) propietario = `entrega ID ${idMovimiento}`;
+
+      // Para mostrar un número concreto, buscamos la intersección de intervalos.
+      const separar = (texto: string): Array<[number, number]> =>
+        (texto || "").split(/[,/;]/).map((parte) => {
+          const m = parte.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+          return m ? [Number(m[1]), Number(m[2] || m[1])] as [number, number] : null;
+        }).filter((r): r is [number, number] => r !== null);
+      const nuevos = separar(tipo === "Falla" ? entrega.SerieFalla : entrega.SerieVirgen);
+      const anteriores = separar(tipo === "Falla" ? anterior?.SerieFalla : anterior?.SerieVirgen);
+      let numero: number | null = null;
+      for (const [a,b] of nuevos) {
+        for (const [c,d] of anteriores) {
+          if (a <= d && c <= b) { numero = Math.max(a,c); break; }
+        }
+        if (numero !== null) break;
+      }
+      const fecha = anterior?.FechaEntrega
+        ? String(anterior.FechaEntrega).split("-").reverse().join("/") : "";
+      alert(`NUMERACIÓN DUPLICADA — ${tipo.toUpperCase()}\n\n` +
+        (numero !== null ? `Papeleta: ${String(numero).padStart(4, "0")}\n` : "") +
+        `Asignada a: ${propietario}\n` +
+        (fecha ? `Fecha de entrega: ${fecha}\n` : "") +
+        `\nNo se ha guardado esta entrega.`);
+    } else {
+      alert("Error guardando el movimiento: " + mensajeError);
+    }
+    return false;
+  }
+
+  if (cobroInmediato) {
+    const { error: errorCobro } = await (supabase as any)
+      .from("LOTERIA_NINO_PAGOS")
+      .insert({ IDEntrega: idRegistroPrincipal, FechaPago: cobroInmediato.fecha,
+        Importe: cobroInmediato.importe, Observaciones: null });
+    if (errorCobro) {
+      alert("La entrega SÍ se ha guardado, pero NO el cobro: " + errorCobro.message +
+        ". Registra el pago desde la ficha; NO vuelvas a guardar las mismas papeletas.");
+      await cargarDatos();
+      return true;
+    }
+  }
+
+  const actualizado =
+    await recalcularTotalesRegistroPrincipal(
+      idRegistroPrincipal
+    );
+
+  if (!actualizado) return false;
+
+  await cargarDatos();
+
+  const { data: registroActualizado } = await (supabase as any)
+    .from("LOTERIA_SORTEO_NINO")
+    .select("*")
+    .eq("ID", idRegistroPrincipal)
+    .single();
+  
+  if (registroActualizado) {
+    setRegistroPrincipalSeleccionado(registroActualizado);
+    setEntregaEditando(registroActualizado);
+  }
+  
+  setMovimientoEditando(null);
+  
+  setEntrega({
+    ...entregaVacia,
+    NUMCENS: registroActualizado?.NUMCENS ?? entrega.NUMCENS ?? null,
+    NombreExterno:
+      registroActualizado?.NombreExterno ||
+      entrega.NombreExterno ||
+      "",
+    Sorteo: "Niño",
+    FechaEntrega: new Date().toISOString().slice(0, 10),
+  });
+  return true;
+}
 
       async function guardarConfiguracion() {
         if (!ejercicioActivo) {
@@ -458,17 +1051,85 @@ setCargando(false);
       }
 
       // ==============================
+// ADMINISTRACIÓN
+// ==============================
+
+const entregasAdminFalla = entregasAdministracion.filter(
+  (e) => e.Tipo === "FALLA"
+);
+
+const entregasAdminVirgen = entregasAdministracion.filter(
+  (e) => e.Tipo === "VIRGEN"
+);
+
+const decimosRecibidosFalla = entregasAdminFalla.reduce(
+  (suma, e) => suma + Number(e.Decimos || 0),
+  0
+);
+
+const decimosRecibidosVirgen = entregasAdminVirgen.reduce(
+  (suma, e) => suma + Number(e.Decimos || 0),
+  0
+);
+
+const papeletasEmitidasAdminFalla = entregasAdminFalla.reduce(
+  (suma, e) => suma + Number(e.PapeletasEmitidas || 0),
+  0
+);
+
+const papeletasEmitidasAdminVirgen = entregasAdminVirgen.reduce(
+  (suma, e) => suma + Number(e.PapeletasEmitidas || 0),
+  0
+);
+
+const totalAdministracionFalla = entregasAdminFalla.reduce(
+  (suma, e) => suma + Number(e.Importe || 0),
+  0
+);
+
+const totalAdministracionVirgen = entregasAdminVirgen.reduce(
+  (suma, e) => suma + Number(e.Importe || 0),
+  0
+);
+
+const pagadoAdministracionFalla = pagosAdministracion
+  .filter((pago) =>
+    entregasAdminFalla.some(
+      (entrega) => Number(entrega.ID) === Number(pago.IDEntrega)
+    )
+  )
+  .reduce(
+    (suma, pago) => suma + Number(pago.Importe || 0),
+    0
+  );
+
+const pagadoAdministracionVirgen = pagosAdministracion
+  .filter((pago) =>
+    entregasAdminVirgen.some(
+      (entrega) => Number(entrega.ID) === Number(pago.IDEntrega)
+    )
+  )
+  .reduce(
+    (suma, pago) => suma + Number(pago.Importe || 0),
+    0
+  );
+
+const pendienteAdministracionFalla = Math.max(
+  0,
+  totalAdministracionFalla - pagadoAdministracionFalla
+);
+
+const pendienteAdministracionVirgen = Math.max(
+  0,
+  totalAdministracionVirgen - pagadoAdministracionVirgen
+);
+
+      // ==============================
 // RESUMEN FALLA
 // ==============================
 
 const papeletasEmitidasFalla =
-configuracion.ImportePapeletaFalla > 0
-  ? Math.floor(
-      (configuracion.DecimosFalla *
-        configuracion.PrecioDecimoFalla) /
-        configuracion.ImportePapeletaFalla
-    )
-  : 0;
+  papeletasEmitidasAdminFalla;
 
 const papeletasEntregadasFalla = entregas.reduce(
 (suma, e) => suma + Number(e.PapeletasFalla || 0),
@@ -488,9 +1149,8 @@ papeletasVendidasFalla *
 (configuracion.ImportePapeletaFalla -
   configuracion.BeneficioPapeletaFalla);
 
-const pagoAdministracionFalla =
-configuracion.DecimosFalla *
-configuracion.PrecioDecimoFalla;
+  const pagoAdministracionFalla =
+  totalAdministracionFalla;
 
 const beneficioSociosFalla =
 papeletasVendidasFalla *
@@ -502,13 +1162,7 @@ configuracion.BeneficioPapeletaFalla;
 // ==============================
 
 const papeletasEmitidasVirgen =
-configuracion.ImportePapeletaVirgen > 0
-  ? Math.floor(
-      (configuracion.DecimosVirgen *
-        configuracion.PrecioDecimoVirgen) /
-        configuracion.ImportePapeletaVirgen
-    )
-  : 0;
+  papeletasEmitidasAdminVirgen;
 
 const papeletasEntregadasVirgen = entregas.reduce(
 (suma, e) => suma + Number(e.PapeletasVirgen || 0),
@@ -528,13 +1182,22 @@ papeletasVendidasVirgen *
 (configuracion.ImportePapeletaVirgen -
   configuracion.BeneficioPapeletaVirgen);
 
-const pagoAdministracionVirgen =
-configuracion.DecimosVirgen *
-configuracion.PrecioDecimoVirgen;
+  const pagoAdministracionVirgen =
+  totalAdministracionVirgen;
 
 const beneficioSociosVirgen =
 papeletasVendidasVirgen *
 configuracion.BeneficioPapeletaVirgen;
+
+  // Importe de las papeletas entregadas a socios, descontando devoluciones.
+  // Misma base de cálculo que el total de cada recibo de la tabla inferior.
+  const totalEntregadoSocios = entregas.reduce((suma, fila) => {
+    const falla = Math.max(0, Number(fila.PapeletasFalla || 0) - Number(fila.DevueltasFalla || 0));
+    const virgen = Math.max(0, Number(fila.PapeletasVirgen || 0) - Number(fila.DevueltasVirgen || 0));
+    return suma +
+      falla * Number(configuracion.ImportePapeletaFalla || 0) +
+      virgen * Number(configuracion.ImportePapeletaVirgen || 0);
+  }, 0);
 
   const importePagado = entregas.reduce(
     (suma, e) => suma + totalPagadoEntrega(e.ID),
@@ -577,48 +1240,138 @@ configuracion.BeneficioPapeletaVirgen;
     return suma + pendienteFila;
   }, 0);
   
-function editarEntrega(fila: any) {
-  setEntregaEditando(fila);
-
-  setEntrega({
-    ID: fila.ID ?? null,
-    NUMCENS: fila.NUMCENS ?? null,
-    NombreExterno: fila.NombreExterno || "",
-    Sorteo: "Niño",
-    FechaEntrega: fila.FechaEntrega || "",
-
-    PapeletasFalla: Number(fila.PapeletasFalla || 0),
-    DevueltasFalla: Number(fila.DevueltasFalla || 0),
-    SerieFalla: fila.SerieFalla || "",
-
-    PapeletasVirgen: Number(fila.PapeletasVirgen || 0),
-    DevueltasVirgen: Number(fila.DevueltasVirgen || 0),
-    SerieVirgen: fila.SerieVirgen || "",
-
-    Recibo: fila.Recibo || "",
-    Observaciones: fila.Observaciones || "",
-  });
-
-  if (fila.NUMCENS) {
-    const socio = socios.find(
-      (s) => Number(s.NUMCENS) === Number(fila.NUMCENS)
-    );
-
-    setBusquedaSocio(
-      socio
-        ? textoSocio(socio)
-        : `NUMCENS ${fila.NUMCENS}`
-    );
-  } else {
-    setBusquedaSocio("");
+  function editarEntrega(fila: any) {
+    // Esta es la ficha principal del socio
+    setEntregaEditando(fila);
+    setRegistroPrincipalSeleccionado(fila);
+    setMovimientoEditando(null);
+  
+    // Los campos de arriba serán SIEMPRE una nueva entrega,
+    // por eso empiezan vacíos y no con los totales acumulados.
+    setEntrega({
+      ...entregaVacia,
+  
+      NUMCENS: fila.NUMCENS ?? null,
+      NombreExterno: fila.NombreExterno || "",
+      Sorteo: "Niño",
+  
+      FechaEntrega: new Date().toISOString().slice(0, 10),
+  
+      PapeletasFalla: 0,
+      DevueltasFalla: 0,
+      SerieFalla: "",
+  
+      PapeletasVirgen: 0,
+      DevueltasVirgen: 0,
+      SerieVirgen: "",
+  
+      Recibo: "",
+      Observaciones: "",
+    });
+  
+    if (fila.NUMCENS) {
+      const socio = socios.find(
+        (s: any) =>
+          Number(s.NUMCENS) === Number(fila.NUMCENS)
+      );
+  
+      setBusquedaSocio(
+        socio
+          ? textoSocio(socio)
+          : `NUMCENS ${fila.NUMCENS}`
+      );
+    } else {
+      setBusquedaSocio("");
+    }
+  
+    setModalAbierto(true);
   }
 
-  setModalAbierto(true);
-}
+  function editarMovimiento(movimiento: any) {
+    setMovimientoEditando(movimiento);
+  
+    setEntrega({
+      ...entregaVacia,
+  
+      NUMCENS:
+        registroPrincipalSeleccionado?.NUMCENS ??
+        entregaEditando?.NUMCENS ??
+        null,
+  
+      NombreExterno:
+        registroPrincipalSeleccionado?.NombreExterno ||
+        entregaEditando?.NombreExterno ||
+        "",
+  
+      Sorteo: "Niño",
+  
+      FechaEntrega: movimiento.FechaEntrega || "",
+  
+      PapeletasFalla: Number(
+        movimiento.PapeletasFalla || 0
+      ),
+      DevueltasFalla: Number(
+        movimiento.DevueltasFalla || 0
+      ),
+      SerieFalla: movimiento.SerieFalla || "",
+  
+      PapeletasVirgen: Number(
+        movimiento.PapeletasVirgen || 0
+      ),
+      DevueltasVirgen: Number(
+        movimiento.DevueltasVirgen || 0
+      ),
+      SerieVirgen: movimiento.SerieVirgen || "",
+  
+      Recibo: movimiento.Recibo || "",
+      Observaciones: movimiento.Observaciones || "",
+    });
+  }
+
+  async function eliminarMovimiento(movimiento: any) {
+    const movimientosDeEstaFicha = movimientosEntregas.filter(
+      (m: any) =>
+        Number(m.IDEntrega) === Number(movimiento.IDEntrega)
+    );
+  
+    if (movimientosDeEstaFicha.length <= 1) {
+      alert(
+        "Esta es la única entrega del socio. Para eliminarla, elimina la ficha completa desde la tabla principal."
+      );
+      return;
+    }
+
+    const confirmar = window.confirm(
+      "¿Seguro que quieres eliminar esta compra?"
+    );
+  
+    if (!confirmar) return;
+  
+    const { error } = await (supabase as any)
+      .from("LOTERIA_NINO_ENTREGAS_MOVIMIENTOS")
+      .delete()
+      .eq("ID", movimiento.ID);
+  
+    if (error) {
+      alert(
+        "Error eliminando la entrega: " +
+          error.message
+      );
+      return;
+    }
+  
+    await recalcularTotalesRegistroPrincipal(
+      Number(movimiento.IDEntrega)
+    );
+  
+    setMovimientoEditando(null);
+  
+    await cargarDatos();
+  }
 
   async function eliminarEntrega(id: number) {
     const confirmar = window.confirm(
-      "¿Seguro que quieres eliminar esta entrega?"
+      "¿Seguro que quieres eliminar esta compra?"
     );
   
     if (!confirmar) return;
@@ -634,6 +1387,16 @@ function editarEntrega(fila: any) {
     }
   
     await cargarDatos();
+  }
+
+  // Recibos de todas las entregas de una misma ficha, no solo del último movimiento.
+  function recibosDeFicha(idFicha: number): string[] {
+    return Array.from(new Set(
+      movimientosEntregas
+        .filter((m: any) => Number(m.IDEntrega) === Number(idFicha))
+        .map((m: any) => String(m.Recibo ?? "").trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
   }
 
   const entregasFiltradas = entregas.filter((fila: any) => {
@@ -676,37 +1439,25 @@ function editarEntrega(fila: any) {
   
     if (!textoBusqueda) return true;
   
-    const contenido = normalizarTexto(
-      [
-        nombre,
-        fila.NUMCENS,
-        fila.NombreExterno,
     
-        fila.SerieFalla,
-        fila.SerieVirgen,
-    
-        fila.FechaEntrega,
-    
-        papeletasFalla,
-        devueltasFalla,
-        vendidasFalla,
-    
-        papeletasVirgen,
-        devueltasVirgen,
-        vendidasVirgen,
-    
-        importePagado,
-        pendiente,
-    
-        pendiente > 0 ? "pendiente" : "pagado",
-    
-        devueltasFalla > 0 || devueltasVirgen > 0
-          ? "devueltas devolucion"
-          : "",
-      ].join(" ")
-    );
-  
-    return contenido.includes(textoBusqueda);
+const recibos = movimientosEntregas
+.filter((m: any) => Number(m.IDEntrega) === Number(fila.ID))
+.map((m: any) => String(m.Recibo ?? "").trim())
+.filter(Boolean);
+
+const nombreCompleto = normalizarTexto(nombre);
+
+if (/^\d+$/.test(textoBusqueda)) {
+return (
+  recibos.some(
+    (recibo: string) => Number(recibo) === Number(textoBusqueda)
+  ) ||
+  String(fila.NUMCENS ?? "") === textoBusqueda
+);
+}
+
+return nombreCompleto.includes(textoBusqueda);
+
   });
 
   const entregasOrdenadas = [...entregasFiltradas].sort(
@@ -785,21 +1536,27 @@ const pendienteB = Math.max(
         comparacion = nombreA.localeCompare(nombreB, "es");
       }
   
-      if (campoOrden === "serie") {
-        const serieA = `${a.SerieFalla || ""} ${a.SerieVirgen || ""}`;
-        const serieB = `${b.SerieFalla || ""} ${b.SerieVirgen || ""}`;
-      
-        comparacion = serieA.localeCompare(
-          serieB,
-          "es",
-          { numeric: true }
-        );
+      if (campoOrden === "recibo") {
+        const recibosA = recibosDeFicha(a.ID);
+        const recibosB = recibosDeFicha(b.ID);
+        const primeroA = recibosA[0] ?? String(a.Recibo ?? "").trim();
+        const primeroB = recibosB[0] ?? String(b.Recibo ?? "").trim();
+        // Los registros sin recibo van detrás en ambos sentidos.
+        if (!primeroA && primeroB) return 1;
+        if (primeroA && !primeroB) return -1;
+        comparacion = primeroA.localeCompare(primeroB, "es", { numeric: true });
+        if (comparacion === 0) comparacion = nombreA.localeCompare(nombreB, "es");
       }
-  
+
       if (campoOrden === "pendiente") {
         comparacion = pendienteA - pendienteB;
       }
   
+      if (campoOrden === "recibo") {
+        const sinA = !recibosDeFicha(a.ID).length && !String(a.Recibo ?? "").trim();
+        const sinB = !recibosDeFicha(b.ID).length && !String(b.Recibo ?? "").trim();
+        if (sinA !== sinB) return sinA ? 1 : -1;
+      }
       return direccionOrden === "asc"
         ? comparacion
         : -comparacion;
@@ -817,84 +1574,114 @@ const pendienteB = Math.max(
     }
   }
   function exportarExcel() {
-  const datos = entregasOrdenadas.map((fila: any) => {
-    const socio = socios.find(
-      (s: any) => Number(s.NUMCENS) === Number(fila.NUMCENS)
-    );
-
-    const nombre =
-      fila.NombreExterno ||
-      `${socio?.Apellidos || ""}, ${socio?.Nombre || ""}`;
-
-    // FALLA
-    const papeletasFalla = Number(fila.PapeletasFalla || 0);
-    const devueltasFalla = Number(fila.DevueltasFalla || 0);
-
-    const vendidasFalla = Math.max(
-      0,
-      papeletasFalla - devueltasFalla
-    );
-
-    // VIRGEN
-    const papeletasVirgen = Number(fila.PapeletasVirgen || 0);
-    const devueltasVirgen = Number(fila.DevueltasVirgen || 0);
-
-    const vendidasVirgen = Math.max(
-      0,
-      papeletasVirgen - devueltasVirgen
-    );
-
-    // TOTAL VENDIDAS
-    const vendidasTotal =
-      vendidasFalla + vendidasVirgen;
-
-    // IMPORTES
-    const totalFalla =
-      vendidasFalla *
-      Number(configuracion.ImportePapeletaFalla || 0);
-
-    const totalVirgen =
-      vendidasVirgen *
-      Number(configuracion.ImportePapeletaVirgen || 0);
-
-    const total = totalFalla + totalVirgen;
-
-    const pagado = totalPagadoEntrega(fila.ID);
-
-    const pendiente = Math.max(
-      0,
-      total - pagado
-    );
-
-    return {
-      socio: nombre,
-      numcens: fila.NUMCENS || "",
-      fecha: fila.FechaEntrega || "",
-      recibo: fila.Recibo || "",
-
-      // FALLA
-      entregadasFalla: papeletasFalla,
-      devueltasFalla,
-      vendidasFalla,
-      serieFalla: fila.SerieFalla || "",
-
-      // VIRGEN
-      entregadasVirgen: papeletasVirgen,
-      devueltasVirgen,
-      vendidasVirgen,
-      serieVirgen: fila.SerieVirgen || "",
-
-      // TOTALES
-      vendidasTotal,
-      total,
-      pagado,
-      pendiente,
-
-      estado: pendiente > 0 ? "Pendiente" : "Pagado",
-
-      observaciones: fila.Observaciones || "",
-    };
-  });
+    const datos = entregasOrdenadas.flatMap((fila: any) => {
+      const socio = socios.find(
+        (s: any) => Number(s.NUMCENS) === Number(fila.NUMCENS)
+      );
+    
+      const nombre =
+        fila.NombreExterno ||
+        `${socio?.Apellidos || ""}, ${socio?.Nombre || ""}`;
+    
+      const movimientos = movimientosEntregas.filter(
+        (movimiento: any) =>
+          Number(movimiento.IDEntrega) === Number(fila.ID)
+      );
+    
+      const filasMovimientos = movimientos.map((movimiento: any) => {
+        const entregadasFalla = Number(
+          movimiento.PapeletasFalla || 0
+        );
+        const devueltasFalla = Number(
+          movimiento.DevueltasFalla || 0
+        );
+        const vendidasFalla = Math.max(
+          0,
+          entregadasFalla - devueltasFalla
+        );
+    
+        const entregadasVirgen = Number(
+          movimiento.PapeletasVirgen || 0
+        );
+        const devueltasVirgen = Number(
+          movimiento.DevueltasVirgen || 0
+        );
+        const vendidasVirgen = Math.max(
+          0,
+          entregadasVirgen - devueltasVirgen
+        );
+    
+        const vendidasTotal =
+          vendidasFalla + vendidasVirgen;
+    
+        const importe =
+          vendidasFalla *
+            Number(configuracion.ImportePapeletaFalla || 0) +
+          vendidasVirgen *
+            Number(configuracion.ImportePapeletaVirgen || 0);
+    
+        return {
+          movimiento,
+          entregadasFalla,
+          devueltasFalla,
+          vendidasFalla,
+          entregadasVirgen,
+          devueltasVirgen,
+          vendidasVirgen,
+          vendidasTotal,
+          importe,
+        };
+      });
+    
+      const total = filasMovimientos.reduce(
+        (suma: number, movimiento: any) =>
+          suma + movimiento.importe,
+        0
+      );
+    
+      const pagado = totalPagadoEntrega(fila.ID);
+      const pendiente = Math.max(0, total - pagado);
+    
+      return filasMovimientos.map(
+        (movimiento: any, index: number) => ({
+          socio: index === 0 ? nombre : "",
+          numcens: index === 0 ? fila.NUMCENS || "" : "",
+    
+          fecha: movimiento.movimiento.FechaEntrega || "",
+          recibo: movimiento.movimiento.Recibo || "",
+    
+          entregadasFalla: movimiento.entregadasFalla,
+          devueltasFalla: movimiento.devueltasFalla,
+          vendidasFalla: movimiento.vendidasFalla,
+          serieFalla:
+            movimiento.movimiento.SerieFalla || "",
+    
+          entregadasVirgen: movimiento.entregadasVirgen,
+          devueltasVirgen: movimiento.devueltasVirgen,
+          vendidasVirgen: movimiento.vendidasVirgen,
+          serieVirgen:
+            movimiento.movimiento.SerieVirgen || "",
+    
+          vendidasTotal: movimiento.vendidasTotal,
+    
+          total: index === 0 ? total : "",
+          pagado: index === 0 ? pagado : "",
+          pendiente: index === 0 ? pendiente : "",
+    
+          estado:
+            index === 0
+              ? pendiente > 0
+                ? "Pendiente"
+                : "Pagado"
+              : "",
+    
+          observaciones:
+            movimiento.movimiento.Observaciones || "",
+    
+          grupoSocio: fila.ID,
+        })
+      );
+    });
 
   descargarExcel({
     nombreArchivo: `nino-${ejercicioActivo || "ejercicio"}.xlsx`,
@@ -1042,6 +1829,23 @@ const pendienteB = Math.max(
       );
   }
 
+  const totalPagadoAdministracion = pagosAdministracion.reduce(
+    (suma: number, pago: any) =>
+      suma + Number(pago.Importe || 0),
+    0
+  );
+  
+  const totalAdministracionGeneral = entregasAdministracion.reduce(
+    (suma: number, fila: any) =>
+      suma + Number(fila.Importe || 0),
+    0
+  );
+  
+  const pendienteAdministracionGeneral = Math.max(
+    0,
+    totalAdministracionGeneral - totalPagadoAdministracion
+  );
+
   async function guardarPago() {
     if (!pago.IDEntrega) {
       alert("No se ha encontrado la entrega.");
@@ -1060,17 +1864,20 @@ const pendienteB = Math.max(
       return;
     }
   
-    const vendidasFalla = Math.max(
-      0,
-      Number(entrega.PapeletasFalla || 0) -
-        Number(entrega.DevueltasFalla || 0)
-    );
-    
-    const vendidasVirgen = Math.max(
-      0,
-      Number(entrega.PapeletasVirgen || 0) -
-        Number(entrega.DevueltasVirgen || 0)
-    );
+    const registroPrincipal =
+  registroPrincipalSeleccionado || entregaEditando;
+
+const vendidasFalla = Math.max(
+  0,
+  Number(registroPrincipal?.PapeletasFalla || 0) -
+    Number(registroPrincipal?.DevueltasFalla || 0)
+);
+
+const vendidasVirgen = Math.max(
+  0,
+  Number(registroPrincipal?.PapeletasVirgen || 0) -
+    Number(registroPrincipal?.DevueltasVirgen || 0)
+);
     
     const totalFalla =
       vendidasFalla *
@@ -1141,7 +1948,7 @@ const pendienteB = Math.max(
       return;
     }
   
-    setpagosNino(pagosData || []);
+    setPagosNino(pagosData || []);
     setModalPagoAbierto(false);
     setPago(pagoVacio);
     setPagoEditando(null);
@@ -1184,7 +1991,7 @@ const pendienteB = Math.max(
       return;
     }
   
-    setpagosNino(pagosData || []);
+    setPagosNino(pagosData || []);
   }
 
   return (
@@ -1196,11 +2003,16 @@ const pendienteB = Math.max(
         <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-l-4 border-red-900 px-6 py-5">
   <div>
-    <h1 className="text-2xl font-bold text-zinc-900">
-      Niño
-    </h1>
+  <h1 className="text-2xl font-bold text-zinc-900">
+  Lotería del Niño
+  <span className="ml-3 text-base font-normal text-zinc-600">
+    {configuracion.FechaSorteo
+      ? `Sorteo del ${configuracion.FechaSorteo.split("-").reverse().join("/")}`
+      : ""}
+  </span>
+</h1>
 
-    <p className="mt-2 text-sm text-zinc-600">
+    <p className="mt-2 text-xs text-zinc-600">
       Gestión de entregas, series, pagos y devolución de papeletas.
     </p>
   </div>
@@ -1211,7 +2023,7 @@ const pendienteB = Math.max(
       onClick={() =>
         window.location.href = "/loterias/nino/imprimir"
       }
-      className="rounded bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-900"
+      className="rounded bg-zinc-800 px-4 py-2 text-xs font-medium text-white hover:bg-zinc-900"
     >
       🖨️ Imprimir
     </button>
@@ -1219,7 +2031,7 @@ const pendienteB = Math.max(
     <button
   type="button"
   onClick={exportarExcel}
-  className="rounded bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
+  className="rounded bg-green-700 px-4 py-2 text-xs font-medium text-white hover:bg-green-800"
 >
   📗 Excel
 </button>
@@ -1228,11 +2040,31 @@ const pendienteB = Math.max(
 </section>
         </div>
 
+        <AdministracionNinoModal
+  abierto={modalAdministracionAbierto}
+  onClose={() => setModalAdministracionAbierto(false)}
+  entregas={entregasAdministracion}
+  totalAdministracion={totalAdministracionGeneral}
+totalPagadoAdministracion={totalPagadoAdministracion}
+pendienteAdministracion={pendienteAdministracionGeneral}
+  guardarPagoAdministracion={guardarPagoAdministracion}
+  actualizarPagoAdministracion={actualizarPagoAdministracion}
+  eliminarPagoAdministracion={eliminarPagoAdministracion}
+  pagos={pagosAdministracion}
+  precioDecimoFalla={configuracion.PrecioDecimoFalla}
+  precioDecimoVirgen={configuracion.PrecioDecimoVirgen}
+  onRegistrar={guardarEntregaAdministracion}
+  onActualizar={actualizarEntregaAdministracion}
+  eliminarEntregaAdministracion={eliminarEntregaAdministracion}
+/>
+
         <EntregaNinoModal
   abierto={modalAbierto}
   onClose={() => {
     setModalAbierto(false);
-    setEntregaEditando(null);
+setEntregaEditando(null);
+setMovimientoEditando(null);
+setRegistroPrincipalSeleccionado(null);
     setBusquedaSocio("");
     setEntrega(entregaVacia);
   }}
@@ -1244,26 +2076,69 @@ const pendienteB = Math.max(
   sociosFiltrados={sociosFiltrados}
   textoSocio={textoSocio}
   seleccionarSocio={seleccionarSocio}
+  seleccionarVendedorExterno={seleccionarVendedorExterno}
+  limpiarSeleccionVendedor={() => {
+    if (!movimientoEditando) {
+      setRegistroPrincipalSeleccionado(null);
+      setEntregaEditando(null);
+    }
+  }}
+  vendedoresExternos={entregas.filter((fila: any) => !fila.NUMCENS && fila.NombreExterno)}
   guardarEntrega={guardarEntrega}
+  precioFalla={configuracion.ImportePapeletaFalla}
+  precioVirgen={configuracion.ImportePapeletaVirgen}
+editarMovimiento={editarMovimiento}
+eliminarMovimiento={eliminarMovimiento}
+movimientoEditando={movimientoEditando}
+
+  movimientosEntrega={movimientosEntregas.filter(
+    (movimiento: any) =>
+      Number(movimiento.IDEntrega) ===
+      Number(
+        registroPrincipalSeleccionado?.ID ||
+          entregaEditando?.ID
+      )
+  )}
 
   pagosEntrega={pagosNino.filter(
     (p: any) =>
-      Number(p.IDEntrega) === Number(entregaEditando?.ID)
+      Number(p.IDEntrega) ===
+      Number(
+        (registroPrincipalSeleccionado || entregaEditando)
+          ?.ID || 0
+      )
   )}
 
-  totalPagado={totalPagadoEntrega(entregaEditando?.ID || 0)}
+  totalPagado={totalPagadoEntrega(
+    Number(
+      (registroPrincipalSeleccionado || entregaEditando)
+        ?.ID || 0
+    )
+  )}
 
   importeTotal={
     Math.max(
       0,
-      Number(entrega.PapeletasFalla || 0) -
-        Number(entrega.DevueltasFalla || 0)
+      Number(
+        (registroPrincipalSeleccionado || entregaEditando)
+          ?.PapeletasFalla || 0
+      ) -
+        Number(
+          (registroPrincipalSeleccionado || entregaEditando)
+            ?.DevueltasFalla || 0
+        )
     ) *
       Number(configuracion.ImportePapeletaFalla || 0) +
     Math.max(
       0,
-      Number(entrega.PapeletasVirgen || 0) -
-        Number(entrega.DevueltasVirgen || 0)
+      Number(
+        (registroPrincipalSeleccionado || entregaEditando)
+          ?.PapeletasVirgen || 0
+      ) -
+        Number(
+          (registroPrincipalSeleccionado || entregaEditando)
+            ?.DevueltasVirgen || 0
+        )
     ) *
       Number(configuracion.ImportePapeletaVirgen || 0)
   }
@@ -1273,23 +2148,42 @@ const pendienteB = Math.max(
       0,
       Math.max(
         0,
-        Number(entrega.PapeletasFalla || 0) -
-          Number(entrega.DevueltasFalla || 0)
+        Number(
+          (registroPrincipalSeleccionado || entregaEditando)
+            ?.PapeletasFalla || 0
+        ) -
+          Number(
+            (registroPrincipalSeleccionado || entregaEditando)
+              ?.DevueltasFalla || 0
+          )
       ) *
         Number(configuracion.ImportePapeletaFalla || 0) +
         Math.max(
           0,
-          Number(entrega.PapeletasVirgen || 0) -
-            Number(entrega.DevueltasVirgen || 0)
+          Number(
+            (registroPrincipalSeleccionado || entregaEditando)
+              ?.PapeletasVirgen || 0
+          ) -
+            Number(
+              (registroPrincipalSeleccionado || entregaEditando)
+                ?.DevueltasVirgen || 0
+            )
         ) *
           Number(configuracion.ImportePapeletaVirgen || 0) -
-          totalPagadoEntrega(entrega.ID ?? 0)
+        totalPagadoEntrega(
+          Number(
+            (registroPrincipalSeleccionado || entregaEditando)
+              ?.ID || 0
+          )
+        )
     )
   }
+
   abrirNuevoPago={() => {
     setPago({
       ...pagoVacio,
-      IDEntrega: entregaEditando?.ID,
+      IDEntrega:
+  (registroPrincipalSeleccionado || entregaEditando)?.ID,
       FechaPago: new Date().toISOString().slice(0, 10),
     });
   
@@ -1321,234 +2215,301 @@ const pendienteB = Math.max(
   Configuración Niño
 </h2>
 
-<div className="ml-auto flex items-center gap-2">
-  <label className="whitespace-nowrap text-sm font-medium text-zinc-700">
-    Fecha sorteo
-  </label>
+<div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
 
-  <input
-    type="date"
-    value={configuracion.FechaSorteo || ""}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        FechaSorteo: e.target.value,
-      })
-    }
-    className="w-40 border border-zinc-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-red-900"
-  />
+  {/* FECHA SORTEO */}
+  <div className="flex min-w-0 items-center gap-1.5">
+    <label className="whitespace-nowrap text-sm font-medium text-zinc-700 sm:text-sm">
+      Fecha sorteo
+    </label>
+
+    <input
+      type="date"
+      value={configuracion.FechaSorteo || ""}
+      onChange={(e) =>
+        setConfiguracion({
+          ...configuracion,
+          FechaSorteo: e.target.value,
+        })
+      }
+      className="w-[130px] border border-zinc-300 bg-white px-1.5 py-1.5 text-sm outline-none focus:border-red-900 sm:w-40 sm:px-2 sm:text-sm"
+    />
+  </div>
+
+  {/* GUARDAR CONFIGURACIÓN */}
+  <button
+    type="button"
+    onClick={guardarConfiguracion}
+    className="whitespace-nowrap rounded bg-red-900 px-2 py-1.5 text-sm font-medium text-white hover:bg-red-950 sm:px-3 sm:py-2 sm:text-sm"
+  >
+    💾 Guardar configuración
+  </button>
+
+  {/* GESTIONAR ADMINISTRACIÓN */}
+  <button
+    type="button"
+    onClick={() => setModalAdministracionAbierto(true)}
+    className="whitespace-nowrap rounded bg-zinc-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 sm:px-3 sm:py-2 sm:text-sm"
+  >
+    🏦 Gestionar Administración
+  </button>
+
 </div>
-
-<button
-  type="button"
-  onClick={guardarConfiguracion}
-  className="whitespace-nowrap rounded bg-red-900 px-3 py-2 text-sm font-medium text-white hover:bg-red-950"
->
-  💾 Guardar configuración
-</button>
-
 </div>
-
   <div className="p-6">
 
-   {/* FALLA + VIRGEN COMPACTO */}
-<div className="overflow-hidden rounded border border-zinc-300">
-
-{/* CABECERA */}
-<div className="grid grid-cols-[90px_repeat(6,1fr)] gap-3 border-b border-zinc-300 bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-600">
-  <div>Tipo</div>
-  <div>Número</div>
-  <div>Nº décimos</div>
-  <div>Precio décimo</div>
-  <div>Importe papeleta</div>
-  <div>Beneficio</div>
-  <div>Premio / papeleta</div>
-</div>
-
-{/* FALLA */}
-<div className="grid grid-cols-[90px_repeat(6,1fr)] items-center gap-3 border-b border-zinc-200 bg-red-50/40 px-3 py-2">
-  <div className="text-sm font-bold text-red-900">
-    FALLA
-  </div>
-
-  <input
-    type="text"
-    value={configuracion.NumeroFalla}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        NumeroFalla: e.target.value,
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    value={configuracion.DecimosFalla}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        DecimosFalla: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.PrecioDecimoFalla}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        PrecioDecimoFalla: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.ImportePapeletaFalla}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        ImportePapeletaFalla: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.BeneficioPapeletaFalla}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        BeneficioPapeletaFalla: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.PremioPorPapeletaFalla}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        PremioPorPapeletaFalla: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-</div>
-
-{/* VIRGEN */}
-<div className="grid grid-cols-[90px_repeat(6,1fr)] items-center gap-3 bg-blue-50/40 px-3 py-2">
-  <div className="text-sm font-bold text-blue-900">
-    VIRGEN
-  </div>
-
-  <input
-    type="text"
-    value={configuracion.NumeroVirgen}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        NumeroVirgen: e.target.value,
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    value={configuracion.DecimosVirgen}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        DecimosVirgen: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.PrecioDecimoVirgen}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        PrecioDecimoVirgen: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.ImportePapeletaVirgen}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        ImportePapeletaVirgen: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.BeneficioPapeletaVirgen}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        BeneficioPapeletaVirgen: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-
-  <input
-    type="number"
-    step="0.01"
-    value={configuracion.PremioPorPapeletaVirgen}
-    onChange={(e) =>
-      setConfiguracion({
-        ...configuracion,
-        PremioPorPapeletaVirgen: Number(e.target.value),
-      })
-    }
-    className="w-full border border-zinc-300 px-2 py-1.5 text-sm"
-  />
-</div>
-
-</div>
+ 
 
     {/* ================= RESUMEN ================= */}
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+
+{/* ================= ADMINISTRACIÓN / CONFIGURACIÓN ================= */}
+
+<div className="mb-4 overflow-hidden rounded border border-zinc-200 bg-white">
+
+  {/* CABECERA */}
+  <div className="grid grid-cols-9 items-center gap-2 bg-zinc-100 px-2 py-2.5 text-[11px] font-semibold text-zinc-600 md:grid-cols-9 md:text-xs">
+        <div>Tipo</div>
+    <div>Número</div>
+    <div className="text-right">Décimos</div>
+    <div className="text-right">Precio Décimo</div>
+    <div className="text-right">Papeletas</div>
+    <div className="text-right">Importe Papeleta</div>
+    <div className="text-right">Beneficio</div>
+    <div className="text-center leading-tight">
+  Premio<br />
+  papeleta
+</div>
+    <div className="text-right">Total</div>
+  </div>
+
+  {/* FALLA */}
+  <div className="grid grid-cols-9 items-center gap-2 bg-zinc-100 px-2 py-2.5 text-[11px] font-semibold text-zinc-600 md:grid-cols-9 md:text-sm">
+
+    <div className="font-bold text-red-900">
+      FALLA
+    </div>
+
+    <div>
+      <input
+        type="text"
+        value={configuracion.NumeroFalla}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            NumeroFalla: e.target.value,
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div className="text-center font-semibold">
+      {decimosRecibidosFalla}
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.PrecioDecimoFalla}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            PrecioDecimoFalla: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div className="text-center font-semibold">
+      {papeletasEmitidasAdminFalla}
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.ImportePapeletaFalla}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            ImportePapeletaFalla: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.BeneficioPapeletaFalla}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            BeneficioPapeletaFalla: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.PremioPorPapeletaFalla}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            PremioPorPapeletaFalla: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div className="text-right font-semibold">
+      {totalAdministracionFalla.toFixed(2)} €
+    </div>
+  </div>
+
+  {/* VIRGEN */}
+  <div className="grid grid-cols-9 items-center gap-2 bg-zinc-100 px-2 py-2.5 text-[11px] font-semibold text-zinc-600 md:grid-cols-9 md:text-sm">
+
+    <div className="font-bold text-blue-900">
+      VIRGEN
+    </div>
+
+    <div>
+      <input
+        type="text"
+        value={configuracion.NumeroVirgen}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            NumeroVirgen: e.target.value,
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div className="text-center font-semibold">
+      {decimosRecibidosVirgen}
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.PrecioDecimoVirgen}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            PrecioDecimoVirgen: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div className="text-center font-semibold">
+      {papeletasEmitidasAdminVirgen}
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.ImportePapeletaVirgen}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            ImportePapeletaVirgen: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.BeneficioPapeletaVirgen}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            BeneficioPapeletaVirgen: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div>
+      <input
+        type="number"
+        step="0.01"
+        value={configuracion.PremioPorPapeletaVirgen}
+        onChange={(e) =>
+          setConfiguracion({
+            ...configuracion,
+            PremioPorPapeletaVirgen: Number(e.target.value),
+          })
+        }
+        className="w-full border-0 border-b border-zinc-300 bg-transparent px-0.5 py-0.5 text-right text-sm outline-none focus:border-zinc-700"
+      />
+    </div>
+
+    <div className="text-right font-semibold">
+      {totalAdministracionVirgen.toFixed(2)} €
+    </div>
+  </div>
+
+  <div className="mt-2 flex items-center justify-end gap-6 border-t border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+  <div>
+    <span className="text-zinc-500">Total Administración: </span>
+    <span className="font-semibold">
+      {totalAdministracionGeneral.toFixed(2)} €
+    </span>
+  </div>
+
+  <div>
+    <span className="text-zinc-500">Pagado: </span>
+    <span className="font-semibold text-green-700">
+      {totalPagadoAdministracion.toFixed(2)} €
+    </span>
+  </div>
+
+  <div>
+    <span className="text-zinc-500">Pendiente: </span>
+    <span className="font-bold text-red-700">
+      {pendienteAdministracionGeneral.toFixed(2)} €
+    </span>
+  </div>
+</div>
+
+</div>
+
+<div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
 
 {/* RESUMEN FALLA */}
-<div className="min-w-0 rounded border border-red-200 bg-red-50/20 p-4">
-  <h3 className="mb-3 border-b border-red-100 pb-2 text-sm font-bold uppercase text-red-900">
+<div className="min-w-0 rounded border border-zinc-200 bg-white p-3">
+  <h3 className="mb-2 border-b border-zinc-200 pb-2 text-sm font-bold uppercase text-zinc-800">
     Resumen Falla
   </h3>
 
-  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6">
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[0.8fr_1.2fr] sm:gap-4">
 
     {/* CANTIDADES */}
-    <div className="min-w-0 space-y-2 text-sm">
+    <div className="min-w-0 space-y-1.5 text-xs">
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Emitidas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1556,8 +2517,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Entregadas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1565,8 +2526,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Devueltas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1574,8 +2535,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Vendidas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1586,10 +2547,10 @@ const pendienteB = Math.max(
     </div>
 
     {/* DINERO */}
-    <div className="min-w-0 space-y-2 border-t border-zinc-200 pt-4 text-sm sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
+    <div className="min-w-0 space-y-1.5 border-t border-zinc-200 pt-3 text-xs sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
 
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0 text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-3">
+        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
           Pago administración
         </span>
         <span className="shrink-0 whitespace-nowrap font-semibold">
@@ -1597,8 +2558,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0 text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-3">
+        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
           Recaudación socios
         </span>
         <span className="shrink-0 whitespace-nowrap font-semibold">
@@ -1606,8 +2567,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0 text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-3">
+        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
           Beneficio socios
         </span>
         <span className="shrink-0 whitespace-nowrap font-semibold">
@@ -1621,18 +2582,18 @@ const pendienteB = Math.max(
 
 
 {/* RESUMEN VIRGEN */}
-<div className="min-w-0 rounded border border-blue-200 bg-blue-50/20 p-4">
-  <h3 className="mb-3 border-b border-blue-100 pb-2 text-sm font-bold uppercase text-blue-900">
+<div className="min-w-0 rounded border border-zinc-200 bg-white p-3">
+  <h3 className="mb-2 border-b border-zinc-200 pb-2 text-sm font-bold uppercase text-zinc-800">
     Resumen Virgen
   </h3>
 
-  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6">
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[0.8fr_1.2fr] sm:gap-4">
 
     {/* CANTIDADES */}
-    <div className="min-w-0 space-y-2 text-sm">
+    <div className="min-w-0 space-y-1.5 text-xs">
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Emitidas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1640,8 +2601,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Entregadas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1649,8 +2610,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Devueltas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1658,8 +2619,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium uppercase text-zinc-600">
           Vendidas
         </span>
         <span className="shrink-0 font-semibold">
@@ -1670,10 +2631,10 @@ const pendienteB = Math.max(
     </div>
 
     {/* DINERO */}
-    <div className="min-w-0 space-y-2 border-t border-zinc-200 pt-4 text-sm sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
+    <div className="min-w-0 space-y-1.5 border-t border-zinc-200 pt-3 text-xs sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
 
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0 text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-3">
+        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
           Pago administración
         </span>
         <span className="shrink-0 whitespace-nowrap font-semibold">
@@ -1681,8 +2642,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0 text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-3">
+        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
           Recaudación socios
         </span>
         <span className="shrink-0 whitespace-nowrap font-semibold">
@@ -1690,8 +2651,8 @@ const pendienteB = Math.max(
         </span>
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0 text-xs font-medium uppercase text-zinc-600">
+      <div className="flex items-center justify-between gap-3">
+        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
           Beneficio socios
         </span>
         <span className="shrink-0 whitespace-nowrap font-semibold">
@@ -1705,22 +2666,23 @@ const pendienteB = Math.max(
 
 </div>
 
-    {/* PENDIENTE TOTAL DEL SORTEO */}
-    <div className="mt-5 flex items-center justify-end gap-3 border-t border-zinc-200 pt-4 text-sm">
-      <span className="font-medium text-zinc-700">
-        Pendiente de cobro total:
-      </span>
-
-      <span
-        className={`text-base font-bold ${
-          pendienteCobro > 0
-            ? "text-red-700"
-            : "text-green-700"
-        }`}
-      >
-        {euros(pendienteCobro)}
-      </span>
-    </div>
+    {/* TOTALES SOCIOS: mismo lugar que el pendiente anterior */}
+<div className="mt-2 flex flex-nowrap items-center justify-end gap-4 whitespace-nowrap text-xs">
+  <div className="flex items-center gap-2">
+    <span className="font-medium text-zinc-700">Total entregado a socios:</span>
+    <span className="font-semibold text-zinc-900">{euros(totalEntregadoSocios)}</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="font-medium text-zinc-700">Total cobrado:</span>
+    <span className="font-semibold text-green-700">{euros(importePagado)}</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="font-medium text-zinc-700">Pendiente de cobro a socios:</span>
+    <span className={`font-bold ${pendienteCobro > 0 ? "text-red-700" : "text-green-700"}`}>
+      {euros(pendienteCobro)}
+    </span>
+  </div>
+</div>
 
   </div>
 </section>
@@ -1735,7 +2697,7 @@ const pendienteB = Math.max(
 
       <input
         type="text"
-        placeholder="Buscar socio, serie, fecha, pendiente..."
+        placeholder="Buscar socio, NUMCENS, recibo, fecha..."
         value={busquedaEntregas}
         onChange={(e) => setBusquedaEntregas(e.target.value)}
         className="w-80 border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
@@ -1746,10 +2708,12 @@ const pendienteB = Math.max(
       onClick={() => {
         setEntrega(entregaVacia);
         setEntregaEditando(null);
+        setRegistroPrincipalSeleccionado(null);
+        setMovimientoEditando(null);
         setBusquedaSocio("");
         setModalAbierto(true);
       }}
-      className="rounded bg-red-900 px-3 py-2 text-sm font-medium text-white hover:bg-red-950"
+      className="whitespace-nowrap rounded bg-red-900 px-2 py-1.5 text-sm font-medium text-white hover:bg-red-950 sm:px-3 sm:py-2 sm:text-sm"
     >
       + Registrar entrega
     </button>
@@ -1768,67 +2732,40 @@ const pendienteB = Math.max(
     
     <div className="overflow-x-auto">
 
-<table className="w-full min-w-[1050px] divide-y divide-zinc-200">
+<table className="w-full table-fixed divide-y divide-zinc-200">
       <thead className="bg-zinc-50">
-  <tr>
-    <CabeceraOrdenable
-  titulo="Socio"
-  campo="socio"
-  campoOrden={campoOrden}
-  direccionOrden={direccionOrden}
-  alOrdenar={ordenarPor}
-/>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Sorteo
-    </th>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Fecha
-    </th>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Papeletas
-    </th>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Devueltas
-    </th>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Vendidas
-    </th>
-
-    <th className="px-2 py-3 text-right text-xs font-semibold uppercase">
-  Total
-</th>
-
-    <th className="px-2 py-3 text-center text-xs font-semibold uppercase">
-      Pagado
-    </th>
-
-    <CabeceraOrdenable
-  titulo="Pendiente"
-  campo="pendiente"
-  campoOrden={campoOrden}
-  direccionOrden={direccionOrden}
-  alOrdenar={ordenarPor}
-  className="text-right"
-/>
-
-    <CabeceraOrdenable
-  titulo="Serie"
-  campo="serie"
-  campoOrden={campoOrden}
-  direccionOrden={direccionOrden}
-  alOrdenar={ordenarPor}
-/>
-
-<th className="sticky right-0 z-30 whitespace-nowrap border-l border-zinc-200 bg-zinc-100 px-3 py-3 text-center text-xs font-semibold uppercase shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.15)]">
-  Acciones
-</th>
-  </tr>
-</thead>
+        <tr>
+          <CabeceraOrdenable
+            titulo="Socio / vendedor"
+            campo="socio"
+            campoOrden={campoOrden}
+            direccionOrden={direccionOrden}
+            alOrdenar={ordenarPor}
+            className="w-[26%] text-left"
+          />
+          <CabeceraOrdenable
+            titulo="Recibo"
+            campo="recibo"
+            campoOrden={campoOrden}
+            direccionOrden={direccionOrden}
+            alOrdenar={ordenarPor}
+            className="w-[14%] text-center"
+          />
+          <th className="px-2 py-3 text-center text-xs font-semibold uppercase">Fecha</th>
+          <th className="px-2 py-3 text-center text-xs font-semibold uppercase">Venta</th>
+          <th className="px-2 py-3 text-right text-xs font-semibold uppercase">Total</th>
+          <th className="px-2 py-3 text-right text-xs font-semibold uppercase">Pagado</th>
+          <CabeceraOrdenable
+            titulo="Pendiente"
+            campo="pendiente"
+            campoOrden={campoOrden}
+            direccionOrden={direccionOrden}
+            alOrdenar={ordenarPor}
+            className="text-right"
+          />
+          <th className="px-2 py-3 text-center text-xs font-semibold uppercase">Acciones</th>
+        </tr>
+      </thead>
 
       <tbody className="divide-y divide-zinc-200 bg-white">
       {entregasOrdenadas.map((fila) => {
@@ -1886,31 +2823,16 @@ const pendienteB = Math.max(
                 </div>
               </td>
 
-              <td className="px-4 py-3 text-center text-sm">
-                {fila.Sorteo}
+              <td className="px-2 py-3 text-center text-sm">
+                {(() => {
+                  const recibos = recibosDeFicha(fila.ID);
+                  const mostrados = recibos.length ? recibos : (fila.Recibo ? [String(fila.Recibo)] : []);
+                  return mostrados.length ? mostrados.join(", ") : "—";
+                })()}
               </td>
-
-              <td className="px-4 py-3 text-center text-sm">
-              {formatearFecha(fila.FechaEntrega)}
-                              </td>
-
-                              <td className="px-4 py-3 text-center text-sm">
-  <div className="font-medium text-red-900">
-    F: {Number(fila.PapeletasFalla || 0)}
-  </div>
-  <div className="font-medium text-blue-900">
-    V: {Number(fila.PapeletasVirgen || 0)}
-  </div>
-</td>
-
-<td className="px-4 py-3 text-center text-sm">
-  <div className="text-red-900">
-    F: {Number(fila.DevueltasFalla || 0)}
-  </div>
-  <div className="text-blue-900">
-    V: {Number(fila.DevueltasVirgen || 0)}
-  </div>
-</td>
+              <td className="px-2 py-3 text-center text-sm">
+                {formatearFecha(fila.FechaEntrega)}
+              </td>
 
 <td className="px-4 py-3 text-center text-sm font-medium">
   {vendidasFalla + vendidasVirgen}
@@ -1920,7 +2842,7 @@ const pendienteB = Math.max(
   {euros(importeTotal)}
 </td>
 
-<td className="px-4 py-3 text-center text-sm">
+<td className="px-2 py-3 text-right text-sm">
   {euros(importePagado)}
 </td>
 
@@ -1943,17 +2865,7 @@ const pendienteB = Math.max(
 
   </div>
 </td>
-              <td className="px-2 py-3 text-center text-xs whitespace-nowrap">
-  <div className="whitespace-nowrap text-red-900">
-    F: {fila.SerieFalla || "—"}
-  </div>
-
-  <div className="whitespace-nowrap text-blue-900">
-    V: {fila.SerieVirgen || "—"}
-  </div>
-</td>
-
-<td className="sticky right-0 z-20 border-l border-zinc-200 bg-white px-3 py-3 text-center shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.15)]">
+<td className="px-2 py-3 text-center">
   <div className="flex justify-center gap-2">
 
     <button
@@ -1983,6 +2895,77 @@ const pendienteB = Math.max(
   )}
 </section>
       </main>
+    </div>
+  );
+}
+
+
+// Panel propio del Niño: mantiene separadas las operaciones de Administración.
+function AdministracionNinoModal(props: any) {
+  const { abierto, onClose, entregas = [], pagos = [], totalAdministracion = 0,
+    totalPagadoAdministracion = 0, pendienteAdministracion = 0,
+    precioDecimoFalla = 0, precioDecimoVirgen = 0,
+    onRegistrar, onActualizar, eliminarEntregaAdministracion,
+    guardarPagoAdministracion, actualizarPagoAdministracion, eliminarPagoAdministracion } = props;
+  const hoy = () => new Date().toISOString().slice(0, 10);
+  const vacia = () => ({ ID: null, Fecha: hoy(), Tipo: "FALLA", Decimos: 0, PapeletasEmitidas: 0, Observaciones: "" });
+  const pagoVacio = () => ({ ID: null, Fecha: hoy(), Importe: 0, Observaciones: "" });
+  const [linea, setLinea] = useState<any>(vacia);
+  const [cobro, setCobro] = useState<any>(pagoVacio);
+  if (!abierto) return null;
+  const input = 'w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm';
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b px-5 py-3">
+          <h2 className="font-semibold">Administración · Lotería del Niño</h2>
+          <button onClick={onClose} type="button" aria-label="Cerrar">✕</button>
+        </div>
+        <div className="space-y-5 overflow-y-auto p-5">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+            <div>Total: <b>{Number(totalAdministracion).toFixed(2)} €</b></div>
+            <div>Pagado: <b>{Number(totalPagadoAdministracion).toFixed(2)} €</b></div>
+            <div>Pendiente: <b>{Number(pendienteAdministracion).toFixed(2)} €</b></div>
+          </div>
+          <form className="space-y-2 border p-3" onSubmit={async e => {
+            e.preventDefault();
+            const ok = linea.ID ? await onActualizar(linea.ID, linea) : await onRegistrar(linea);
+            if (ok) setLinea(vacia());
+          }}>
+            <h3 className="text-sm font-semibold">{linea.ID ? 'Editar entrega' : 'Nueva entrega a Administración'}</h3>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <label className="text-xs">Fecha<input className={input} type="date" required value={linea.Fecha} onChange={e=>setLinea({...linea,Fecha:e.target.value})}/></label>
+              <label className="text-xs">Tipo<select className={input} value={linea.Tipo} onChange={e=>setLinea({...linea,Tipo:e.target.value})}><option value="FALLA">Falla</option><option value="VIRGEN">Virgen</option></select></label>
+              <label className="text-xs">Décimos<input className={input} type="number" min="0" required value={linea.Decimos} onChange={e=>setLinea({...linea,Decimos:Number(e.target.value)})}/></label>
+              <label className="text-xs">Papeletas emitidas<input className={input} type="number" min="0" value={linea.PapeletasEmitidas} onChange={e=>setLinea({...linea,PapeletasEmitidas:Number(e.target.value)})}/></label>
+              <label className="text-xs">Importe<div className="py-2 font-semibold">{(Number(linea.Decimos || 0)*Number(linea.Tipo==='VIRGEN'?precioDecimoVirgen:precioDecimoFalla)).toFixed(2)} €</div></label>
+            </div>
+            <input className={input} placeholder="Observaciones" value={linea.Observaciones||''} onChange={e=>setLinea({...linea,Observaciones:e.target.value})}/>
+            <button type="submit" className="bg-red-900 px-3 py-2 text-xs text-white">Guardar entrega</button>
+            {linea.ID && <button type="button" className="ml-2 text-xs" onClick={()=>setLinea(vacia())}>Cancelar edición</button>}
+          </form>
+          <div className="overflow-x-auto border">
+            <table className="w-full text-left text-xs"><thead className="bg-zinc-100"><tr><th className="p-2">Fecha</th><th className="p-2">Tipo</th><th className="p-2">Décimos</th><th className="p-2">Emitidas</th><th className="p-2">Importe</th><th className="p-2">Acciones</th></tr></thead><tbody>
+              {entregas.map((e:any)=><tr key={e.ID} className="border-t"><td className="p-2">{e.Fecha}</td><td className="p-2">{e.Tipo}</td><td className="p-2">{e.Decimos}</td><td className="p-2">{e.PapeletasEmitidas}</td><td className="p-2">{Number(e.Importe||0).toFixed(2)} €</td><td className="p-2"><button type="button" onClick={()=>setLinea({...e})}>✏️</button> <button type="button" onClick={()=>eliminarEntregaAdministracion(e.ID)}>🗑️</button></td></tr>)}
+            </tbody></table>
+          </div>
+          <form className="space-y-2 border p-3" onSubmit={async e=>{
+            e.preventDefault();
+            const ok = cobro.ID ? await actualizarPagoAdministracion(cobro.ID,cobro) : await guardarPagoAdministracion(cobro);
+            if (ok) setCobro(pagoVacio());
+          }}>
+            <h3 className="text-sm font-semibold">{cobro.ID ? 'Editar pago' : 'Pago a Administración'}</h3>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="text-xs">Fecha<input className={input} required type="date" value={cobro.Fecha} onChange={e=>setCobro({...cobro,Fecha:e.target.value})}/></label>
+              <label className="text-xs">Importe €<input className={input} required type="number" min="0.01" step="0.01" value={cobro.Importe} onChange={e=>setCobro({...cobro,Importe:Number(e.target.value)})}/></label>
+            </div>
+            <input className={input} placeholder="Observaciones" value={cobro.Observaciones||''} onChange={e=>setCobro({...cobro,Observaciones:e.target.value})}/>
+            <button type="submit" className="bg-green-700 px-3 py-2 text-xs text-white">Guardar pago</button>
+            {cobro.ID && <button type="button" className="ml-2 text-xs" onClick={()=>setCobro(pagoVacio())}>Cancelar edición</button>}
+          </form>
+          <div className="overflow-x-auto border"><table className="w-full text-left text-xs"><thead className="bg-zinc-100"><tr><th className="p-2">Fecha</th><th className="p-2">Importe</th><th className="p-2">Observaciones</th><th className="p-2">Acciones</th></tr></thead><tbody>{pagos.map((e:any)=><tr className="border-t" key={e.ID}><td className="p-2">{e.Fecha}</td><td className="p-2">{Number(e.Importe||0).toFixed(2)} €</td><td className="p-2">{e.Observaciones||'—'}</td><td className="p-2"><button type="button" onClick={()=>setCobro({...e})}>✏️</button> <button type="button" onClick={()=>eliminarPagoAdministracion(e.ID)}>🗑️</button></td></tr>)}</tbody></table></div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1992,9 +1992,14 @@ const vendidasVirgen = Math.max(
         <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-l-4 border-red-900 px-6 py-5">
   <div>
-    <h1 className="text-2xl font-bold text-zinc-900">
-      Navidad
-    </h1>
+  <h1 className="text-2xl font-bold text-zinc-900">
+  Navidad
+  <span className="ml-3 text-base font-normal text-zinc-600">
+    {configuracion.FechaSorteo
+      ? `— Sorteo del ${configuracion.FechaSorteo.split("-").reverse().join("/")}`
+      : ""}
+  </span>
+</h1>
 
     <p className="mt-2 text-xs text-zinc-600">
       Gestión de entregas, series, pagos y devolución de papeletas.
