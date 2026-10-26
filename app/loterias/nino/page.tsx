@@ -9,6 +9,7 @@ import { normalizarTexto } from "@/lib/texto";
 import CabeceraOrdenable from "@/app/components/CabeceraOrdenable";
 import { exportarExcel as descargarExcel } from "@/lib/excel";
 import PagoModal from "@/app/components/PagoModal";
+import ControlSeriesModal from "@/app/components/ControlSeriesModal";
 
 const entregaVacia = {
   ID: null,
@@ -65,6 +66,9 @@ export default function NinoPage() {
   const [cargando, setCargando] = useState(true);
   
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [controlSeriesAbierto, setControlSeriesAbierto] = useState(false);
+  const [configAdminAbierta, setConfigAdminAbierta] = useState(false);
+  const [resumenSociosAbierto, setResumenSociosAbierto] = useState(false);
   const [entregaEditando, setEntregaEditando] = useState<any>(null);
 
   const [registroPrincipalSeleccionado, setRegistroPrincipalSeleccionado] =
@@ -411,7 +415,42 @@ setCargando(false);
         setBusquedaSocio(textoSocio(socio));
       }
 
+  // Validación de tramos de papeletas de Administración.
+  function validarSeriesAdministracion(datos: any, idEditando: number | null = null): boolean {
+    const vacio = (v: any) => v === null || v === undefined || v === "";
+    const sinDesde = vacio(datos.SerieDesde);
+    const sinHasta = vacio(datos.SerieHasta);
+    if (sinDesde && sinHasta && idEditando !== null) return true; // Registro antiguo.
+    if (sinDesde || sinHasta) {
+      alert("Indica Serie desde y Serie hasta.");
+      return false;
+    }
+    const desde = Number(datos.SerieDesde);
+    const hasta = Number(datos.SerieHasta);
+    const cantidad = Number(datos.PapeletasEmitidas);
+    if (!Number.isSafeInteger(desde) || !Number.isSafeInteger(hasta) || desde < 1 || hasta < desde || hasta > 2147483646) {
+      alert("La numeración indicada no es válida.");
+      return false;
+    }
+    if (!Number.isSafeInteger(cantidad) || cantidad < 1 || hasta - desde + 1 !== cantidad) {
+      alert(`El tramo ${desde}–${hasta} contiene ${hasta - desde + 1} papeletas, no ${cantidad}.`);
+      return false;
+    }
+    const otra = entregasAdministracion.find((fila: any) =>
+      Number(fila.ID) !== Number(idEditando) &&
+      fila.Tipo === datos.Tipo &&
+      fila.SerieDesde != null && fila.SerieHasta != null &&
+      desde <= Number(fila.SerieHasta) && Number(fila.SerieDesde) <= hasta
+    );
+    if (otra) {
+      alert(`Este tramo se solapa con la compra de ${datos.Tipo} ID ${otra.ID}.`);
+      return false;
+    }
+    return true;
+  }
+
       async function guardarEntregaAdministracion(datos: any) {
+        if (!validarSeriesAdministracion(datos)) return false;
         const precioDecimo =
           datos.Tipo === "VIRGEN"
             ? Number(configuracion.PrecioDecimoVirgen || 0)
@@ -428,6 +467,9 @@ setCargando(false);
   Tipo: datos.Tipo,
   Decimos: Number(datos.Decimos || 0),
   PapeletasEmitidas: Number(datos.PapeletasEmitidas || 0),
+  SerieDesde: datos.SerieDesde === "" || datos.SerieDesde == null ? null : Number(datos.SerieDesde),
+  SerieHasta: datos.SerieHasta === "" || datos.SerieHasta == null ? null : Number(datos.SerieHasta),
+
   Importe: importe,
   Observaciones: datos.Observaciones || null,
 } as any);
@@ -446,6 +488,7 @@ setCargando(false);
         idEntrega: number,
         datos: any
       ) {
+        if (!validarSeriesAdministracion(datos, idEntrega)) return false;
         const precioDecimo =
           datos.Tipo === "VIRGEN"
             ? Number(configuracion.PrecioDecimoVirgen || 0)
@@ -462,6 +505,9 @@ setCargando(false);
             Tipo: datos.Tipo,
             Decimos: Number(datos.Decimos || 0),
             PapeletasEmitidas: Number(datos.PapeletasEmitidas || 0),
+  SerieDesde: datos.SerieDesde === "" || datos.SerieDesde == null ? null : Number(datos.SerieDesde),
+  SerieHasta: datos.SerieHasta === "" || datos.SerieHasta == null ? null : Number(datos.SerieHasta),
+
             Importe: importe,
             Observaciones: datos.Observaciones || null,
           })
@@ -2003,14 +2049,12 @@ const vendidasVirgen = Math.max(
         <section className="mb-8 border border-zinc-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-l-4 border-red-900 px-6 py-5">
   <div>
-  <h1 className="text-2xl font-bold text-zinc-900">
-  Lotería del Niño
-  <span className="ml-3 text-base font-normal text-zinc-600">
-    {configuracion.FechaSorteo
-      ? `Sorteo del ${configuracion.FechaSorteo.split("-").reverse().join("/")}`
-      : ""}
-  </span>
-</h1>
+    <h1 className="text-2xl font-bold text-zinc-900">
+      Niño
+      <span className="ml-3 text-base font-normal text-zinc-600">
+        {configuracion.FechaSorteo ? `— Sorteo del ${configuracion.FechaSorteo.split("-").reverse().join("/")}` : ""}
+      </span>
+    </h1>
 
     <p className="mt-2 text-xs text-zinc-600">
       Gestión de entregas, series, pagos y devolución de papeletas.
@@ -2035,11 +2079,13 @@ const vendidasVirgen = Math.max(
 >
   📗 Excel
 </button>
+<button type="button" onClick={() => setControlSeriesAbierto(true)} className="rounded bg-indigo-800 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-900">🔎 Control de series</button>
   </div>
 </div>
 </section>
         </div>
 
+        <ControlSeriesModal abierto={controlSeriesAbierto} onClose={() => setControlSeriesAbierto(false)} sorteo="Niño" ejercicio={ejercicioActivo} compras={entregasAdministracion} movimientos={movimientosEntregas} entregas={entregas} socios={socios} />
         <AdministracionNinoModal
   abierto={modalAdministracionAbierto}
   onClose={() => setModalAdministracionAbierto(false)}
@@ -2256,14 +2302,24 @@ movimientoEditando={movimientoEditando}
 
 </div>
 </div>
-  <div className="p-6">
 
- 
-
-    {/* ================= RESUMEN ================= */}
-
-{/* ================= ADMINISTRACIÓN / CONFIGURACIÓN ================= */}
-
+  {/* ADMINISTRACIÓN: totales siempre visibles; configuración plegable */}
+  <div className="border-b border-zinc-200">
+    <button type="button" onClick={() => setConfigAdminAbierta(v => !v)}
+      aria-expanded={configAdminAbierta}
+      className="flex w-full flex-wrap items-center justify-between gap-x-5 gap-y-2 bg-zinc-50 px-4 py-3 text-left hover:bg-zinc-100">
+      <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-semibold uppercase text-zinc-700">
+        <span aria-hidden="true" className="text-base">{configAdminAbierta ? "⌃" : "⌄"}</span>
+        Administración
+      </span>
+      <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs sm:text-sm">
+        <span className="text-zinc-700">Total: <strong className="text-zinc-900">{euros(totalAdministracionGeneral)}</strong></span>
+        <span className="text-zinc-700">Pagado: <strong className="text-green-700">{euros(totalPagadoAdministracion)}</strong></span>
+        <span className="text-zinc-700">Pendiente: <strong className="text-red-700">{euros(pendienteAdministracionGeneral)}</strong></span>
+      </span>
+    </button>
+    {configAdminAbierta && (
+      <div className="px-4 py-3">
 <div className="mb-4 overflow-hidden rounded border border-zinc-200 bg-white">
 
   {/* CABECERA */}
@@ -2469,222 +2525,70 @@ movimientoEditando={movimientoEditando}
       {totalAdministracionVirgen.toFixed(2)} €
     </div>
   </div>
+</div>
+      </div>
+    )}
+  </div>
 
-  <div className="mt-2 flex items-center justify-end gap-6 border-t border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+  {/* SOCIOS: totales siempre visibles; resumen plegable */}
   <div>
-    <span className="text-zinc-500">Total Administración: </span>
-    <span className="font-semibold">
-      {totalAdministracionGeneral.toFixed(2)} €
-    </span>
-  </div>
-
-  <div>
-    <span className="text-zinc-500">Pagado: </span>
-    <span className="font-semibold text-green-700">
-      {totalPagadoAdministracion.toFixed(2)} €
-    </span>
-  </div>
-
-  <div>
-    <span className="text-zinc-500">Pendiente: </span>
-    <span className="font-bold text-red-700">
-      {pendienteAdministracionGeneral.toFixed(2)} €
-    </span>
-  </div>
+    <button type="button" onClick={() => setResumenSociosAbierto(v => !v)}
+      aria-expanded={resumenSociosAbierto}
+      className="flex w-full flex-wrap items-center justify-between gap-x-5 gap-y-2 bg-zinc-50 px-4 py-3 text-left hover:bg-zinc-100">
+      <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-semibold uppercase text-zinc-700">
+        <span aria-hidden="true" className="text-base">{resumenSociosAbierto ? "⌃" : "⌄"}</span>
+        Socios
+      </span>
+      <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs sm:text-sm">
+        <span className="text-zinc-700">Total entregado: <strong className="text-zinc-900">{euros(totalEntregadoSocios)}</strong></span>
+        <span className="text-zinc-700">Cobrado: <strong className="text-green-700">{euros(importePagado)}</strong></span>
+        <span className="text-zinc-700">Pendiente: <strong className={pendienteCobro > 0 ? "text-red-700" : "text-green-700"}>{euros(pendienteCobro)}</strong></span>
+      </span>
+    </button>
+    {resumenSociosAbierto && (
+      <div className="px-4 pb-3">
+<div className="mt-3 overflow-x-auto rounded border border-zinc-200 bg-white">
+  <table className="w-full min-w-[900px] text-xs">
+    <thead className="bg-zinc-100 text-zinc-600">
+      <tr>
+        <th className="px-3 py-2 text-left">Resumen</th>
+        <th className="px-2 py-2 text-right">Emitidas</th>
+        <th className="px-2 py-2 text-right">Entregadas</th>
+        <th className="px-2 py-2 text-right">Devueltas</th>
+        <th className="px-2 py-2 text-right">Vendidas</th>
+        <th className="px-2 py-2 text-right">Pago Administración</th>
+        <th className="px-2 py-2 text-right">Recaudación socios</th>
+        <th className="px-3 py-2 text-right">Beneficio socios</th>
+      </tr>
+    </thead>
+    <tbody className="divide-y divide-zinc-200">
+      <tr>
+        <th className="px-3 py-2 text-left font-bold text-red-900">Falla</th>
+        <td className="px-2 py-2 text-right">{papeletasEmitidasFalla}</td>
+        <td className="px-2 py-2 text-right">{papeletasEntregadasFalla}</td>
+        <td className="px-2 py-2 text-right">{papeletasDevueltasFalla}</td>
+        <td className="px-2 py-2 text-right font-semibold">{papeletasVendidasFalla}</td>
+        <td className="px-2 py-2 text-right whitespace-nowrap">{euros(pagoAdministracionFalla)}</td>
+        <td className="px-2 py-2 text-right whitespace-nowrap">{euros(recaudacionSociosFalla)}</td>
+        <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{euros(beneficioSociosFalla)}</td>
+      </tr>
+      <tr>
+        <th className="px-3 py-2 text-left font-bold text-blue-900">Virgen</th>
+        <td className="px-2 py-2 text-right">{papeletasEmitidasVirgen}</td>
+        <td className="px-2 py-2 text-right">{papeletasEntregadasVirgen}</td>
+        <td className="px-2 py-2 text-right">{papeletasDevueltasVirgen}</td>
+        <td className="px-2 py-2 text-right font-semibold">{papeletasVendidasVirgen}</td>
+        <td className="px-2 py-2 text-right whitespace-nowrap">{euros(pagoAdministracionVirgen)}</td>
+        <td className="px-2 py-2 text-right whitespace-nowrap">{euros(recaudacionSociosVirgen)}</td>
+        <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{euros(beneficioSociosVirgen)}</td>
+      </tr>
+    </tbody>
+  </table>
 </div>
-
-</div>
-
-<div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-
-{/* RESUMEN FALLA */}
-<div className="min-w-0 rounded border border-zinc-200 bg-white p-3">
-  <h3 className="mb-2 border-b border-zinc-200 pb-2 text-sm font-bold uppercase text-zinc-800">
-    Resumen Falla
-  </h3>
-
-  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[0.8fr_1.2fr] sm:gap-4">
-
-    {/* CANTIDADES */}
-    <div className="min-w-0 space-y-1.5 text-xs">
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Emitidas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasEmitidasFalla}
-        </span>
       </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Entregadas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasEntregadasFalla}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Devueltas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasDevueltasFalla}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Vendidas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasVendidasFalla}
-        </span>
-      </div>
-
-    </div>
-
-    {/* DINERO */}
-    <div className="min-w-0 space-y-1.5 border-t border-zinc-200 pt-3 text-xs sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
-
-      <div className="flex items-center justify-between gap-3">
-        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
-          Pago administración
-        </span>
-        <span className="shrink-0 whitespace-nowrap font-semibold">
-          {euros(pagoAdministracionFalla)}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
-          Recaudación socios
-        </span>
-        <span className="shrink-0 whitespace-nowrap font-semibold">
-          {euros(recaudacionSociosFalla)}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
-          Beneficio socios
-        </span>
-        <span className="shrink-0 whitespace-nowrap font-semibold">
-          {euros(beneficioSociosFalla)}
-        </span>
-      </div>
-
-    </div>
+    )}
   </div>
-</div>
 
-
-{/* RESUMEN VIRGEN */}
-<div className="min-w-0 rounded border border-zinc-200 bg-white p-3">
-  <h3 className="mb-2 border-b border-zinc-200 pb-2 text-sm font-bold uppercase text-zinc-800">
-    Resumen Virgen
-  </h3>
-
-  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[0.8fr_1.2fr] sm:gap-4">
-
-    {/* CANTIDADES */}
-    <div className="min-w-0 space-y-1.5 text-xs">
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Emitidas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasEmitidasVirgen}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Entregadas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasEntregadasVirgen}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Devueltas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasDevueltasVirgen}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium uppercase text-zinc-600">
-          Vendidas
-        </span>
-        <span className="shrink-0 font-semibold">
-          {papeletasVendidasVirgen}
-        </span>
-      </div>
-
-    </div>
-
-    {/* DINERO */}
-    <div className="min-w-0 space-y-1.5 border-t border-zinc-200 pt-3 text-xs sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
-
-      <div className="flex items-center justify-between gap-3">
-        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
-          Pago administración
-        </span>
-        <span className="shrink-0 whitespace-nowrap font-semibold">
-          {euros(pagoAdministracionVirgen)}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
-          Recaudación socios
-        </span>
-        <span className="shrink-0 whitespace-nowrap font-semibold">
-          {euros(recaudacionSociosVirgen)}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <span className="whitespace-nowrap font-medium uppercase text-zinc-600">
-          Beneficio socios
-        </span>
-        <span className="shrink-0 whitespace-nowrap font-semibold">
-          {euros(beneficioSociosVirgen)}
-        </span>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-</div>
-
-    {/* TOTALES SOCIOS: mismo lugar que el pendiente anterior */}
-<div className="mt-2 flex flex-nowrap items-center justify-end gap-4 whitespace-nowrap text-xs">
-  <div className="flex items-center gap-2">
-    <span className="font-medium text-zinc-700">Total entregado a socios:</span>
-    <span className="font-semibold text-zinc-900">{euros(totalEntregadoSocios)}</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <span className="font-medium text-zinc-700">Total cobrado:</span>
-    <span className="font-semibold text-green-700">{euros(importePagado)}</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <span className="font-medium text-zinc-700">Pendiente de cobro a socios:</span>
-    <span className={`font-bold ${pendienteCobro > 0 ? "text-red-700" : "text-green-700"}`}>
-      {euros(pendienteCobro)}
-    </span>
-  </div>
-</div>
-
-  </div>
 </section>
 
 <section className="border border-zinc-200 bg-white">
@@ -2908,7 +2812,7 @@ function AdministracionNinoModal(props: any) {
     onRegistrar, onActualizar, eliminarEntregaAdministracion,
     guardarPagoAdministracion, actualizarPagoAdministracion, eliminarPagoAdministracion } = props;
   const hoy = () => new Date().toISOString().slice(0, 10);
-  const vacia = () => ({ ID: null, Fecha: hoy(), Tipo: "FALLA", Decimos: 0, PapeletasEmitidas: 0, Observaciones: "" });
+  const vacia = () => ({ ID: null, Fecha: hoy(), Tipo: "FALLA", Decimos: 0, PapeletasEmitidas: 0, SerieDesde: "", SerieHasta: "", Observaciones: "" });
   const pagoVacio = () => ({ ID: null, Fecha: hoy(), Importe: 0, Observaciones: "" });
   const [linea, setLinea] = useState<any>(vacia);
   const [cobro, setCobro] = useState<any>(pagoVacio);
@@ -2933,11 +2837,13 @@ function AdministracionNinoModal(props: any) {
             if (ok) setLinea(vacia());
           }}>
             <h3 className="text-sm font-semibold">{linea.ID ? 'Editar entrega' : 'Nueva entrega a Administración'}</h3>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-7">
               <label className="text-xs">Fecha<input className={input} type="date" required value={linea.Fecha} onChange={e=>setLinea({...linea,Fecha:e.target.value})}/></label>
               <label className="text-xs">Tipo<select className={input} value={linea.Tipo} onChange={e=>setLinea({...linea,Tipo:e.target.value})}><option value="FALLA">Falla</option><option value="VIRGEN">Virgen</option></select></label>
               <label className="text-xs">Décimos<input className={input} type="number" min="0" required value={linea.Decimos} onChange={e=>setLinea({...linea,Decimos:Number(e.target.value)})}/></label>
               <label className="text-xs">Papeletas emitidas<input className={input} type="number" min="0" value={linea.PapeletasEmitidas} onChange={e=>setLinea({...linea,PapeletasEmitidas:Number(e.target.value)})}/></label>
+              <label className="text-xs">Serie desde<input className={input} type="number" min="1" step="1" value={linea.SerieDesde ?? ""} onChange={e=>setLinea({...linea,SerieDesde:e.target.value})}/></label>
+              <label className="text-xs">Serie hasta<input className={input} type="number" min="1" step="1" value={linea.SerieHasta ?? ""} onChange={e=>setLinea({...linea,SerieHasta:e.target.value})}/></label>
               <label className="text-xs">Importe<div className="py-2 font-semibold">{(Number(linea.Decimos || 0)*Number(linea.Tipo==='VIRGEN'?precioDecimoVirgen:precioDecimoFalla)).toFixed(2)} €</div></label>
             </div>
             <input className={input} placeholder="Observaciones" value={linea.Observaciones||''} onChange={e=>setLinea({...linea,Observaciones:e.target.value})}/>
@@ -2945,8 +2851,8 @@ function AdministracionNinoModal(props: any) {
             {linea.ID && <button type="button" className="ml-2 text-xs" onClick={()=>setLinea(vacia())}>Cancelar edición</button>}
           </form>
           <div className="overflow-x-auto border">
-            <table className="w-full text-left text-xs"><thead className="bg-zinc-100"><tr><th className="p-2">Fecha</th><th className="p-2">Tipo</th><th className="p-2">Décimos</th><th className="p-2">Emitidas</th><th className="p-2">Importe</th><th className="p-2">Acciones</th></tr></thead><tbody>
-              {entregas.map((e:any)=><tr key={e.ID} className="border-t"><td className="p-2">{e.Fecha}</td><td className="p-2">{e.Tipo}</td><td className="p-2">{e.Decimos}</td><td className="p-2">{e.PapeletasEmitidas}</td><td className="p-2">{Number(e.Importe||0).toFixed(2)} €</td><td className="p-2"><button type="button" onClick={()=>setLinea({...e})}>✏️</button> <button type="button" onClick={()=>eliminarEntregaAdministracion(e.ID)}>🗑️</button></td></tr>)}
+            <table className="w-full text-left text-xs"><thead className="bg-zinc-100"><tr><th className="p-2">Fecha</th><th className="p-2">Tipo</th><th className="p-2">Décimos</th><th className="p-2">Emitidas</th><th className="p-2">Desde</th><th className="p-2">Hasta</th><th className="p-2">Importe</th><th className="p-2">Acciones</th></tr></thead><tbody>
+              {entregas.map((e:any)=><tr key={e.ID} className="border-t"><td className="p-2">{e.Fecha}</td><td className="p-2">{e.Tipo}</td><td className="p-2">{e.Decimos}</td><td className="p-2">{e.PapeletasEmitidas}</td><td className="p-2">{e.SerieDesde ?? "—"}</td><td className="p-2">{e.SerieHasta ?? "—"}</td><td className="p-2">{Number(e.Importe||0).toFixed(2)} €</td><td className="p-2"><button type="button" onClick={()=>setLinea({...e,SerieDesde:e.SerieDesde??"",SerieHasta:e.SerieHasta??""})}>✏️</button> <button type="button" onClick={()=>eliminarEntregaAdministracion(e.ID)}>🗑️</button></td></tr>)}
             </tbody></table>
           </div>
           <form className="space-y-2 border p-3" onSubmit={async e=>{
