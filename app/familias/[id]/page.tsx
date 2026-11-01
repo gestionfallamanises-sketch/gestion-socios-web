@@ -9,6 +9,7 @@ import RemoveMemberButton from "../../components/RemoveMemberButton";
 import TrasladarFamiliaButton from "../../components/TrasladarFamiliaButton";
 import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 import PrintButton from "../../components/PrintButton";
+import EditarConfiguracionSocio from "../../components/EditarConfiguracionSocio";
 
 export default async function FamiliaPage({
   params,
@@ -113,10 +114,27 @@ if (errorFormasPago) {
 
       const cuotasFamiliaAny = (cuotasFamilia || []) as any[];
 
-  const ejercicioActual =
-    cuotasFamilia && cuotasFamilia.length > 0
-      ? cuotasFamiliaAny[0].Ejercicio
-      : null;
+  // Editar y resumir siempre el ejercicio activo, nunca el último ejercicio histórico.
+  const ejercicioActual = ejercicioActivo;
+
+  const { data: tiposCuotaData } = ejercicioActivo !== null
+    ? await supabase.from("TIPOS_CUOTA")
+        .select("IDCuota, Descripcion, Importe")
+        .eq("Ejercicio", ejercicioActivo)
+        .order("Descripcion", { ascending: true })
+    : { data: [] };
+  const tiposCuota = ((tiposCuotaData || []) as any[]).map((t) => ({
+    IDCuota: String(t.IDCuota),
+    Descripcion: t.Descripcion,
+    Importe: t.Importe,
+  }));
+  const pagadoresElegibles = miembrosAny.filter(
+    (s) => String(s.Estado || "").toLowerCase() === "activo"
+  ).map((s) => ({
+    NUMCENS: Number(s.NUMCENS),
+    Nombre: String(s.Nombre || ""),
+    Apellidos: String(s.Apellidos || ""),
+  }));
 
   const cuotasActuales =
     cuotasFamiliaAny?.filter(
@@ -307,8 +325,9 @@ const totalPendiente =
                 <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
                 <tr>
                 <th className="px-4 py-3">Socio</th>
-<th className="px-4 py-3">Tipo cuota</th>
-<th className="px-4 py-3">Pagador</th>
+<th className="px-3 py-3">Tipo cuota</th>
+<th className="px-3 py-3">Forma pago</th>
+<th className="px-3 py-3">Pagador</th>
 <th className="px-4 py-3 text-right">Cuota</th>
 <th className="px-4 py-3 text-right">Pagado</th>
 <th className="px-4 py-3 text-right">Pendiente</th>
@@ -353,7 +372,20 @@ const totalPendiente =
   {cuota?.Tipo || cuota?.TipoCuota || cuota?.NombreCuota || cuota?.Descripcion || cuota?.IDCuota || "-"}
 </td>
 
-        <td className="px-4 py-3 text-zinc-600">
+        <td className="px-3 py-3 text-zinc-600 whitespace-nowrap">
+          {(() => {
+            const fp = formasPagoFamiliaAny.find(
+              (f) => Number(f.NUMCENS) === Number(socio.NUMCENS) && f.Activo === true
+            );
+            if (!fp?.Metodo) return "-";
+            const esBanco = String(fp.Metodo).trim().toUpperCase() === "BANCO";
+            return esBanco
+              ? `Banco${Number(fp.NumeroPlazos) > 0 ? ` · ${fp.NumeroPlazos} plazos` : ""}`
+              : "Efectivo";
+          })()}
+        </td>
+
+        <td className="px-3 py-3 text-zinc-600">
   {(() => {
     const formaPago = formasPagoFamiliaAny.find(
       (fp) =>
@@ -406,6 +438,23 @@ const totalPendiente =
 </td>
 
         <td className="px-4 py-3 text-right">
+          <div className="flex flex-wrap justify-end gap-2">
+            <EditarConfiguracionSocio
+              numcens={Number(socio.NUMCENS)}
+              ejercicio={ejercicioActual}
+              idCuota={cuota?.IDCuota != null ? String(cuota.IDCuota) : null}
+              metodo={formasPagoFamiliaAny.find((fp) => Number(fp.NUMCENS) === Number(socio.NUMCENS))?.Metodo ?? null}
+              numeroPlazos={formasPagoFamiliaAny.find((fp) => Number(fp.NUMCENS) === Number(socio.NUMCENS))?.NumeroPlazos ?? null}
+              pagador={formasPagoFamiliaAny.find((fp) => Number(fp.NUMCENS) === Number(socio.NUMCENS))?.NUMCENS_Pagador ?? null}
+              tiposCuota={tiposCuota}
+              pagadores={pagadoresElegibles}
+              puedeEditar={Boolean(
+                ejercicioActual !== null && cuota?.IDCuota != null &&
+                tiposCuota.length > 0 &&
+                formasPagoFamiliaAny.some((fp) => Number(fp.NUMCENS) === Number(socio.NUMCENS) && fp.Activo === true) &&
+                String(socio.Estado || "").toLowerCase() === "activo"
+              )}
+            />
           {String(socio.NUMCENS) === String(familiaAny?.Titular_NUMCENS) ? (
             <span className="bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
               Titular
@@ -420,6 +469,7 @@ const totalPendiente =
               <RemoveMemberButton numcens={String(socio.NUMCENS)} />
             </div>
           )}
+          </div>
         </td>
       </tr>
     );

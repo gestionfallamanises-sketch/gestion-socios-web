@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import Link from "next/link";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
@@ -214,7 +213,7 @@ const totalPendiente =
         .forEach((p) => {
           movimientos.push({
             fecha: p.PAGOS_MANUALES?.FechaPago,
-            texto: "Pago manual",
+            texto: "Efectivo",
             importe: Number(p.ImporteAplicado || 0),
             tipo: "manual",
             idPagoManual: p.PAGOS_MANUALES?.IDPagoManual,
@@ -353,70 +352,96 @@ const resumenPendientes = Object.values(
             </div>
           
           </section>
-          <div className="mb-8 grid gap-4 lg:grid-cols-2">
-          <section className="border border-zinc-200 bg-white">
+          <div className="mb-8 grid gap-4 lg:grid-cols-5">
+          <section className="min-w-0 border border-zinc-200 bg-white lg:col-span-3">
   <div className="bg-zinc-100 px-4 py-3">
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
       Pagos realizados
     </h2>
     <p className="text-xs text-zinc-500">
-      Remesas, pagos manuales e intentos sin cobro
+      Remesas, efectivo e intentos sin cobro
     </p>
   </div>
 
-  <div className="p-4">
+  <div className="overflow-x-auto">
     {movimientosHistorial.length === 0 ? (
-      <p className="text-sm text-zinc-500">
+      <p className="px-4 py-3 text-sm text-zinc-500">
         Todavía no hay movimientos registrados.
       </p>
     ) : (
-      <div className="space-y-2">
-        {movimientosHistorial.map((mov, idx) => (
-          <div
-            key={idx}
-            className="flex items-center justify-between border-b border-zinc-100 pb-2 text-sm"
-          >
-            <span>
-              {formatearFecha(mov.fecha)} · {mov.texto}
-            </span>
+      <table className="w-full min-w-[590px] border-collapse text-xs">
+        <thead className="border-y border-zinc-200 bg-zinc-50 text-left uppercase text-zinc-600">
+          <tr>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">Fecha</th>
+            <th className="px-3 py-2 font-semibold">Tipo</th>
+            <th className="px-3 py-2 font-semibold">Referencia</th>
+            <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Importe</th>
+            <th className="px-3 py-2 text-center font-semibold">Estado</th>
+            <th className="px-3 py-2 text-center font-semibold print:hidden">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {movimientosHistorial.map((mov, idx) => {
+            const esSinCobro = mov.texto === "Sin cobro";
+            const esDevuelto = mov.tipo === "remesa" && mov.devuelto;
+            const esGasto = mov.tipo === "gasto-devolucion";
+            const tipo =
+              mov.tipo === "remesa"
+                ? "Remesa"
+                : mov.tipo === "manual"
+                ? "Efectivo"
+                : esGasto
+                ? "Gasto"
+                : "Intento";
+            const referencia =
+              mov.tipo === "manual"
+                ? "Entrega a cuenta"
+                : mov.texto;
+            const estado = esDevuelto
+              ? "Devuelto"
+              : esSinCobro
+              ? "Sin cobro"
+              : esGasto
+              ? "Registrado"
+              : "Cobrado";
+            const colorEstado = esDevuelto || esGasto
+              ? "text-red-700"
+              : esSinCobro
+              ? "text-amber-700"
+              : "text-green-700";
 
-            <div className="flex items-center gap-2">
-  <span
-    className={
-      mov.texto === "Sin cobro"
-        ? "font-medium text-orange-700"
-        : mov.devuelto || mov.tipo === "gasto-devolucion"
-        ? "font-medium text-red-700"
-        : "font-medium text-green-700"
-    }
-  >
-    {mov.texto === "Sin cobro"
-      ? "Sin cobro"
-      : `${Number(mov.importe || 0).toFixed(2)} €`}
-  </span>
-
-  {mov.tipo === "remesa" && mov.devuelto && (
-    <span className="text-xs font-semibold text-red-700">
-      Devuelto
-    </span>
-  )}
-
-  {mov.tipo === "manual" && mov.idPagoManual && (
-    <span className="print:hidden">
-      <AnularPagoManualButton
-        idPagoManual={Number(mov.idPagoManual)}
-      />
-    </span>
-  )}
-</div>
-          </div>
-        ))}
-      </div>
+            return (
+              <tr key={idx} className="border-b border-zinc-100 hover:bg-zinc-50">
+                <td className="whitespace-nowrap px-3 py-2 text-zinc-700">
+                  {formatearFecha(mov.fecha)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-zinc-900">{tipo}</td>
+                <td className="px-3 py-2 text-zinc-700">{referencia}</td>
+                <td className={`whitespace-nowrap px-3 py-2 text-right font-medium ${colorEstado}`}>
+                  {Number(mov.importe || 0).toFixed(2)} €
+                </td>
+                <td className={`whitespace-nowrap px-3 py-2 text-center font-medium ${colorEstado}`}>
+                  {estado}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-center print:hidden">
+                  {mov.tipo === "manual" && mov.idPagoManual ? (
+                    <AnularPagoManualButton
+                      idPagoManual={Number(mov.idPagoManual)}
+                    />
+                  ) : (
+                    <span className="text-zinc-300">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     )}
   </div>
 </section>
 
-<section className="border border-zinc-200 bg-white">
+<section className="min-w-0 border border-zinc-200 bg-white lg:col-span-2">
   <div className="bg-zinc-100 px-4 py-3">
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
       Cuotas pendientes recalculadas

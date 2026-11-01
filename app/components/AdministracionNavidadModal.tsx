@@ -27,6 +27,8 @@ pendienteAdministracion,
     Tipo: "FALLA",
     Decimos: 0,
     PapeletasEmitidas: 0,
+    SerieDesde: "",
+    SerieHasta: "",
     Importe: 0,
     Observaciones: "",
   });
@@ -54,6 +56,8 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
       Tipo: fila.Tipo || "FALLA",
       Decimos: Number(fila.Decimos || 0),
       PapeletasEmitidas: Number(fila.PapeletasEmitidas || 0),
+      SerieDesde: fila.SerieDesde == null ? "" : String(fila.SerieDesde),
+      SerieHasta: fila.SerieHasta == null ? "" : String(fila.SerieHasta),
       Importe: Number(fila.Importe || 0),
       Observaciones: fila.Observaciones || "",
     });
@@ -99,6 +103,8 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
       Tipo: "FALLA",
       Decimos: 0,
       PapeletasEmitidas: 0,
+    SerieDesde: "",
+    SerieHasta: "",
       Importe: 0,
       Observaciones: "",
     });
@@ -234,7 +240,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
              Décimos: compra y edición
             </h3>
 
-            <div className="grid grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-600">
                   Fecha
@@ -312,6 +318,18 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
               </div>
 
               <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Serie desde</label>
+                <input type="number" min="1" step="1" value={nuevaEntrega.SerieDesde}
+                  onChange={(e) => setNuevaEntrega({...nuevaEntrega, SerieDesde: e.target.value})}
+                  className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Serie hasta</label>
+                <input type="number" min="1" step="1" value={nuevaEntrega.SerieHasta}
+                  onChange={(e) => setNuevaEntrega({...nuevaEntrega, SerieHasta: e.target.value})}
+                  className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm" />
+              </div>
+              <div>
   <label className="mb-1 block text-xs font-medium text-zinc-600">
     Importe
   </label>
@@ -346,6 +364,8 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
           Tipo: "FALLA",
           Decimos: 0,
           PapeletasEmitidas: 0,
+    SerieDesde: "",
+    SerieHasta: "",
           Importe: 0,
           Observaciones: "",
         });
@@ -379,6 +399,8 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
           <th className="px-2 py-2 text-center">Tipo</th>
           <th className="px-2 py-2 text-right">Décimos</th>
           <th className="px-2 py-2 text-right">Papeletas</th>
+          <th className="px-2 py-2 text-right">Desde</th>
+          <th className="px-2 py-2 text-right">Hasta</th>
           <th className="px-2 py-2 text-right">Importe</th>
           <th className="px-2 py-2 text-center">Acciones</th>
         </tr>
@@ -388,7 +410,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
         {entregas.length === 0 ? (
           <tr>
             <td
-              colSpan={6}
+              colSpan={8}
               className="px-3 py-6 text-center text-zinc-500"
             >
               Todavía no hay décimos comprados.
@@ -417,6 +439,8 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
               <td className="px-2 py-2 text-right">
                 {fila.PapeletasEmitidas}
               </td>
+              <td className="px-2 py-2 text-right">{fila.SerieDesde ?? "—"}</td>
+              <td className="px-2 py-2 text-right">{fila.SerieHasta ?? "—"}</td>
 
               <td className="whitespace-nowrap px-2 py-2 text-right">
                 {euros(fila.Importe)}

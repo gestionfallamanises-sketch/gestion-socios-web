@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import ConfirmModal from "./ConfirmModal";
 
@@ -11,86 +12,92 @@ export default function MakeTitularButton({
   idFamilia: number;
   numcens: string;
 }) {
-
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   async function cambiarTitular() {
-    const { error } = await supabase
-      .from("FAMILIAS")
-      .update({
-        Titular_NUMCENS: Number(numcens),
-      })
-      .eq("ID_Familia", Number(idFamilia));
-  
-    if (error) {
-      alert(error.message);
-      return;
-    }
-  
-    const { data: sociosFamilia, error: errorSocios } = await supabase
-      .from("SOCIOS")
-      .select("NUMCENS")
-      .eq("ID_Familia", Number(idFamilia))
-      .eq("Estado", "Activo");
-  
-    if (errorSocios) {
-      alert(errorSocios.message);
-      return;
-    }
-  
-    const numsSocios = (sociosFamilia || []).map(
-      (s: any) => s.NUMCENS
-    );
-  
-    if (numsSocios.length > 0) {
-      const { error: errorPagadores } = await supabase
-        .from("FORMAS_PAGO_SOCIOS")
-        .update({
-          NUMCENS_Pagador: Number(numcens),
-        })
-        .in("NUMCENS", numsSocios)
-        .eq("Activo", true);
-  
-      if (errorPagadores) {
-        alert(errorPagadores.message);
+    if (guardando) return;
+
+    setGuardando(true);
+
+    try {
+      const nuevoTitular = Number(numcens);
+
+      // Comprobar que el socio pertenece a esta familia
+      // y está activo.
+      const { data: socio, error: errorSocio } =
+        await supabase
+          .from("SOCIOS")
+          .select("NUMCENS, ID_Familia, Estado")
+          .eq("NUMCENS", nuevoTitular)
+          .eq("ID_Familia", idFamilia)
+          .eq("Estado", "Activo")
+          .maybeSingle();
+
+      if (errorSocio) throw errorSocio;
+
+      if (!socio) {
+        alert(
+          "No se puede cambiar el titular. " +
+          "El socio no pertenece a esta familia " +
+          "o no está activo."
+        );
         return;
       }
-    }
-  
-    const { data: ejercicioData, error: errorEjercicio } =
-      await supabase
-        .from("EJERCICIOS")
-        .select("Ejercicio")
-        .eq("Activo", true)
-        .maybeSingle();
-  
-    if (errorEjercicio) {
-      alert(errorEjercicio.message);
-      return;
-    }
-  
-    const ejercicioActivo = Number(
-      ejercicioData?.Ejercicio || 0
-    );
-  
-    if (!ejercicioActivo) {
-      alert("No se ha encontrado un ejercicio activo.");
-      return;
-    }
-  
-    const { error: errorCuotas } = await supabase.rpc(
-      "generar_actualizar_cuotas_completo",
-      {
-        p_ejercicio: ejercicioActivo,
+
+      // Comprobar que la familia existe.
+      const { data: familia, error: errorFamilia } =
+        await supabase
+          .from("FAMILIAS")
+          .select("ID_Familia, Titular_NUMCENS")
+          .eq("ID_Familia", idFamilia)
+          .maybeSingle();
+
+      if (errorFamilia) throw errorFamilia;
+
+      if (!familia) {
+        alert("No se ha encontrado la familia.");
+        return;
       }
-    );
-  
-    if (errorCuotas) {
-      alert(errorCuotas.message);
-      return;
+
+      if (Number(familia.Titular_NUMCENS) === nuevoTitular) {
+        alert("Este socio ya es el titular de la familia.");
+        return;
+      }
+
+      // ÚNICA MODIFICACIÓN:
+      // cambiar el titular de la familia.
+      const { data: actualizado, error: errorActualizar } =
+        await supabase
+          .from("FAMILIAS")
+          .update({
+            Titular_NUMCENS: nuevoTitular,
+          })
+          .eq("ID_Familia", idFamilia)
+          .eq("Titular_NUMCENS", familia.Titular_NUMCENS)
+          .select("ID_Familia")
+          .maybeSingle();
+
+      if (errorActualizar) throw errorActualizar;
+
+      if (!actualizado) {
+        alert(
+          "No se ha podido confirmar el cambio. " +
+          "Es posible que otro usuario haya modificado " +
+          "el titular. Actualiza la página."
+        );
+        return;
+      }
+
+      window.location.reload();
+    } catch (error: any) {
+      alert(
+        "Error al cambiar el titular: " +
+        (error?.message || "Error desconocido")
+      );
+    } finally {
+      setGuardando(false);
     }
-  
-    window.location.reload();
   }
 
   return (
@@ -98,16 +105,17 @@ export default function MakeTitularButton({
       <button
         type="button"
         onClick={() => setModalAbierto(true)}
-        className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-200"
+        disabled={guardando}
+        className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-200 disabled:opacity-50"
       >
-        Cambiar
+        {guardando ? "Guardando..." : "Cambiar"}
       </button>
-  
+
       <ConfirmModal
         open={modalAbierto}
-        title="ATENCIÓN"
-        message="Está cambiando el titular de la familia. También se actualizará el pagador de todos los miembros activos de esta familia. ¿Desea continuar?"
-        confirmText="Sí, cambiar"
+        title="Cambiar titular de la familia"
+        message="Se cambiará únicamente el titular de la familia. No se modificarán los pagadores, las cuotas, los plazos ni las remesas. ¿Deseas continuar?"
+        confirmText="Sí, cambiar titular"
         cancelText="Cancelar"
         onCancel={() => setModalAbierto(false)}
         onConfirm={() => {

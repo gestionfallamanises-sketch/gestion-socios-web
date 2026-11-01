@@ -2,6 +2,7 @@ import Link from "next/link";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
 import PrintButton from "@/app/components/PrintButton";
+import ExportarExcelFamiliaButton from "@/app/components/ExportarExcelFamiliaButton";
 
 export default async function CuotasFamiliaPage({
   params,
@@ -100,6 +101,60 @@ export default async function CuotasFamiliaPage({
         .in("IDPlazo", idsPlazos)
     : { data: [] };
 
+
+  // Consultar TODAS las líneas de remesa de los plazos de la familia.
+  // Algunas devoluciones agrupadas se reflejan en CUOTAS_PLAZOS
+  // aunque no figure Devuelto=true en cada línea de REMESAS_DETALLE.
+  const { data: detallesRemesa, error: errorDetalles } =
+    idsPlazos.length > 0
+      ? await (supabase as any)
+          .from("REMESAS_DETALLE")
+          .select("IDDetalleRemesa, IDPlazo, IDRemesa, Importe, Estado, Devuelto, IBAN, TitularCuenta")
+          .in("IDPlazo", idsPlazos)
+      : { data: [], error: null };
+
+  if (errorDetalles) {
+    console.error("Error consultando el historial de remesas:", errorDetalles.message);
+  }
+
+  const detallesRemesaAny = (detallesRemesa as any[]) || [];
+  const idsRemesasHistorial = [...new Set(
+    detallesRemesaAny
+      .map((r) => Number(r.IDRemesa))
+      .filter((n) => Number.isSafeInteger(n) && n > 0)
+  )];
+
+  const { data: remesasHistorial } = idsRemesasHistorial.length > 0
+    ? await (supabase as any)
+        .from("REMESAS")
+        .select("IDRemesa, FechaVencimiento, FechaRemesa")
+        .in("IDRemesa", idsRemesasHistorial)
+    : { data: [] };
+
+  const remesasHistorialAny = (remesasHistorial as any[]) || [];
+
+  function lineaDevuelta(detalle: any, plazo: any): boolean {
+    const devueltaEnDetalle = detalle.Devuelto === true ||
+      String(detalle.Estado || "").trim().toLowerCase() === "devuelto";
+    if (devueltaEnDetalle) return true;
+
+    // Cuando el plazo figura devuelto, se muestra su línea aunque
+    // el detalle del recibo agrupado no esté marcado individualmente.
+    if (String(plazo?.Estado || "").trim().toLowerCase() === "devuelto") {
+      return true;
+    }
+
+    // La devolución del recibo agrupado afecta a las líneas del MISMO
+    // recibo (remesa + IBAN + titular). No afecta a otras cuentas.
+    return detallesRemesaAny.some((otra) =>
+      Number(otra.IDRemesa) === Number(detalle.IDRemesa) &&
+      String(otra.IBAN || "") === String(detalle.IBAN || "") &&
+      String(otra.TitularCuenta || "") === String(detalle.TitularCuenta || "") &&
+      (otra.Devuelto === true ||
+       String(otra.Estado || "").trim().toLowerCase() === "devuelto")
+    );
+  }
+
       const idsCuotasFamilia = cuotasAny.map((c) => c.IDCuotaSocio);
 
 const { data: resumenCuotasFamilia } =
@@ -151,14 +206,30 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
     return `${day}-${month}-${year}`;
   }
   
+  const plazosFamiliaAnyPorId = new Map<number, any>(
+    plazosAny.map((p) => [Number(p.IDPlazo), p])
+  );
+
   function movimientosDePlazo(idPlazo: number) {
     const movimientos: any[] = [];
   
     aplicacionesRemesaAny
       .filter((r) => Number(r.IDPlazo) === Number(idPlazo))
+      // REMESAS_APLICACIONES conserva aplicaciones históricas incluso
+      // cuando el recibo fue posteriormente devuelto. En ese caso,
+      // no se trata de un cobro vigente y no debe aparecer en verde.
+      .filter((r) => {
+        const detallesDelRecibo = detallesRemesaAny.filter(
+          (rd) =>
+            Number(rd.IDPlazo) === Number(idPlazo) &&
+            Number(rd.IDRemesa) === Number(r.IDRemesa)
+        );
+        const plazo = plazosFamiliaAnyPorId.get(Number(idPlazo));
+        return !detallesDelRecibo.some((rd) => lineaDevuelta(rd, plazo));
+      })
       .forEach((r) => {
         movimientos.push({
-          fecha: r.FechaAplicacion,
+          fecha: remesasHistorialAny.find((remesa) => Number(remesa.IDRemesa) === Number(r.IDRemesa))?.FechaVencimiento || r.FechaAplicacion,
           texto: `Remesa ${r.IDRemesa}`,
           importe: Number(r.ImporteAplicado || 0),
           tipo: "remesa",
@@ -170,85 +241,111 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
       .forEach((p) => {
         movimientos.push({
           fecha: p.PAGOS_MANUALES?.FechaPago,
-          texto: "Pago manual familiar",
+          texto: "Efectivo",
           importe: Number(p.ImporteAplicado || 0),
           tipo: "manual",
         });
       });
   
+    // Una línea histórica por socio/plazo y remesa; importe individual.
+    const plazoActual = plazosFamiliaAnyPorId.get(Number(idPlazo));
+    const vistos = new Set<string>();
+    detallesRemesaAny
+      .filter((rd) => Number(rd.IDPlazo) === Number(idPlazo))
+      .filter((rd) => lineaDevuelta(rd, plazoActual))
+      .forEach((rd) => {
+        const clave = `${rd.IDRemesa}-${rd.IDPlazo}`;
+        if (vistos.has(clave)) return;
+        vistos.add(clave);
+
+        const remesa = remesasHistorialAny.find(
+          (r) => Number(r.IDRemesa) === Number(rd.IDRemesa)
+        );
+        movimientos.push({
+          fecha: remesa?.FechaVencimiento || remesa?.FechaRemesa || null,
+          texto: `Remesa ${rd.IDRemesa} · Devuelto`,
+          importe: Number(rd.Importe || 0),
+          tipo: "devuelto",
+        });
+      });
+
+    // Si el plazo está devuelto pero no hay detalle de remesa
+    // accesible, mostrar el estado sin inventar un importe histórico.
+    if (
+      String(plazoActual?.Estado || "").trim().toLowerCase() === "devuelto" &&
+      !movimientos.some((m) => m.tipo === "devuelto")
+    ) {
+      movimientos.push({
+        fecha: plazoActual?.FechaVencimiento || plazoActual?.FechaPago || null,
+        texto: "Plazo devuelto (sin detalle de remesa accesible)",
+        importe: null,
+        tipo: "devuelto",
+      });
+    }
+
     return movimientos;
   }
   
+  // Agrupar los movimientos por cuota y socio, sin mezclar ejercicios.
   const movimientosFamilia = plazosAny
     .flatMap((plazo) => {
       const movimientos = movimientosDePlazo(plazo.IDPlazo);
-  
       if (plazo.Estado === "Sin cobro") {
         movimientos.push({
           fecha: plazo.FechaVencimiento || plazo.FechaPago || null,
-          texto: `${socioDeCuota(plazo.IDCuotaSocio)} · Sin cobro`,
+          texto: "Sin cobro",
           importe: 0,
+          tipo: "sin-cobro",
         });
       }
-  
       return movimientos.map((mov) => ({
         ...mov,
-        socio: socioDeCuota(plazo.IDCuotaSocio),
+        idCuotaSocio: Number(plazo.IDCuotaSocio),
       }));
     })
-    .sort((a, b) => {
-      const fechaA = a.fecha || "";
-      const fechaB = b.fecha || "";
-      return fechaA.localeCompare(fechaB);
-    });
-  
-  const pendientesPorSocio = cuotasAny
-    .map((cuota) => {
-      const resumen = resumenCuotasFamiliaAny.find(
-        (v) => Number(v.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
-      );
-      const pendienteReal = Number(resumen?.Pendiente ?? cuota.Pendiente ?? 0);
-      const esEfectivo =
-        Number(cuota.Ejercicio) === ejercicioVigente &&
-        metodosPorSocio.get(Number(cuota.NUMCENS)) === "efectivo";
+    .sort((a, b) => String(a.fecha || "").localeCompare(String(b.fecha || "")));
 
-      // Efectivo: el plazo interno no representa necesariamente
-      // el pendiente anual. Usar la misma fuente que la ficha individual.
-      if (esEfectivo) {
-        return {
-          socio: `${cuota.Apellidos}, ${cuota.Nombre}`,
-          grupos: [] as { importe: number; cantidad: number }[],
-          totalPendiente: pendienteReal,
-          esEfectivo: true,
-        };
-      }
-
-      // Banco: mantener el desglose existente por importe de plazo.
-      const plazosCuota = plazosAny.filter(
-        (p) => Number(p.IDCuotaSocio) === Number(cuota.IDCuotaSocio)
-      );
-      const pendientes = plazosCuota.filter(
-        (p) => Number(p.Pendiente || 0) > 0 && p.Estado !== "Pagado"
-      );
-      const grupos = Object.values(
-        pendientes.reduce((acc: any, plazo: any) => {
-          const importeCuota = Number(plazo.Importe || plazo.ImportePlazo || 0);
-          const importe = importeCuota.toFixed(2);
-          if (!acc[importe]) acc[importe] = { importe: importeCuota, cantidad: 0 };
-          acc[importe].cantidad += 1;
-          return acc;
-        }, {})
-      ) as { importe: number; cantidad: number }[];
-      return {
-        socio: `${cuota.Apellidos}, ${cuota.Nombre}`,
-        grupos,
-        totalPendiente: pendientes.reduce(
-          (acc, p) => acc + Number(p.Pendiente || 0), 0
-        ),
-        esEfectivo: false,
-      };
-    })
-    .filter((item) => item.totalPendiente > 0);
+  const bloquesSocios = cuotasAny.map((cuota) => {
+    const idCuotaSocio = Number(cuota.IDCuotaSocio);
+    const resumen = resumenCuotasFamiliaAny.find(
+      (r) => Number(r.IDCuotaSocio) === idCuotaSocio
+    ) || cuota;
+    const pendienteReal = Number(resumen.Pendiente || 0);
+    const importeCuota = Number(resumen.ImporteCuota || 0);
+    const pagadoReal = Number(resumen.TotalPagado || 0);
+    const esEfectivo = Number(cuota.Ejercicio) === ejercicioVigente &&
+      metodosPorSocio.get(Number(cuota.NUMCENS)) === "efectivo";
+    const movimientos = movimientosFamilia.filter(
+      (mov) => mov.idCuotaSocio === idCuotaSocio
+    );
+    const plazosCuota = plazosAny.filter(
+      (p) => Number(p.IDCuotaSocio) === idCuotaSocio
+    );
+    const pendientes = plazosCuota.filter(
+      (p) => Number(p.Pendiente || 0) > 0 && p.Estado !== "Pagado"
+    );
+    const grupos = Object.values(
+      pendientes.reduce((acc: Record<string, { importe: number; cantidad: number }>, plazo: any) => {
+        const importe = Number(plazo.Pendiente || 0);
+        const clave = importe.toFixed(2);
+        if (!acc[clave]) acc[clave] = { importe, cantidad: 0 };
+        acc[clave].cantidad += 1;
+        return acc;
+      }, {})
+    );
+    return {
+      idCuotaSocio,
+      numcens: Number(cuota.NUMCENS),
+      nombre: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+      ejercicio: cuota.Ejercicio,
+      importeCuota,
+      pagadoReal,
+      pendienteReal,
+      esEfectivo,
+      movimientos,
+      grupos,
+    };
+  });
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -276,7 +373,30 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
         </p>
       </div>
 
-      <PrintButton />
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <ExportarExcelFamiliaButton
+          nombreFamilia={String(familiaAny?.Nombre_Familia || `Familia_${id}`)}
+          bloques={bloquesSocios.map((bloque) => ({
+            numcens: bloque.numcens,
+            nombre: bloque.nombre,
+            ejercicio: String(bloque.ejercicio),
+            metodo: Number(bloque.ejercicio) === ejercicioVigente
+              ? (bloque.esEfectivo ? "Efectivo" : "Banco")
+              : "",
+            cuota: bloque.importeCuota,
+            pagado: bloque.pagadoReal,
+            pendiente: bloque.pendienteReal,
+            movimientos: bloque.movimientos.map((mov) => ({
+              fecha: mov.fecha || "",
+              tipo: mov.tipo === "manual" ? "Efectivo" : mov.tipo === "sin-cobro" ? "Intento" : "Remesa",
+              referencia: mov.tipo === "manual" ? "Entrega a cuenta" : String(mov.texto || ""),
+              importe: mov.importe == null ? null : Number(mov.importe),
+              estado: mov.tipo === "devuelto" ? "Devuelto" : mov.tipo === "sin-cobro" ? "Sin cobro" : "Cobrado",
+            })),
+          }))}
+        />
+        <PrintButton />
+      </div>
     </div>
   </div>
 </section>
@@ -289,98 +409,102 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
             </div>
           </section>
 
-          <div className="mb-8 grid gap-4 lg:grid-cols-2">
-  <section className="border border-zinc-200 bg-white">
-    <div className="bg-zinc-100 px-4 py-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-        Pagos realizados
-      </h2>
-      <p className="text-xs text-zinc-500">
-      Remesas, pagos manuales familiares e intentos sin cobro
-      </p>
-    </div>
+          <div className="space-y-3 pb-8">
+            {bloquesSocios.map((bloque) => (
+              <section key={bloque.idCuotaSocio} className="border border-zinc-200 bg-white">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-200 bg-zinc-100 px-3 py-2 text-xs">
+                  <Link href={`/socios/${bloque.numcens}/cuotas`} className="font-bold text-red-900 hover:underline">
+                    {bloque.nombre} · Nº {bloque.numcens}
+                  </Link>
+                  <span className="text-zinc-600">Ej. <strong>{bloque.ejercicio}</strong></span>
+                  <span className="text-zinc-700">Cuota: <strong>{bloque.importeCuota.toFixed(2)} €</strong></span>
+                  <span className="text-green-700">Pagado: <strong>{bloque.pagadoReal.toFixed(2)} €</strong></span>
+                  <span className="text-red-700">Pendiente: <strong>{bloque.pendienteReal.toFixed(2)} €</strong></span>
+                  {Number(bloque.ejercicio) === ejercicioVigente && (
+                    <span className="text-zinc-500">{bloque.esEfectivo ? "Efectivo" : "Banco"}</span>
+                  )}
+                </div>
 
-    <div className="p-4">
-      {movimientosFamilia.length === 0 ? (
-        <p className="text-sm text-zinc-500">
-          Todavía no hay movimientos registrados.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {movimientosFamilia.map((mov, idx) => (
-            <div
-              key={idx}
-              className="flex items-center justify-between border-b border-zinc-100 pb-2 text-sm"
-            >
-              <span>
-                {formatearFecha(mov.fecha)} · {mov.socio} · {mov.texto}
-              </span>
+                <div className="grid lg:grid-cols-5">
+                  <div className="min-w-0 lg:col-span-3 lg:border-r lg:border-zinc-200">
+                    <div className="border-b border-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700">
+                      Pagos y devoluciones
+                    </div>
+                    {bloque.movimientos.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-zinc-500">Sin movimientos registrados.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[460px] border-collapse text-xs">
+                          <thead className="bg-zinc-50 text-left text-zinc-600">
+                            <tr>
+                              <th className="whitespace-nowrap px-2 py-1.5">Fecha</th>
+                              <th className="px-2 py-1.5">Tipo</th>
+                              <th className="px-2 py-1.5">Referencia</th>
+                              <th className="whitespace-nowrap px-2 py-1.5 text-right">Importe</th>
+                              <th className="px-2 py-1.5 text-center">Estado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bloque.movimientos.map((mov, i) => {
+                              const devuelto = mov.tipo === "devuelto";
+                              const sinCobro = mov.tipo === "sin-cobro";
+                              const tipo = devuelto || mov.tipo === "remesa" ? "Remesa" : mov.tipo === "manual" ? "Efectivo" : "Intento";
+                              const referencia = mov.tipo === "manual" ? "Entrega a cuenta" : mov.texto;
+                              const estado = devuelto ? "Devuelto" : sinCobro ? "Sin cobro" : "Cobrado";
+                              const color = devuelto ? "text-red-700" : sinCobro ? "text-amber-700" : "text-green-700";
+                              return (
+                                <tr key={`${bloque.idCuotaSocio}-${i}`} className="border-t border-zinc-100 hover:bg-zinc-50">
+                                  <td className="whitespace-nowrap px-2 py-1.5 text-zinc-700">{formatearFecha(mov.fecha)}</td>
+                                  <td className="whitespace-nowrap px-2 py-1.5">{tipo}</td>
+                                  <td className="px-2 py-1.5 text-zinc-700">{referencia}</td>
+                                  <td className={`whitespace-nowrap px-2 py-1.5 text-right font-medium ${color}`}>
+                                    {mov.importe == null ? "—" : `${Number(mov.importe).toFixed(2)} €`}
+                                  </td>
+                                  <td className={`whitespace-nowrap px-2 py-1.5 text-center font-medium ${color}`}>{estado}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
 
-              <span
-                className={
-                  mov.texto.includes("Sin cobro")
-                    ? "font-medium text-orange-700"
-                    : "font-medium text-green-700"
-                }
-              >
-                {mov.texto.includes("Sin cobro")
-                  ? "Sin cobro"
-                  : `${Number(mov.importe || 0).toFixed(2)} €`}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </section>
-
-  <section className="border border-zinc-200 bg-white">
-    <div className="bg-zinc-100 px-4 py-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-        Cuotas pendientes recalculadas
-      </h2>
-      <p className="text-xs text-zinc-500">
-        Resumen pendiente por miembro de la familia
-      </p>
-    </div>
-
-    <div className="p-4">
-      {pendientesPorSocio.length === 0 ? (
-        <p className="text-sm font-medium text-green-700">
-          No quedan cuotas pendientes.
-        </p>
-      ) : (
-        <div className="space-y-4 text-sm">
-          {pendientesPorSocio.map((item) => (
-            <div
-              key={item.socio}
-              className="border-b border-zinc-100 pb-3 last:border-b-0"
-            >
-              <p className="mb-1 font-medium text-zinc-900">
-                {item.socio}
-              </p>
-
-               {item.esEfectivo ? (
-                 <p className="text-zinc-700">
-                   Pendiente de pago: <span className="font-medium">{item.totalPendiente.toFixed(2)} €</span>
-                 </p>
-               ) : item.grupos.map((grupo: any) => (
-                <p key={grupo.importe} className="text-zinc-700">
-                  {grupo.cantidad} cuota
-                  {grupo.cantidad === 1 ? "" : "s"} pendiente
-                  {grupo.cantidad === 1 ? "" : "s"} de{" "}
-                  <span className="font-medium">
-                    {Number(grupo.importe || 0).toFixed(2)} €
-                  </span>
-                </p>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </section>
-</div>
+                  <div className="min-w-0 lg:col-span-2">
+                    <div className="border-b border-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700">
+                      Cuotas pendientes
+                    </div>
+                    <div className="space-y-1 px-3 py-2 text-xs">
+                      {bloque.pendienteReal <= 0 ? (
+                        <p className="font-medium text-green-700">Cuota completamente pagada.</p>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-red-700">
+                            Pendiente real: {bloque.pendienteReal.toFixed(2)} €
+                          </p>
+                          {!bloque.esEfectivo && bloque.grupos.length > 0 && (
+                            <>
+                              {bloque.grupos.map((grupo) => (
+                                <p key={grupo.importe} className="text-zinc-700">
+                                  {grupo.cantidad} plazo{grupo.cantidad === 1 ? "" : "s"} de {grupo.importe.toFixed(2)} €
+                                </p>
+                              ))}
+                              <p className="pt-1 text-[11px] text-zinc-500">
+                                Desglose interno de plazos; el saldo válido es el pendiente real.
+                              </p>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ))}
+            {bloquesSocios.length === 0 && (
+              <p className="border border-zinc-200 bg-white p-4 text-sm text-zinc-500">No hay cuotas registradas.</p>
+            )}
+          </div>
         </div>
       </main>
     </div>
