@@ -187,10 +187,26 @@ export default function EdicionFichaSocio({ seccion, numcens, estado, socio, ban
       setEditando(false);
       router.refresh();
     } catch (e: unknown) {
-      const err = e as { message?: string; details?: string; hint?: string; code?: string } | null;
-      const partes = [err?.message, err?.details, err?.hint, err?.code ? `Código: ${err.code}` : null].filter(Boolean);
-      console.error("Error al guardar ficha del socio:", e);
-      setError(partes.length ? partes.join(" · ") : "No se pudo guardar. Revisa la consola del navegador.");
+      const err = e as {
+        message?: string;
+        details?: string;
+        hint?: string;
+        code?: string;
+      };
+      
+      console.error("ERROR GUARDANDO SOCIO:", {
+        mensaje: err?.message ?? String(e),
+        detalles: err?.details,
+        sugerencia: err?.hint,
+        codigo: err?.code,
+        tipo: e?.constructor?.name,
+      });
+      
+      setError(
+        [err?.message, err?.details, err?.hint, err?.code]
+          .filter(Boolean)
+          .join(" · ") || "No se pudo guardar la ficha del socio"
+      );
     }
     finally { setGuardando(false); }
   }
