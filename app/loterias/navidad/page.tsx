@@ -1,11 +1,15 @@
-
 "use client";
 
 import React, { useEffect, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import EntregaNavidadModal from "../../components/EntregaNavidadModal";
 import AdministracionNavidadModal from "../../components/AdministracionNavidadModal";
-import { supabase } from "../../../lib/supabaseClient";
+import { createBrowserClient } from "@supabase/ssr";
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 import { normalizarTexto } from "@/lib/texto";
 import CabeceraOrdenable from "@/app/components/CabeceraOrdenable";
 import { exportarExcel as descargarExcel } from "@/lib/excel";
@@ -2291,6 +2295,32 @@ movimientoEditando={movimientoEditando}
 
 </div>
 </div>
+
+  {/* Números jugados: visibles sin desplegar Administración. */}
+  <div className="grid grid-cols-1 gap-3 border-b border-zinc-200 bg-white px-4 py-3 sm:grid-cols-2">
+    <label className="flex min-w-0 flex-col gap-1 text-sm font-semibold text-red-900">
+      Número Falla
+      <input
+        type="text"
+        value={configuracion.NumeroFalla}
+        onChange={(e) => setConfiguracion({ ...configuracion, NumeroFalla: e.target.value })}
+        placeholder="Ej. 01234"
+        aria-label="Número jugado por la Falla"
+        className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 outline-none focus:border-red-900"
+      />
+    </label>
+    <label className="flex min-w-0 flex-col gap-1 text-sm font-semibold text-blue-900">
+      Número Virgen
+      <input
+        type="text"
+        value={configuracion.NumeroVirgen}
+        onChange={(e) => setConfiguracion({ ...configuracion, NumeroVirgen: e.target.value })}
+        placeholder="Ej. 01234"
+        aria-label="Número jugado por la Virgen"
+        className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 outline-none focus:border-blue-900"
+      />
+    </label>
+  </div>
 
   {/* ADMINISTRACIÓN: totales siempre visibles; configuración plegable */}
   <div className="border-b border-zinc-200">

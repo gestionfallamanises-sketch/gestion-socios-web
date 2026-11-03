@@ -3,7 +3,6 @@ import EdicionFichaSocio from "../../components/EdicionFichaSocio";
 import Link from "next/link";
 import Sidebar from "../../components/Sidebar";
 import { supabase } from "../../../lib/supabaseClient";
-import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 import HistorialSocioModal from "../../components/HistorialSocioModal";
 import ExcelSocioButton from "../../components/ExcelSocioButton";
 import LoteriaSocioDesplegable from "../../components/LoteriaSocioDesplegable";
@@ -17,15 +16,6 @@ export default async function SocioPage({
   searchParams: Promise<{ fromFamilia?: string }>;
 }) {
   
-  const { data: ejercicioActivoData } = await supabase
-  .from("EJERCICIOS")
-  .select("Ejercicio")
-  .eq("Activo", true)
-  .maybeSingle();
-
-  const ejercicioActivo =
-  (ejercicioActivoData as any)?.Ejercicio ?? null;
-
   const { numcens } = await params;
   const { fromFamilia } = await searchParams;
 
@@ -88,11 +78,6 @@ export default async function SocioPage({
     .order("Ejercicio", { ascending: false })
     .limit(1)
     .maybeSingle();
-
-    const ejercicioParaCuota =
-  (cuotaActual as any)?.Ejercicio ??
-  (ejercicioActivoData as any)?.Ejercicio ??
-  null;
 
     const { data: resumenCuotaActual } = (cuotaActual as any)?.IDCuotaSocio
   ? await (supabase as any)
@@ -428,12 +413,6 @@ const textoResponsableLoteria = grupoLoteria
 </div>
 
 <div className="flex items-center gap-3">
-{socioAny.Estado?.toLowerCase() !== "baja" && (
-  <GenerarCuotasButton
-  ejercicio={ejercicioParaCuota}
-  />
-)}
-
   <Link
     href={"/socios/" + socioAny.NUMCENS + "/cuotas"}
     className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"

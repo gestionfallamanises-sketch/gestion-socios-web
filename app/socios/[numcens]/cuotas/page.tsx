@@ -3,6 +3,7 @@ import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabaseClient";
 import RegistrarPagoModalButton from "@/app/components/RegistrarPagoModalButton";
 import AnularPagoManualButton from "@/app/components/AnularPagoManualButton";
+import EditarPagoManualButton from "@/app/components/EditarPagoManualButton";
 import PrintButton from "@/app/components/PrintButton";
 
 export default async function CuotasSocioPage({
@@ -217,6 +218,7 @@ const totalPendiente =
             importe: Number(p.ImporteAplicado || 0),
             tipo: "manual",
             idPagoManual: p.PAGOS_MANUALES?.IDPagoManual,
+            observaciones: p.PAGOS_MANUALES?.Observaciones || "",
           });
         });
     
@@ -425,9 +427,17 @@ const resumenPendientes = Object.values(
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-center print:hidden">
                   {mov.tipo === "manual" && mov.idPagoManual ? (
-                    <AnularPagoManualButton
-                      idPagoManual={Number(mov.idPagoManual)}
-                    />
+                    <div className="flex items-center justify-center gap-2">
+                      <EditarPagoManualButton
+                        idPagoManual={Number(mov.idPagoManual)}
+                        fechaPago={mov.fecha || ""}
+                        observaciones={mov.observaciones || ""}
+                        importe={Number(mov.importe || 0)}
+                      />
+                      <AnularPagoManualButton
+                        idPagoManual={Number(mov.idPagoManual)}
+                      />
+                    </div>
                   ) : (
                     <span className="text-zinc-300">—</span>
                   )}

@@ -7,7 +7,6 @@ import AddMemberForm from "../../components/AddMemberForm";
 import MakeTitularButton from "../../components/MakeTitularButton";
 import RemoveMemberButton from "../../components/RemoveMemberButton";
 import TrasladarFamiliaButton from "../../components/TrasladarFamiliaButton";
-import GenerarCuotasButton from "../../components/GenerarCuotasButton";
 import PrintButton from "../../components/PrintButton";
 import EditarConfiguracionSocio from "../../components/EditarConfiguracionSocio";
 
@@ -222,8 +221,6 @@ const totalPendiente =
     );
   }
 
-  const ejercicioParaGenerar = ejercicioActual ?? ejercicioActivo;
-  
   return (
     <div className="min-h-screen bg-zinc-100 p-8">
       <main className="mx-auto max-w-7xl">
@@ -514,11 +511,6 @@ const totalPendiente =
     </div>
 
     <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-zinc-200 p-4 xl:border-l xl:border-t-0">
-      {(ejercicioActual ?? ejercicioActivo) !== null && (
-        <GenerarCuotasButton
-          ejercicio={ejercicioActual ?? ejercicioActivo!}
-        />
-      )}
 
       <Link
         href={`/familias/${familiaAny.ID_Familia}/cuotas`}

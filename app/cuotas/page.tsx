@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import Sidebar from "../components/Sidebar";
-import GenerarCuotasButton from "../components/GenerarCuotasButton";
 import RegistrarPagoGeneralButton from "../components/RegistrarPagoGeneralButton";
 import { normalizarTexto } from "@/lib/texto";
 import * as XLSX from "xlsx";
@@ -441,9 +440,6 @@ const coincideBusqueda = normalizarTexto(texto).includes(
 
   <RegistrarPagoGeneralButton />
 
-  {ejercicioSeleccionado !== null && (
-  <GenerarCuotasButton ejercicio={ejercicioSeleccionado} />
-)}
   </div>
 </div>
 

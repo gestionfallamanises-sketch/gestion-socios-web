@@ -409,7 +409,7 @@ if (campo === "PagadoConfirmado") {
       ? 0
       : Number(grupo.ImportePremio || 0);
   
-    return pendienteCobro - pendientePremio;
+    return pendientePremio - pendienteCobro;
   }
   
   async function guardarGrupo(grupo: any, mostrarAviso = true) {
@@ -690,8 +690,10 @@ alert("Cambios guardados");
     <span className="text-zinc-600">Premio</span>
     <span className="bg-white px-2 py-1 font-semibold">{totalPremio.toFixed(2)} €</span>
 
-    <span className="text-zinc-600">Pend.</span>
-    <span className="bg-white px-2 py-1 font-semibold">{totalPendiente.toFixed(2)} €</span>
+    <span className="text-zinc-600">Saldo</span>
+    <span className={`bg-white px-2 py-1 font-semibold ${totalPendiente < -0.005 ? "text-red-700" : totalPendiente > 0.005 ? "text-green-700" : "text-zinc-700"}`}>
+      {Math.abs(totalPendiente) < 0.005 ? "----" : `${totalPendiente > 0 ? "+" : ""}${totalPendiente.toFixed(2)} €`}
+    </span>
   </div>
 </div>
 
@@ -940,14 +942,14 @@ alert("Cambios guardados");
         <td
           className={`px-2 py-2 text-right text-sm font-semibold whitespace-nowrap 
             ${
-            pendiente < 0
-              ? "text-red-700"
-              : pendiente > 0
+              pendiente > 0
               ? "text-green-700"
+              : pendiente < 0
+              ? "text-red-700"
               : "text-zinc-700"
           }`}
         >
-          {pendiente.toFixed(2)} €
+          {Math.abs(pendiente) < 0.005 ? "----" : `${pendiente > 0 ? "+" : ""}${pendiente.toFixed(2)} €`}
         </td>
         <td className="no-print px-2 py-2 text-center">
   <button

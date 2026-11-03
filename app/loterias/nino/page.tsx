@@ -4,7 +4,13 @@
 import React, { useEffect, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import EntregaNinoModal from "../../components/EntregaNinoModal";
-import { supabase } from "../../../lib/supabaseClient";
+import AdministracionNinoModal from "../../components/AdministracionNinoModal";
+import { createBrowserClient } from "@supabase/ssr";
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 import { normalizarTexto } from "@/lib/texto";
 import CabeceraOrdenable from "@/app/components/CabeceraOrdenable";
 import { exportarExcel as descargarExcel } from "@/lib/excel";
@@ -2303,6 +2309,32 @@ movimientoEditando={movimientoEditando}
 </div>
 </div>
 
+  {/* Números jugados: visibles sin desplegar Administración. */}
+  <div className="grid grid-cols-1 gap-3 border-b border-zinc-200 bg-white px-4 py-3 sm:grid-cols-2">
+    <label className="flex min-w-0 flex-col gap-1 text-sm font-semibold text-red-900">
+      Números Falla
+      <input
+        type="text"
+        value={configuracion.NumeroFalla}
+        onChange={(e) => setConfiguracion({ ...configuracion, NumeroFalla: e.target.value })}
+        placeholder="Ej. 01234 - 56789"
+        aria-label="Números jugados por la Falla"
+        className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 outline-none focus:border-red-900"
+      />
+    </label>
+    <label className="flex min-w-0 flex-col gap-1 text-sm font-semibold text-blue-900">
+      Números Virgen
+      <input
+        type="text"
+        value={configuracion.NumeroVirgen}
+        onChange={(e) => setConfiguracion({ ...configuracion, NumeroVirgen: e.target.value })}
+        placeholder="Ej. 01234 - 56789"
+        aria-label="Números jugados por la Virgen"
+        className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900 outline-none focus:border-blue-900"
+      />
+    </label>
+  </div>
+
   {/* ADMINISTRACIÓN: totales siempre visibles; configuración plegable */}
   <div className="border-b border-zinc-200">
     <button type="button" onClick={() => setConfigAdminAbierta(v => !v)}
@@ -2799,79 +2831,6 @@ movimientoEditando={movimientoEditando}
   )}
 </section>
       </main>
-    </div>
-  );
-}
-
-
-// Panel propio del Niño: mantiene separadas las operaciones de Administración.
-function AdministracionNinoModal(props: any) {
-  const { abierto, onClose, entregas = [], pagos = [], totalAdministracion = 0,
-    totalPagadoAdministracion = 0, pendienteAdministracion = 0,
-    precioDecimoFalla = 0, precioDecimoVirgen = 0,
-    onRegistrar, onActualizar, eliminarEntregaAdministracion,
-    guardarPagoAdministracion, actualizarPagoAdministracion, eliminarPagoAdministracion } = props;
-  const hoy = () => new Date().toISOString().slice(0, 10);
-  const vacia = () => ({ ID: null, Fecha: hoy(), Tipo: "FALLA", Decimos: 0, PapeletasEmitidas: 0, SerieDesde: "", SerieHasta: "", Observaciones: "" });
-  const pagoVacio = () => ({ ID: null, Fecha: hoy(), Importe: 0, Observaciones: "" });
-  const [linea, setLinea] = useState<any>(vacia);
-  const [cobro, setCobro] = useState<any>(pagoVacio);
-  if (!abierto) return null;
-  const input = 'w-full border border-zinc-300 bg-white px-2 py-1.5 text-sm';
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-3">
-          <h2 className="font-semibold">Administración · Lotería del Niño</h2>
-          <button onClick={onClose} type="button" aria-label="Cerrar">✕</button>
-        </div>
-        <div className="space-y-5 overflow-y-auto p-5">
-          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
-            <div>Total: <b>{Number(totalAdministracion).toFixed(2)} €</b></div>
-            <div>Pagado: <b>{Number(totalPagadoAdministracion).toFixed(2)} €</b></div>
-            <div>Pendiente: <b>{Number(pendienteAdministracion).toFixed(2)} €</b></div>
-          </div>
-          <form className="space-y-2 border p-3" onSubmit={async e => {
-            e.preventDefault();
-            const ok = linea.ID ? await onActualizar(linea.ID, linea) : await onRegistrar(linea);
-            if (ok) setLinea(vacia());
-          }}>
-            <h3 className="text-sm font-semibold">{linea.ID ? 'Editar entrega' : 'Nueva entrega a Administración'}</h3>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-7">
-              <label className="text-xs">Fecha<input className={input} type="date" required value={linea.Fecha} onChange={e=>setLinea({...linea,Fecha:e.target.value})}/></label>
-              <label className="text-xs">Tipo<select className={input} value={linea.Tipo} onChange={e=>setLinea({...linea,Tipo:e.target.value})}><option value="FALLA">Falla</option><option value="VIRGEN">Virgen</option></select></label>
-              <label className="text-xs">Décimos<input className={input} type="number" min="0" required value={linea.Decimos} onChange={e=>setLinea({...linea,Decimos:Number(e.target.value)})}/></label>
-              <label className="text-xs">Papeletas emitidas<input className={input} type="number" min="0" value={linea.PapeletasEmitidas} onChange={e=>setLinea({...linea,PapeletasEmitidas:Number(e.target.value)})}/></label>
-              <label className="text-xs">Serie desde<input className={input} type="number" min="1" step="1" value={linea.SerieDesde ?? ""} onChange={e=>setLinea({...linea,SerieDesde:e.target.value})}/></label>
-              <label className="text-xs">Serie hasta<input className={input} type="number" min="1" step="1" value={linea.SerieHasta ?? ""} onChange={e=>setLinea({...linea,SerieHasta:e.target.value})}/></label>
-              <label className="text-xs">Importe<div className="py-2 font-semibold">{(Number(linea.Decimos || 0)*Number(linea.Tipo==='VIRGEN'?precioDecimoVirgen:precioDecimoFalla)).toFixed(2)} €</div></label>
-            </div>
-            <input className={input} placeholder="Observaciones" value={linea.Observaciones||''} onChange={e=>setLinea({...linea,Observaciones:e.target.value})}/>
-            <button type="submit" className="bg-red-900 px-3 py-2 text-xs text-white">Guardar entrega</button>
-            {linea.ID && <button type="button" className="ml-2 text-xs" onClick={()=>setLinea(vacia())}>Cancelar edición</button>}
-          </form>
-          <div className="overflow-x-auto border">
-            <table className="w-full text-left text-xs"><thead className="bg-zinc-100"><tr><th className="p-2">Fecha</th><th className="p-2">Tipo</th><th className="p-2">Décimos</th><th className="p-2">Emitidas</th><th className="p-2">Desde</th><th className="p-2">Hasta</th><th className="p-2">Importe</th><th className="p-2">Acciones</th></tr></thead><tbody>
-              {entregas.map((e:any)=><tr key={e.ID} className="border-t"><td className="p-2">{e.Fecha}</td><td className="p-2">{e.Tipo}</td><td className="p-2">{e.Decimos}</td><td className="p-2">{e.PapeletasEmitidas}</td><td className="p-2">{e.SerieDesde ?? "—"}</td><td className="p-2">{e.SerieHasta ?? "—"}</td><td className="p-2">{Number(e.Importe||0).toFixed(2)} €</td><td className="p-2"><button type="button" onClick={()=>setLinea({...e,SerieDesde:e.SerieDesde??"",SerieHasta:e.SerieHasta??""})}>✏️</button> <button type="button" onClick={()=>eliminarEntregaAdministracion(e.ID)}>🗑️</button></td></tr>)}
-            </tbody></table>
-          </div>
-          <form className="space-y-2 border p-3" onSubmit={async e=>{
-            e.preventDefault();
-            const ok = cobro.ID ? await actualizarPagoAdministracion(cobro.ID,cobro) : await guardarPagoAdministracion(cobro);
-            if (ok) setCobro(pagoVacio());
-          }}>
-            <h3 className="text-sm font-semibold">{cobro.ID ? 'Editar pago' : 'Pago a Administración'}</h3>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <label className="text-xs">Fecha<input className={input} required type="date" value={cobro.Fecha} onChange={e=>setCobro({...cobro,Fecha:e.target.value})}/></label>
-              <label className="text-xs">Importe €<input className={input} required type="number" min="0.01" step="0.01" value={cobro.Importe} onChange={e=>setCobro({...cobro,Importe:Number(e.target.value)})}/></label>
-            </div>
-            <input className={input} placeholder="Observaciones" value={cobro.Observaciones||''} onChange={e=>setCobro({...cobro,Observaciones:e.target.value})}/>
-            <button type="submit" className="bg-green-700 px-3 py-2 text-xs text-white">Guardar pago</button>
-            {cobro.ID && <button type="button" className="ml-2 text-xs" onClick={()=>setCobro(pagoVacio())}>Cancelar edición</button>}
-          </form>
-          <div className="overflow-x-auto border"><table className="w-full text-left text-xs"><thead className="bg-zinc-100"><tr><th className="p-2">Fecha</th><th className="p-2">Importe</th><th className="p-2">Observaciones</th><th className="p-2">Acciones</th></tr></thead><tbody>{pagos.map((e:any)=><tr className="border-t" key={e.ID}><td className="p-2">{e.Fecha}</td><td className="p-2">{Number(e.Importe||0).toFixed(2)} €</td><td className="p-2">{e.Observaciones||'—'}</td><td className="p-2"><button type="button" onClick={()=>setCobro({...e})}>✏️</button> <button type="button" onClick={()=>eliminarPagoAdministracion(e.ID)}>🗑️</button></td></tr>)}</tbody></table></div>
-        </div>
-      </div>
     </div>
   );
 }

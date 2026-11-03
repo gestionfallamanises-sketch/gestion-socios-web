@@ -28,10 +28,6 @@ export default function LoginPage() {
       return;
     }
     
-    console.log("LOGIN SUPABASE", {
-      usuario: !!data.user,
-      sesion: !!data.session,
-    });
     
     const userId = data.user?.id;
     

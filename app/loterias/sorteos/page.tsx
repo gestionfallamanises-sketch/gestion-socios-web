@@ -1261,11 +1261,7 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
 </th>
 
 <th className="px-4 py-3 text-right text-xs font-semibold uppercase">
-  Cobrado
-</th>
-
-<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
-  Pendiente
+  Cobro
 </th>
 
 <th className="px-4 py-3 text-right text-xs font-semibold uppercase">
@@ -1273,11 +1269,7 @@ const resumenVirgen = calcularResumenEconomico("Virgen");
 </th>
 
 <th className="px-4 py-3 text-right text-xs font-semibold uppercase">
-  Sin entregar
-</th>
-
-<th className="px-4 py-3 text-right text-xs font-semibold uppercase">
-  Entregado
+  Premios
 </th>
 
     <th className="px-4 py-3 text-center text-xs font-semibold uppercase">
@@ -1344,50 +1336,39 @@ papeletasVirgen: 0,
 </td>
 
         <td className="px-4 py-3 text-center text-sm font-semibold">
-  {resumen.papeletasFalla}
+  {Number(resumen.papeletasFalla || 0) || "----"}
 </td>
 
 <td className="px-4 py-3 text-center text-sm font-semibold">
-  {resumen.papeletasVirgen}
+  {Number(resumen.papeletasVirgen || 0) || "----"}
 </td>
 
 <td className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
-  {resumen.importeTotal.toFixed(2)} €
-</td>
-
-<td className="px-4 py-3 text-right text-sm font-semibold text-green-700 whitespace-nowrap">
-  {resumen.cobrado.toFixed(2)} €
-</td>
-
-<td
-  className={`px-4 py-3 text-right text-sm font-semibold ${
-    resumen.pendienteCobro > 0
-      ? "text-red-700"
-      : "text-zinc-700"
-  }`}
->
-  {resumen.pendienteCobro.toFixed(2)} €
+  {Number(resumen.importeTotal || 0) > 0 ? euros(resumen.importeTotal) : "----"}
 </td>
 
 <td className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
-  {resumen.premioTotal.toFixed(2)} €
+  {Number(resumen.importeTotal || 0) <= 0 ? (
+    <span className="text-zinc-400">----</span>
+  ) : Number(resumen.pendienteCobro || 0) > 0.005 ? (
+    <span className="text-red-700">-{euros(resumen.pendienteCobro)}</span>
+  ) : (
+    <span className="font-bold text-green-700">PAGADO</span>
+  )}
 </td>
 
-<td
-  className={`px-4 py-3 text-right text-sm font-semibold ${
-    resumen.premioPendiente > 0
-      ? "text-red-700"
-      : "text-zinc-700"
-  }`}
->
-  {resumen.premioPendiente.toFixed(2)} €
+<td className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+  {Number(resumen.premioTotal || 0) > 0 ? euros(resumen.premioTotal) : "----"}
 </td>
 
-<td className="px-4 py-3 text-right text-sm font-semibold text-green-700">
-  {(
-    resumen.premioTotal -
-    resumen.premioPendiente
-  ).toFixed(2)} €
+<td className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+  {Number(resumen.premioTotal || 0) <= 0 ? (
+    <span className="text-zinc-400">----</span>
+  ) : Number(resumen.premioPendiente || 0) > 0.005 ? (
+    <span className="text-red-700">-{euros(resumen.premioPendiente)}</span>
+  ) : (
+    <span className="font-bold text-green-700">ENTREGADOS</span>
+  )}
 </td>
 
         <td className="px-4 py-3">

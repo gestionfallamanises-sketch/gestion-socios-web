@@ -1,7 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 import { supabase } from "@/lib/supabaseClient";
+import { normalizarTexto } from "@/lib/texto";
+
+const clienteAutenticado = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+function fechaLocal() {
+  const hoy = new Date();
+  const yyyy = hoy.getFullYear();
+  const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+  const dd = String(hoy.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Reparte importes en céntimos para evitar descuadres por redondeo.
+// La proporción se calcula según el saldo pendiente de cada socio.
+function repartirPago(
+  importe: string,
+  socios: any[],
+  aplicaciones: Record<number, { seleccionado: boolean; importe: number }>
+): Record<number, { seleccionado: boolean; importe: number }> {
+  const resultado = { ...aplicaciones };
+  const elegibles = socios.filter((s) =>
+    resultado[s.NUMCENS]?.seleccionado && Number(s.Pendiente || 0) > 0
+  );
+  socios.forEach((s) => {
+    resultado[s.NUMCENS] = {
+      seleccionado: resultado[s.NUMCENS]?.seleccionado ?? true,
+      importe: 0,
+    };
+  });
+  const recibido = Number(importe);
+  if (!importe || !Number.isFinite(recibido) || recibido <= 0 || !elegibles.length) return resultado;
+
+  const capacidad = elegibles.map((s) => Math.max(0, Math.round(Number(s.Pendiente || 0) * 100)));
+  const sumaCapacidad = capacidad.reduce((acc, x) => acc + x, 0);
+  let centimos = Math.min(Math.round(recibido * 100), sumaCapacidad);
+  const pesos = capacidad.map((x) => x / sumaCapacidad);
+  const exactos = pesos.map((peso) => centimos * peso);
+  const unidades = exactos.map(Math.floor);
+  let resto = centimos - unidades.reduce((acc, x) => acc + x, 0);
+  const indices = exactos.map((_, i) => i).sort((a, b) =>
+    (exactos[b] - unidades[b]) - (exactos[a] - unidades[a]) || a - b
+  );
+  for (const i of indices) {
+    if (resto <= 0) break;
+    if (unidades[i] < capacidad[i]) { unidades[i]++; resto--; }
+  }
+  elegibles.forEach((s, i) => {
+    resultado[s.NUMCENS] = { seleccionado: true, importe: unidades[i] / 100 };
+  });
+  return resultado;
+}
 
 export default function RegistrarPagoGeneralModal({
   open,
@@ -10,6 +65,134 @@ export default function RegistrarPagoGeneralModal({
   open: boolean;
   onCancel: () => void;
 }) {
+  const [fechaPago, setFechaPago] = useState(fechaLocal);
+  const [guardando, setGuardando] = useState(false);
+  const [posicion, setPosicion] = useState<{ x: number; y: number } | null>(null);
+  const ventanaRef = useRef<HTMLDivElement>(null);
+  const cuerpoRef = useRef<HTMLDivElement>(null);
+  const [dimensiones, setDimensiones] = useState<{ ancho: number; alto: number } | null>(null);
+  const redimensionRef = useRef<{
+    borde: string; x: number; y: number;
+    izquierda: number; arriba: number; ancho: number; alto: number;
+  } | null>(null);
+  const arrastreRef = useRef<{ dx: number; dy: number } | null>(null);
+
+  function limpiarFormulario() {
+    setModo("socio");
+    setNumcensPagador("");
+    setBusquedaPagador("");
+    setPagadoresEncontrados([]);
+    setSociosPagador([]);
+    setCargandoSocios(false);
+    setImporteTotal("");
+    setAplicaciones({});
+    setBusquedaSocio("");
+    setSociosEncontrados([]);
+    setSocioSeleccionado(null);
+    setImporteSocio("");
+    setObservacionesSocio("");
+    setFechaPago(fechaLocal());
+    setPosicion(null);
+    setDimensiones(null);
+    redimensionRef.current = null;
+    arrastreRef.current = null;
+  }
+
+  function cerrarFormulario() {
+    if (guardando) return;
+    limpiarFormulario();
+    onCancel();
+  }
+
+  useEffect(() => {
+    if (!open) {
+      // El modal permanece montado cuando se cierra desde su componente padre.
+      limpiarFormulario();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function mover(e: MouseEvent) {
+      const elemento = ventanaRef.current;
+      if (!elemento) return;
+      const limiteX = window.innerWidth;
+      const limiteY = window.innerHeight;
+      if (redimensionRef.current) {
+        const r = redimensionRef.current;
+        const dx = e.clientX - r.x;
+        const dy = e.clientY - r.y;
+        const minAncho = Math.min(360, limiteX - 16);
+        const minAlto = Math.min(280, limiteY - 16);
+        let izquierda = r.izquierda, arriba = r.arriba;
+        let derecha = r.izquierda + r.ancho, abajo = r.arriba + r.alto;
+        if (r.borde.includes("e")) derecha = Math.min(limiteX - 8, Math.max(izquierda + minAncho, derecha + dx));
+        if (r.borde.includes("s")) abajo = Math.min(limiteY - 8, Math.max(arriba + minAlto, abajo + dy));
+        if (r.borde.includes("w")) izquierda = Math.max(8, Math.min(derecha - minAncho, izquierda + dx));
+        if (r.borde.includes("n")) arriba = Math.max(8, Math.min(abajo - minAlto, arriba + dy));
+        setPosicion({ x: izquierda, y: arriba });
+        setDimensiones({ ancho: derecha - izquierda, alto: abajo - arriba });
+        return;
+      }
+      if (!arrastreRef.current) return;
+      const { dx, dy } = arrastreRef.current;
+      setPosicion({
+        x: Math.max(8, Math.min(limiteX - elemento.offsetWidth - 8, e.clientX - dx)),
+        y: Math.max(8, Math.min(limiteY - elemento.offsetHeight - 8, e.clientY - dy)),
+      });
+    }
+    function soltar() {
+      arrastreRef.current = null;
+      redimensionRef.current = null;
+      document.body.style.userSelect = "";
+    }
+    window.addEventListener("mousemove", mover);
+    window.addEventListener("mouseup", soltar);
+    return () => {
+      window.removeEventListener("mousemove", mover);
+      window.removeEventListener("mouseup", soltar);
+      document.body.style.userSelect = "";
+    };
+  }, [open]);
+
+  function comenzarArrastre(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.button !== 0 || !ventanaRef.current) return;
+    const rect = ventanaRef.current.getBoundingClientRect();
+    arrastreRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    setPosicion({ x: rect.left, y: rect.top });
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  }
+
+  function comenzarRedimension(borde: string, e: React.MouseEvent<HTMLDivElement>) {
+    if (e.button !== 0 || !ventanaRef.current) return;
+    const r = ventanaRef.current.getBoundingClientRect();
+    redimensionRef.current = {
+      borde, x: e.clientX, y: e.clientY,
+      izquierda: r.left, arriba: r.top, ancho: r.width, alto: r.height,
+    };
+    setPosicion({ x: r.left, y: r.top });
+    setDimensiones({ ancho: r.width, alto: r.height });
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  async function guardarFechaPago(idPago: number, importe: number, observaciones: string | null) {
+    const { error } = await (clienteAutenticado as any).rpc("editar_pago_manual_seguro", {
+      p_id_pago_manual: idPago,
+      p_fecha_pago: fechaPago,
+      p_importe: importe,
+      p_observaciones: observaciones,
+    });
+    if (error) {
+      alert(`El pago ${idPago} SE HA REGISTRADO, pero no se pudo guardar la fecha elegida: ${error.message}. No vuelvas a registrarlo; corrige la fecha con el lápiz desde la ficha del socio.`);
+      window.location.reload();
+      return false;
+    }
+    return true;
+  }
+
   const [modo, setModo] = useState<"socio" | "pagador">("socio");
   const [numcensPagador, setNumcensPagador] = useState("");
   const [busquedaPagador, setBusquedaPagador] = useState("");
@@ -37,6 +220,14 @@ const [observacionesSocio, setObservacionesSocio] = useState("");
 
 const diferencia =
   Number(importeTotal || 0) - totalAplicado;
+
+  const repartoInvalido = sociosPagador.some((s) => {
+    const a = aplicaciones[s.NUMCENS];
+    if (!a?.seleccionado) return false;
+    return !Number.isFinite(a.importe) || a.importe < 0 ||
+      Math.round(a.importe * 100) > Math.round(Number(s.Pendiente || 0) * 100) ||
+      Math.abs(a.importe * 100 - Math.round(a.importe * 100)) > 0.00001;
+  });
 
   async function cargarSociosPagador(numcensElegido?: number) {
     const pagadorFinal = numcensElegido || Number(numcensPagador);
@@ -69,11 +260,11 @@ const diferencia =
     (data || []).forEach((socio: any) => {
       inicial[socio.NUMCENS] = {
         seleccionado: true,
-        importe: Number(socio.Pendiente || 0),
+        importe: 0,
       };
     });
   
-    setAplicaciones(inicial);
+    setAplicaciones(repartirPago(importeTotal, data || [], inicial));
   }
 
   async function buscarSociosPagoIndividual(texto: string) {
@@ -107,21 +298,21 @@ const diferencia =
       .from("VISTA_CUOTAS_RESUMEN")
       .select("*")
       .eq("Ejercicio", ejercicioActivo)
-      .or(
-        `Nombre.ilike.%${texto}%,Apellidos.ilike.%${texto}%,NUMCENS.eq.${Number(texto) || -1}`
-      )
-      .limit(10);
-  
-    if (error) {
-      alert(error.message);
-      return;
-    }
-  
-    setSociosEncontrados(data || []);
+      .limit(5000);
+
+    if (error) { alert(error.message); return; }
+    const termino = normalizarTexto(texto.trim());
+    setSociosEncontrados((data || []).filter((socio: any) => {
+      const nombre = normalizarTexto(`${socio.Apellidos || ""} ${socio.Nombre || ""}`);
+      const inverso = normalizarTexto(`${socio.Nombre || ""} ${socio.Apellidos || ""}`);
+      return nombre.includes(termino) || inverso.includes(termino) ||
+        String(socio.NUMCENS).includes(termino);
+    }).slice(0, 10));
   }
 
   async function registrarPagoSocioIndividual() {
-    if (!socioSeleccionado) return;
+    if (!socioSeleccionado || guardando) return;
+    if (!fechaPago) { alert("Selecciona una fecha."); return; }
   
     const importe = Number(importeSocio || 0);
     const pendiente = Number(socioSeleccionado.Pendiente || 0);
@@ -136,6 +327,7 @@ const diferencia =
       return;
     }
   
+    setGuardando(true);
     const { data, error } = await (supabase as any).rpc(
       "registrar_pago_manual_cuota",
       {
@@ -146,15 +338,33 @@ const diferencia =
     );
   
     if (error) {
+      setGuardando(false);
       alert(error.message);
       return;
     }
-  
+    if (!(await guardarFechaPago(Number(data), importe, observacionesSocio || null))) return;
     alert("Pago registrado correctamente. ID: " + data);
     window.location.reload();
   }
 
   async function registrarPagoPagador() {
+    if (guardando) return;
+    if (!fechaPago) { alert("Selecciona una fecha."); return; }
+    const importeRecibido = Number(importeTotal);
+    const seleccionadas = sociosPagador.filter((s) => aplicaciones[s.NUMCENS]?.seleccionado);
+    const excede = seleccionadas.some((s) => {
+      const importe = Number(aplicaciones[s.NUMCENS]?.importe || 0);
+      return !Number.isFinite(importe) || importe < 0 ||
+        Math.round(importe * 100) > Math.round(Number(s.Pendiente || 0) * 100) ||
+        Math.abs(importe * 100 - Math.round(importe * 100)) > 0.00001;
+    });
+    if (!Number.isFinite(importeRecibido) || importeRecibido <= 0 ||
+        Math.abs(importeRecibido * 100 - Math.round(importeRecibido * 100)) > 0.00001 ||
+        Math.round(importeRecibido * 100) !== Math.round(totalAplicado * 100) ||
+        excede || !seleccionadas.length || !numcensPagador) {
+      alert("Revisa el reparto: debe coincidir con el importe recibido y no superar el pendiente de ningún socio.");
+      return;
+    }
     const aplicacionesValidas = Object.entries(aplicaciones)
       .filter(([, valor]) => valor.seleccionado && Number(valor.importe) > 0)
       .map(([numcens, valor]) => ({
@@ -162,6 +372,7 @@ const diferencia =
         importe: Number(valor.importe),
       }));
   
+    setGuardando(true);
     const { data, error } = await (supabase as any).rpc(
       "registrar_pago_manual_pagador",
       {
@@ -173,10 +384,11 @@ const diferencia =
     );
   
     if (error) {
+      setGuardando(false);
       alert(error.message);
       return;
     }
-  
+    if (!(await guardarFechaPago(Number(data), Number(importeTotal), null))) return;
     alert("Pago registrado correctamente. ID: " + data);
     window.location.reload();
   }
@@ -187,6 +399,8 @@ const diferencia =
     setBusquedaPagador(texto);
     setNumcensPagador("");
     setSociosPagador([]);
+    setAplicaciones({});
+    setImporteTotal("");
   
     if (texto.trim().length < 2) {
       setPagadoresEncontrados([]);
@@ -196,24 +410,44 @@ const diferencia =
     const { data, error } = await supabase
       .from("SOCIOS")
       .select("NUMCENS, Nombre, Apellidos")
-      .or(
-        `Nombre.ilike.%${texto}%,Apellidos.ilike.%${texto}%,NUMCENS.eq.${Number(texto) || -1}`
-      )
       .order("Apellidos", { ascending: true })
-      .limit(10);
-  
-    if (error) {
-      alert(error.message);
-      return;
-    }
-  
-    setPagadoresEncontrados(data || []);
+      .limit(5000);
+
+    if (error) { alert(error.message); return; }
+    const termino = normalizarTexto(texto.trim());
+    setPagadoresEncontrados((data || []).filter((socio: any) => {
+      const nombre = normalizarTexto(`${socio.Apellidos || ""} ${socio.Nombre || ""}`);
+      const inverso = normalizarTexto(`${socio.Nombre || ""} ${socio.Apellidos || ""}`);
+      return nombre.includes(termino) || inverso.includes(termino) ||
+        String(socio.NUMCENS).includes(termino);
+    }).slice(0, 10));
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2">
-  <div className="w-full max-w-2xl border border-zinc-200 bg-white shadow-xl">
-  <div className="border-l-4 border-red-900 px-4 py-2">
+      <div
+        ref={ventanaRef}
+        style={{
+          width: dimensiones?.ancho ?? "min(760px, calc(100vw - 24px))",
+          height: dimensiones?.alto ?? "min(650px, calc(100vh - 24px))",
+          ...(posicion ? { position: "fixed" as const, left: posicion.x, top: posicion.y, margin: 0 } : {}),
+        }}
+        className="relative flex min-w-0 flex-col border border-zinc-200 bg-white shadow-xl"
+      >
+        {/* Bordes y esquinas para cambiar el tamaño con el ratón. */}
+        {([
+          ["n", "absolute left-2 right-2 top-0 h-2 cursor-n-resize"],
+          ["s", "absolute bottom-0 left-2 right-2 h-2 cursor-s-resize"],
+          ["e", "absolute bottom-2 right-0 top-2 w-2 cursor-e-resize"],
+          ["w", "absolute bottom-2 left-0 top-2 w-2 cursor-w-resize"],
+          ["nw", "absolute left-0 top-0 h-3 w-3 cursor-nw-resize"],
+          ["ne", "absolute right-0 top-0 h-3 w-3 cursor-ne-resize"],
+          ["sw", "absolute bottom-0 left-0 h-3 w-3 cursor-sw-resize"],
+          ["se", "absolute bottom-0 right-0 h-3 w-3 cursor-se-resize"],
+        ] as const).map(([borde, clases]) => (
+          <div key={borde} onMouseDown={(e) => comenzarRedimension(borde, e)} className={`${clases} z-30`} />
+        ))}
+        <div onMouseDown={comenzarArrastre} className="shrink-0 cursor-move select-none border-l-4 border-red-900 px-4 py-2">
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-lg font-bold text-red-900">
@@ -227,7 +461,8 @@ const diferencia =
 
             <button
               type="button"
-              onClick={onCancel}
+              onClick={cerrarFormulario}
+              onMouseDown={(e) => e.stopPropagation()}
               className="text-xl font-bold text-zinc-400 hover:text-red-900"
             >
               ×
@@ -235,7 +470,7 @@ const diferencia =
           </div>
         </div>
 
-        <div className="space-y-2 p-3">
+        <div ref={cuerpoRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
           <div>
             <label className="mb-2 block text-sm font-medium">
               Tipo de pago
@@ -295,45 +530,32 @@ const diferencia =
 )}
 
 {socioSeleccionado && (
-  <div className="grid grid-cols-[24px_1fr_120px_120px] items-center gap-2 border-t py-1.5">
+  <div className="grid gap-2 border-t pt-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))" }}>
+    <div className="min-w-0">
+      <label className="mb-1 block text-xs font-medium">Socio</label>
+      <div className="truncate border border-zinc-200 bg-white px-2 py-2 text-xs" title={busquedaSocio}>
+        {busquedaSocio}
+      </div>
+    </div>
     <div>
-      <label className="mb-1 block text-sm font-medium">
-        Importe a cuenta
-      </label>
-
-      <input
-        type="number"
-        step="0.01"
-        value={importeSocio}
-        onChange={(e) => setImporteSocio(e.target.value)}
-        className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm"
-      />
+      <label className="mb-1 block text-xs font-medium">Fecha pago</label>
+      <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} className="w-full min-w-0 border border-zinc-300 bg-white px-2 py-2 text-sm" />
     </div>
-
-    <div className="md:col-span-2">
-      <label className="mb-1 block text-sm font-medium">
-        Observaciones
-      </label>
-
-      <input
-        value={observacionesSocio}
-        onChange={(e) => setObservacionesSocio(e.target.value)}
-        className="w-full border border-zinc-300 bg-white px-3 py-2 text-sm"
-      />
+    <div>
+      <label className="mb-1 block text-xs font-medium">Importe (€)</label>
+      <input type="number" min="0.01" step="0.01" value={importeSocio} onChange={(e) => setImporteSocio(e.target.value)} className="w-full min-w-0 border border-zinc-300 bg-white px-2 py-2 text-sm" />
     </div>
-
-    <div className="md:col-span-3">
-      <button
-        type="button"
-        onClick={registrarPagoSocioIndividual}
-        className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-      >
-        Registrar pago
+    <div className="flex min-w-0 flex-wrap items-end gap-2" style={{ gridColumn: "1 / -1" }}>
+      <div className="min-w-0 flex-1">
+        <label className="mb-1 block text-xs font-medium">Observaciones</label>
+        <input value={observacionesSocio} onChange={(e) => setObservacionesSocio(e.target.value)} className="w-full border border-zinc-300 bg-white px-2 py-2 text-sm" />
+      </div>
+      <button type="button" disabled={guardando} onClick={registrarPagoSocioIndividual} className="shrink-0 bg-red-900 px-3 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50">
+        {guardando ? "Guardando..." : "Registrar pago"}
       </button>
     </div>
   </div>
 )}
-
   </div>
 )}
 
@@ -348,13 +570,15 @@ const diferencia =
   />
 
   {pagadoresEncontrados.length > 0 && (
-    <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto border border-zinc-200 bg-white shadow-lg">
+    <div className="mt-1 max-h-44 w-full overflow-y-auto border border-zinc-200 bg-white shadow-lg">
       {pagadoresEncontrados.map((pagador) => (
         <button
           key={pagador.NUMCENS}
           type="button"
           onClick={() => {
             setNumcensPagador(String(pagador.NUMCENS));
+            setImporteTotal("");
+            setAplicaciones({});
             setBusquedaPagador(
               `${pagador.NUMCENS} · ${pagador.Apellidos}, ${pagador.Nombre}`
             );
@@ -385,8 +609,13 @@ const diferencia =
   )}
               {!cargandoSocios && sociosPagador.length > 0 && (
                 <>
+                  <div className="flex flex-wrap gap-3">
                   <div>
-                    <label className="mb-1 block text-sm font-medium">
+                    <label className="mb-1 block text-xs font-medium">Fecha pago</label>
+                    <input type="date" value={fechaPago} onChange={(e) => setFechaPago(e.target.value)} className="w-40 border border-zinc-300 bg-white px-2 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium">
                       Importe recibido
                     </label>
 
@@ -394,12 +623,18 @@ const diferencia =
                       type="number"
                       step="0.01"
                       value={importeTotal}
-                      onChange={(e) => setImporteTotal(e.target.value)}
+                      onChange={(e) => {
+                        const nuevo = e.target.value;
+                        setImporteTotal(nuevo);
+                        setAplicaciones((prev) => repartirPago(nuevo, sociosPagador, prev));
+                      }}
                       className="w-40 border border-zinc-300 bg-white px-3 py-2 text-sm"
                     />
                   </div>
+                  </div>
 
-                  <table className="w-full text-sm">
+                  <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[440px] text-sm">
                     <thead>
                       <tr className="border-b border-zinc-200 text-xs uppercase text-zinc-500">
                         <th className="py-2 text-center">✓</th>
@@ -423,7 +658,7 @@ const diferencia =
                                 false
                               }
                               onChange={(e) =>
-                                setAplicaciones((prev) => ({
+                                setAplicaciones((prev) => repartirPago(importeTotal, sociosPagador, {
                                   ...prev,
                                   [socio.NUMCENS]: {
                                     ...prev[socio.NUMCENS],
@@ -447,8 +682,11 @@ const diferencia =
                             <input
                               type="number"
                               step="0.01"
+                              min="0"
+                              max={Number(socio.Pendiente || 0)}
+                              disabled={!aplicaciones[socio.NUMCENS]?.seleccionado}
                               value={
-                                aplicaciones[socio.NUMCENS]?.importe ?? 0
+                                (aplicaciones[socio.NUMCENS]?.importe ?? 0) || ""
                               }
                               onChange={(e) =>
                                 setAplicaciones((prev) => ({
@@ -466,8 +704,9 @@ const diferencia =
                       ))}
                     </tbody>
                   </table>
+                  </div>
 
-                  <div className="mt-2 flex items-center justify-between gap-4">
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
   <div className="flex flex-col gap-0.5 text-sm">
     <p>
       Importe recibido:{" "}
@@ -491,6 +730,7 @@ const diferencia =
       }
     >
       Diferencia: {diferencia.toFixed(2)} €
+      {repartoInvalido && <span className="block text-xs">Algún importe supera el pendiente o no tiene dos decimales.</span>}
     </p>
   </div>
 
@@ -499,7 +739,7 @@ const diferencia =
     disabled={
       !importeTotal ||
       Math.abs(diferencia) >= 0.01 ||
-      totalAplicado <= 0
+      totalAplicado <= 0 || repartoInvalido || guardando
     }
     onClick={registrarPagoPagador}
     className="shrink-0 bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950 disabled:opacity-50"
