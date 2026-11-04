@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { normalizarTexto } from "@/lib/texto";
 
 function normalizar(texto: string) {

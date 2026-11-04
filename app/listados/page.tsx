@@ -5,7 +5,7 @@ import Link from "next/link";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../../lib/supabase";
 import EditarCargoHistorial from "../components/EditarCargoHistorial";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 function LinkSocio({ numcens, children }: { numcens: any; children: any }) {
   return (
@@ -35,6 +35,7 @@ const [orden, setOrden] = useState("NOMBRE");
     const [socios, setSocios] = useState<any[]>([]);
 const [error, setError] = useState<string | null>(null);
 const [cuotas, setCuotas] = useState<any[]>([]);
+const [familiasListado, setFamiliasListado] = useState<any[]>([]);
 const [formasPagoSocios, setFormasPagoSocios] = useState<any[]>([]);
 const [ejercicios, setEjercicios] = useState<any[]>([]);
 const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<number | null>(null);
@@ -127,6 +128,7 @@ useEffect(() => {
         .from("FAMILIAS")
         .select(`
           ID_Familia,
+          Nombre_Familia,
           Titular_NUMCENS
         `),
     ]);
@@ -143,6 +145,7 @@ useEffect(() => {
 
     const datosSocios = sociosData || [];
     const familias = familiasData || [];
+    setFamiliasListado(familias);
 
     function obtenerTelefono(socio: any) {
       return (
@@ -178,10 +181,12 @@ useEffect(() => {
       );
 
       const telefonoPropio = obtenerTelefono(datosSocio);
+      const datosFamilia = { ID_Familia: datosSocio?.ID_Familia ?? null };
 
       if (telefonoPropio) {
         return {
           ...socio,
+          ...datosFamilia,
           TelefonoListado: telefonoPropio,
           OrigenTelefono: "Propio",
           ContactoTelefono: `${socio.Nombre || ""} ${
@@ -193,6 +198,7 @@ useEffect(() => {
       if (!datosSocio?.ID_Familia) {
         return {
           ...socio,
+          ...datosFamilia,
           TelefonoListado: "",
           OrigenTelefono: "",
           ContactoTelefono: "",
@@ -214,6 +220,7 @@ useEffect(() => {
       if (telefonoTitular) {
         return {
           ...socio,
+          ...datosFamilia,
           TelefonoListado: telefonoTitular,
           OrigenTelefono: "Titular",
           ContactoTelefono: `${titular?.Nombre || ""} ${
@@ -236,6 +243,7 @@ useEffect(() => {
       if (telefonoFamiliar) {
         return {
           ...socio,
+          ...datosFamilia,
           TelefonoListado: telefonoFamiliar,
           OrigenTelefono: "Familiar",
           ContactoTelefono: `${otroAdulto?.Nombre || ""} ${
@@ -246,6 +254,7 @@ useEffect(() => {
 
       return {
         ...socio,
+        ...datosFamilia,
         TelefonoListado: "",
         OrigenTelefono: "",
         ContactoTelefono: "",
@@ -449,6 +458,49 @@ const sociosBaja = socios
         coincideBusqueda
       );
     });
+
+       // Familias: mismo criterio de filtros que Cuotas, pero agrupado por familia.
+       // El importe se toma de la vista contable del ejercicio seleccionado.
+       const sociosPorNumero = new Map(socios.map((socio: any) => [Number(socio.NUMCENS), socio]));
+       const familiasPorId = new Map(familiasListado.map((familia: any) => [Number(familia.ID_Familia), familia]));
+       const cuotasFamiliaFiltradas = cuotas
+         .map((cuota: any) => {
+           const socio = sociosPorNumero.get(Number(cuota.NUMCENS)) as any;
+           const idFamilia = socio?.ID_Familia == null ? null : Number(socio.ID_Familia);
+           if (idFamilia === null || !familiasPorId.has(idFamilia)) return null;
+           const familia = familiasPorId.get(idFamilia) as any;
+           return {
+             ...cuota,
+             ID_Familia: idFamilia,
+             Nombre_Familia: familia?.Nombre_Familia || `Familia ${idFamilia}`,
+             ComisionFamilia: socio?.Comision || "-",
+             LoteriaFamilia: socio?.ConLoteria ? "Sí" : "No",
+             PagadorFamilia: Number(cuota.NUMCENS) === Number(familia?.Titular_NUMCENS)
+               ? "Titular"
+               : (cuota.NUMCENS_Pagador ?? familia?.Titular_NUMCENS ?? "-"),
+           };
+         })
+         .filter((cuota): cuota is any => cuota !== null)
+         .filter((cuota: any) => {
+           const coincideTipo = filtroTipoCuota === "TODOS" || cuota.IDCuota === filtroTipoCuota;
+           const coincideEstado = filtroEstadoCuota === "TODOS" || cuota.EstadoPago === filtroEstadoCuota;
+           const coincideForma = filtroFormaPago === "TODAS" || cuota.Metodo === filtroFormaPago;
+           const pendiente = Number(cuota.Pendiente || 0);
+           const coincidePendiente = filtroPendiente === "TODOS" ||
+             (filtroPendiente === "SI" && pendiente > 0) ||
+             (filtroPendiente === "NO" && pendiente <= 0);
+           const busqueda = normalizarTexto(busquedaSocio);
+           const coincideBusqueda = !busqueda || normalizarTexto(
+             `${cuota.ID_Familia} ${cuota.Nombre_Familia} ${cuota.NUMCENS} ${cuota.Apellidos} ${cuota.Nombre}`
+           ).includes(busqueda);
+           return coincideTipo && coincideEstado && coincideForma && coincidePendiente && coincideBusqueda;
+         })
+         .sort((a: any, b: any) =>
+           a.Nombre_Familia.localeCompare(b.Nombre_Familia, "es", { sensitivity: "base" }) ||
+           a.ID_Familia - b.ID_Familia ||
+           String(a.Apellidos).localeCompare(String(b.Apellidos), "es", { sensitivity: "base" })
+         );
+       const totalFamiliasFiltradas = new Set(cuotasFamiliaFiltradas.map((c: any) => c.ID_Familia)).size;
 
       const tiposCuota = Array.from(
         new Set(cuotas.map((cuota) => cuota.IDCuota).filter(Boolean))
@@ -907,7 +959,28 @@ const sociosMostrados = sociosBase
     let filas: any[] = [];
     let nombreArchivo = "listado.csv";
   
-    if (listado === "CUOTAS") {
+    if (listado === "FAMILIAS") {
+      filas = cuotasFamiliaFiltradas.map((cuota: any, index: number) => {
+        const anterior = cuotasFamiliaFiltradas[index - 1];
+        const primeraFamilia = !anterior || Number(anterior.ID_Familia) !== Number(cuota.ID_Familia);
+        return {
+        "N.º familia": primeraFamilia ? cuota.ID_Familia : "",
+        Familia: primeraFamilia ? cuota.Nombre_Familia : "",
+        NUMCENS: cuota.NUMCENS,
+        Miembro: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+        Comisión: cuota.ComisionFamilia,
+        Lotería: cuota.LoteriaFamilia,
+        Pagador: cuota.PagadorFamilia,
+        Tipo: cuota.IDCuota || "",
+        "Cuota (€)": Number(cuota.Importe || 0),
+        "Pagado (€)": Number(cuota.TotalPagado || 0),
+        "Pendiente (€)": Number(cuota.Pendiente || 0),
+        "Forma pago": cuota.Metodo || "",
+        Estado: cuota.EstadoPago || "",
+      };
+      });
+      nombreArchivo = `familias_miembros_${ejercicioSeleccionado || ""}.csv`;
+    } else if (listado === "CUOTAS") {
       filas = cuotasFiltradas.map((cuota) => ({
         NUMCENS: cuota.NUMCENS || "",
         Socio: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
@@ -1063,6 +1136,43 @@ hoja["!cols"] = cabeceras.map((cabecera) => {
   };
 });
 
+// En Familias, enmarcar cada grupo con bordes reales en el archivo Excel.
+// Solo cambia el aspecto de esta exportación, no los datos ni otros listados.
+if (listado === "FAMILIAS") {
+  const columnas = cabeceras.length;
+  const borde = { style: "thin", color: { rgb: "64748B" } };
+  const fondo = ["FFFFFF", "F1F5F9"];
+  let grupo = -1;
+
+  for (let i = 0; i < cuotasFamiliaFiltradas.length; i++) {
+    const actual = cuotasFamiliaFiltradas[i];
+    const anterior = cuotasFamiliaFiltradas[i - 1];
+    const siguiente = cuotasFamiliaFiltradas[i + 1];
+    const primera = !anterior || Number(actual.ID_Familia) !== Number(anterior.ID_Familia);
+    const ultima = !siguiente || Number(actual.ID_Familia) !== Number(siguiente.ID_Familia);
+    if (primera) grupo++;
+
+    for (let c = 0; c < columnas; c++) {
+      const direccion = XLSX.utils.encode_cell({ r: i + 1, c });
+      const celda = hoja[direccion];
+      if (!celda) continue;
+      celda.s = {
+        fill: { fgColor: { rgb: fondo[grupo % fondo.length] } },
+        alignment: { vertical: "center" },
+        font: primera && c < 2 ? { bold: true } : {},
+        border: {
+          ...(primera ? { top: borde } : {}),
+          ...(ultima ? { bottom: borde } : {}),
+          ...(c === 0 ? { left: borde } : {}),
+          ...(c === columnas - 1 ? { right: borde } : {}),
+        },
+      };
+    }
+  }
+  hoja["!rows"] = [{ hpt: 25 }, ...cuotasFamiliaFiltradas.map(() => ({ hpt: 22 }))];
+  hoja["!freeze"] = { xSplit: 0, ySplit: 1 };
+}
+
 const libro = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(libro, hoja, "Listado");
 
@@ -1103,6 +1213,14 @@ XLSX.writeFile(
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
+      {listado === "FAMILIAS" && (
+        <style>{`@media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          table { font-size: 9px !important; }
+          th, td { padding: 3px 4px !important; }
+          tr { break-inside: avoid; }
+        }`}</style>
+      )}
       <Sidebar />
 
       <main className="min-w-0 flex-1 p-8">
@@ -1170,8 +1288,14 @@ XLSX.writeFile(
   onClick={() => setListado("CUOTAS")}
 />
 
-<BotonListado
-  titulo="Banda"
+ <BotonListado
+   titulo="Familias"
+   activo={listado === "FAMILIAS"}
+   onClick={() => setListado("FAMILIAS")}
+/>
+
+ <BotonListado
+   titulo="Banda"
   activo={listado === "BANDA"}
   onClick={() => setListado("BANDA")}
 />
@@ -1204,7 +1328,8 @@ XLSX.writeFile(
   {listado === "ACTIVOS" && "Socios activos"}
   {listado === "NACIMIENTO" && "Nacimiento"}
   {listado === "BAJAS" && "Socios de baja"}
-  {listado === "CUOTAS" && "Cuotas"}
+   {listado === "CUOTAS" && "Cuotas"}
+   {listado === "FAMILIAS" && "Familias y miembros"}
   {listado === "BANDA" && "Banda"}
   {listado === "PAGADORES" && "Pagadores"}
   {listado === "PAGADOR_SOCIOS" && "Pagador / Socios"}
@@ -1213,8 +1338,10 @@ XLSX.writeFile(
 
 
 <p className="text-xs text-zinc-500">
-  {listado === "CUOTAS"
+   {listado === "CUOTAS"
     ? `Mostrando ${cuotasFiltradas.length} cuotas`
+     : listado === "FAMILIAS"
+     ? `Mostrando ${cuotasFamiliaFiltradas.length} socios de ${totalFamiliasFiltradas} familias`
     : listado === "NACIMIENTO"
     ? `Mostrando ${sociosNacimiento.length} socios`
     : listado === "CARGOS"
@@ -1233,7 +1360,7 @@ XLSX.writeFile(
   type="text"
   value={busquedaSocio}
   onChange={(e) => setBusquedaSocio(e.target.value)}
-  placeholder="Buscar socio..."
+  placeholder={listado === "FAMILIAS" ? "Buscar familia o socio..." : "Buscar socio..."}
   className="w-64 border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-red-900"
 />
   <button
@@ -1373,7 +1500,7 @@ XLSX.writeFile(
   </div>
 )}
 
- {listado === "CUOTAS" && (
+ {(listado === "CUOTAS" || listado === "FAMILIAS") && (
   <div className="border-t border-zinc-200 bg-white px-4 py-4 print:hidden">
     <div className="flex flex-wrap items-center gap-4">
       <SelectFiltro
@@ -1407,7 +1534,7 @@ XLSX.writeFile(
   </div>
 )}
 
-{listado === "CUOTAS" && (
+{(listado === "CUOTAS" || listado === "FAMILIAS") && (
   <div className="hidden border-t border-zinc-200 px-4 py-2 text-xs text-zinc-600 print:flex print:flex-wrap print:items-center print:gap-x-6">
     <span>
       <strong>Tipo:</strong>{" "}
@@ -1453,6 +1580,22 @@ XLSX.writeFile(
         <th className="px-4 py-3">Socio</th>
         <th className="px-4 py-3">Comisión</th>
         <th className="px-4 py-3">Sexo</th>
+      </>
+    ) : listado === "FAMILIAS" ? (
+      <>
+        <th className="px-3 py-3">N.º familia</th>
+        <th className="px-3 py-3">Familia</th>
+        <th className="px-3 py-3">NUMCENS</th>
+        <th className="px-3 py-3">Miembro</th>
+        <th className="px-3 py-3">Comisión</th>
+        <th className="px-3 py-3">Lotería</th>
+        <th className="px-3 py-3">Pagador</th>
+        <th className="px-3 py-3">Tipo</th>
+        <th className="px-3 py-3 text-right">Cuota</th>
+        <th className="px-3 py-3 text-right">Pagado</th>
+        <th className="px-3 py-3 text-right">Pendiente</th>
+        <th className="px-3 py-3">Forma pago</th>
+        <th className="px-3 py-3">Estado</th>
       </>
     ) : listado === "CUOTAS" ? (
       <>
@@ -1586,6 +1729,30 @@ XLSX.writeFile(
         </td>
       </tr>
     ))
+  ) : listado === "FAMILIAS" ? (
+    cuotasFamiliaFiltradas.map((cuota: any, index: number) => {
+      const anterior = cuotasFamiliaFiltradas[index - 1];
+      const primeraFamilia = !anterior || anterior.ID_Familia !== cuota.ID_Familia;
+      return (
+        <tr key={cuota.IDCuotaSocio} className={`border-t border-zinc-200 hover:bg-red-50 ${primeraFamilia ? "border-t-2 border-t-zinc-400" : ""}`}>
+          <td className="px-3 py-2 text-zinc-600">{cuota.ID_Familia}</td>
+          <td className="px-3 py-2 font-medium">
+            {primeraFamilia ? <Link href={`/familias/${cuota.ID_Familia}`} className="text-red-900 hover:underline">{cuota.Nombre_Familia}</Link> : ""}
+          </td>
+          <td className="px-3 py-2">{cuota.NUMCENS}</td>
+          <td className="px-3 py-2 whitespace-nowrap"><LinkSocio numcens={cuota.NUMCENS}>{cuota.Apellidos}, {cuota.Nombre}</LinkSocio></td>
+          <td className="px-3 py-2">{cuota.ComisionFamilia}</td>
+          <td className="px-3 py-2">{cuota.LoteriaFamilia}</td>
+          <td className="px-3 py-2">{cuota.PagadorFamilia}</td>
+          <td className="px-3 py-2">{cuota.IDCuota || "-"}</td>
+          <td className="px-3 py-2 text-right whitespace-nowrap">{Number(cuota.Importe || 0).toFixed(2)} €</td>
+          <td className="px-3 py-2 text-right whitespace-nowrap text-green-700">{Number(cuota.TotalPagado || 0).toFixed(2)} €</td>
+          <td className="px-3 py-2 text-right whitespace-nowrap text-red-700">{Number(cuota.Pendiente || 0).toFixed(2)} €</td>
+          <td className="px-3 py-2">{cuota.Metodo || "-"}</td>
+          <td className="px-3 py-2">{cuota.EstadoPago || "-"}</td>
+        </tr>
+      );
+    })
   ) : listado === "CUOTAS" ? (
     cuotasFiltradas.map((cuota) => (
       <tr

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Sidebar from "@/app/components/Sidebar";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style"
 import ResumenEconomicoSorteos from "@/app/loterias/componentes/ResumenEconomicoSorteos";
 
 export default function ControlSemanalPage() {

@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabaseClient";
 import Sidebar from "../components/Sidebar";
 import RegistrarPagoGeneralButton from "../components/RegistrarPagoGeneralButton";
 import { normalizarTexto } from "@/lib/texto";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 export default function CuotasPage() {
   const [cuotas, setCuotas] = useState<any[]>([]);

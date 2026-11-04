@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import Sidebar from "../../components/Sidebar";
 import { supabase } from "../../../lib/supabaseClient";
 import MonederoSocioDesplegable from "../../components/MonederoSocioDesplegable";

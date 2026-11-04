@@ -41,12 +41,13 @@ export default function MiMonederoPage() {
     setCargando(true);
     setError("");
 
-    const { data, error } = await supabase.rpc(
+    // La RPC no figura en los tipos generados del cliente; especificamos su respuesta.
+    const { data, error } = (await (supabase as any).rpc(
       "consultar_mi_monedero",
       {
         p_token: token,
       }
-    );
+    )) as { data: Monedero | null; error: { message: string } | null };
 
     if (error) {
       console.error(error);

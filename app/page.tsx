@@ -5,7 +5,7 @@ import Sidebar from "./components/Sidebar";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { normalizarTexto } from "@/lib/texto";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style"
 
 export default function Home() {
   const [socios, setSocios] = useState<any[]>([]);

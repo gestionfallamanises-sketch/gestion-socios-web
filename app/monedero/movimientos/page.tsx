@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Sidebar from "../../components/Sidebar";
 import { supabase } from "../../../lib/supabaseClient";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 export default function MovimientosMonederoPage() {
 
@@ -68,14 +68,14 @@ async function cargarMovimientos() {
     return;
   }
 
-  const monederosPorId = new Map(
+  const monederosPorId = new Map<string, { NUMCENS: number | string | null }>(
     (monederosData || []).map((monedero: any) => [
       String(monedero.IDMonedero),
       monedero,
     ])
   );
 
-  const sociosPorNumcens = new Map(
+  const sociosPorNumcens = new Map<string, { Nombre: string | null; Apellidos: string | null }>(
     (sociosData || []).map((socio: any) => [
       String(socio.NUMCENS),
       socio,

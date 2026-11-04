@@ -1,6 +1,6 @@
 "use client";
 
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 type Props = {
   filas: any[];

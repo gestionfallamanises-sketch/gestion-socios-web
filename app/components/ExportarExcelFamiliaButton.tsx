@@ -41,7 +41,7 @@ export default function ExportarExcelFamiliaButton({
 }) {
   async function exportar() {
     // Carga la librería al pulsar, sin incluirla en el código inicial de la página.
-    const XLSX = await import("xlsx");
+    const XLSX = await import("xlsx-js-style");
     const libro = XLSX.utils.book_new();
 
     const resumen = bloques.map((socio) => ({
