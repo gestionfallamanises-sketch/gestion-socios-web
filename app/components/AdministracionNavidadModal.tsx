@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export default function AdministracionNavidadModal({
     abierto,
@@ -19,6 +19,49 @@ pendienteAdministracion,
     actualizarPagoAdministracion,
     eliminarPagoAdministracion,
   }: any) {
+
+  // La cabecera permite arrastrar la ventana; el tirador inferior derecho
+  // permite cambiar su ancho y alto mediante el resize nativo del navegador.
+  const [posicion, setPosicion] = useState({ x: 0, y: 0 });
+  const arrastre = useRef<{
+    inicioX: number;
+    inicioY: number;
+    origenX: number;
+    origenY: number;
+  } | null>(null);
+
+  useEffect(() => {
+    function mover(evento: MouseEvent) {
+      if (!arrastre.current) return;
+      const { inicioX, inicioY, origenX, origenY } = arrastre.current;
+      setPosicion({
+        x: origenX + evento.clientX - inicioX,
+        y: origenY + evento.clientY - inicioY,
+      });
+    }
+
+    function terminar() {
+      arrastre.current = null;
+    }
+
+    window.addEventListener("mousemove", mover);
+    window.addEventListener("mouseup", terminar);
+    return () => {
+      window.removeEventListener("mousemove", mover);
+      window.removeEventListener("mouseup", terminar);
+    };
+  }, []);
+
+  function iniciarArrastre(evento: React.MouseEvent<HTMLDivElement>) {
+    if (evento.button !== 0 || (evento.target as HTMLElement).closest("button")) return;
+    arrastre.current = {
+      inicioX: evento.clientX,
+      inicioY: evento.clientY,
+      origenX: posicion.x,
+      origenY: posicion.y,
+    };
+    evento.preventDefault();
+  }
 
   const hoy = new Date().toISOString().slice(0, 10);
 
@@ -165,10 +208,21 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+      <div
+        className="relative flex min-h-[320px] max-h-[calc(100vh-32px)] min-w-[min(340px,calc(100vw-32px))] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        style={{
+          width: "min(1100px, calc(100vw - 32px))",
+          height: "min(650px, calc(100vh - 32px))",
+          resize: "both",
+          transform: `translate(${posicion.x}px, ${posicion.y}px)`,
+        }}
+      >
 
         {/* CABECERA */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+        <div
+          onMouseDown={iniciarArrastre}
+          className="flex shrink-0 cursor-move select-none items-center justify-between border-b border-zinc-200 px-4 py-3"
+        >
           <div>
             <h2 className="text-xl font-bold text-zinc-900">
               Administración de Loterías · Navidad
@@ -188,7 +242,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-auto p-4">
 
         <div className="mb-2 text-sm font-semibold text-zinc-700">
   Totales Falla + Virgen
@@ -240,7 +294,10 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
              Décimos: compra y edición
             </h3>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+            <div
+              className="grid items-end gap-3"
+              style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(125px, 100%), 1fr))" }}
+            >
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-600">
                   Fecha

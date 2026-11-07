@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 
 export default function AdministracionNinoModal({
     abierto,
@@ -19,6 +19,44 @@ pendienteAdministracion,
     actualizarPagoAdministracion,
     eliminarPagoAdministracion,
   }: any) {
+
+  // La posición se guarda al arrastrar la cabecera; el tamaño se ajusta
+  // desde cualquier borde o esquina mediante la propiedad CSS resize.
+  const ventanaRef = useRef<HTMLDivElement>(null);
+  const [posicion, setPosicion] = useState<{ x: number; y: number } | null>(null);
+  const arrastreRef = useRef<{
+    inicioX: number;
+    inicioY: number;
+    izquierda: number;
+    arriba: number;
+  } | null>(null);
+
+  function iniciarArrastre(evento: React.MouseEvent<HTMLDivElement>) {
+    if (evento.button !== 0 || !ventanaRef.current) return;
+    const rect = ventanaRef.current.getBoundingClientRect();
+    arrastreRef.current = {
+      inicioX: evento.clientX,
+      inicioY: evento.clientY,
+      izquierda: rect.left,
+      arriba: rect.top,
+    };
+    evento.preventDefault();
+  }
+
+  function moverVentana(evento: React.MouseEvent<HTMLDivElement>) {
+    const arrastre = arrastreRef.current;
+    if (!arrastre || !ventanaRef.current) return;
+    const ancho = ventanaRef.current.offsetWidth;
+    const alto = ventanaRef.current.offsetHeight;
+    setPosicion({
+      x: Math.max(0, Math.min(window.innerWidth - Math.min(ancho, window.innerWidth), arrastre.izquierda + evento.clientX - arrastre.inicioX)),
+      y: Math.max(0, Math.min(window.innerHeight - Math.min(alto, window.innerHeight), arrastre.arriba + evento.clientY - arrastre.inicioY)),
+    });
+  }
+
+  function terminarArrastre() {
+    arrastreRef.current = null;
+  }
 
   const hoy = new Date().toISOString().slice(0, 10);
 
@@ -164,31 +202,50 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
   if (!abierto) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 bg-black/40" onMouseMove={moverVentana} onMouseUp={terminarArrastre} onMouseLeave={terminarArrastre}>
+      <div
+        ref={ventanaRef}
+        className="fixed flex flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        style={{
+          left: posicion?.x ?? "50%",
+          top: posicion?.y ?? "50%",
+          transform: posicion ? undefined : "translate(-50%, -50%)",
+          width: "min(1050px, calc(100vw - 32px))",
+          height: "min(660px, calc(100vh - 32px))",
+          minWidth: "min(340px, calc(100vw - 16px))",
+          minHeight: "260px",
+          maxWidth: "100vw",
+          maxHeight: "100vh",
+          resize: "both",
+        }}
+      >
 
-        {/* CABECERA */}
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+        {/* CABECERA: arrastra desde aquí, sin interferir con el botón cerrar */}
+        <div
+          className="flex shrink-0 cursor-move select-none items-center justify-between border-b border-zinc-200 px-4 py-3"
+          onMouseDown={iniciarArrastre}
+        >
           <div>
             <h2 className="text-xl font-bold text-zinc-900">
               Administración de Loterías · Niño
             </h2>
 
             <p className="mt-1 text-sm text-zinc-500">
-              Compra de décimos y pagos realizados a la Administración.
+              Cada papeleta incluye dos números: la mitad de los décimos corresponde a cada uno.
             </p>
           </div>
 
           <button
             type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={onClose}
-            className="rounded px-3 py-1 text-xl text-zinc-500 hover:bg-zinc-100"
+            className="cursor-pointer rounded px-3 py-1 text-xl text-zinc-500 hover:bg-zinc-100"
           >
             ×
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-auto p-4">
 
         <div className="mb-2 text-sm font-semibold text-zinc-700">
   Totales Falla + Virgen
@@ -198,7 +255,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
 <div className="mb-4 overflow-hidden rounded border border-zinc-200 bg-zinc-50">
 <div className="grid grid-cols-5 divide-x divide-zinc-200 text-center text-sm">
     <div className="px-2 py-2">
-      <div className="text-zinc-500">Décimos</div>
+      <div className="text-zinc-500">Décimos (½ por número)</div>
       <div className="mt-0.5 font-semibold text-zinc-900">
         {totalDecimos}
       </div>
@@ -237,12 +294,12 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
           {/* NUEVA COMPRA */}
           <div className="mb-6 rounded border border-zinc-200 bg-zinc-50 p-4">
             <h3 className="mb-3 font-semibold text-zinc-900">
-             Décimos: compra y edición
+             Décimos (½ para cada número): compra y edición
             </h3>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))" }}>
               <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">
+                <label className="mb-1 flex min-h-[32px] items-end text-xs font-medium text-zinc-600">
                   Fecha
                 </label>
 
@@ -260,7 +317,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">
+                <label className="mb-1 flex min-h-[32px] items-end text-xs font-medium text-zinc-600">
                   Tipo
                 </label>
 
@@ -280,8 +337,8 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">
-                  Décimos
+                <label className="mb-1 flex min-h-[32px] items-end text-xs font-medium text-zinc-600">
+                  Décimos (½ x n)
                 </label>
 
                 <input
@@ -299,7 +356,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">
+                <label className="mb-1 flex min-h-[32px] items-end text-xs font-medium text-zinc-600">
                   Papeletas emitidas
                 </label>
 
@@ -318,19 +375,19 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">Serie desde</label>
+                <label className="mb-1 flex min-h-[32px] items-end text-xs font-medium text-zinc-600">Serie desde</label>
                 <input type="number" min="1" step="1" value={nuevaEntrega.SerieDesde}
                   onChange={(e) => setNuevaEntrega({...nuevaEntrega, SerieDesde: e.target.value})}
                   className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-600">Serie hasta</label>
+                <label className="mb-1 flex min-h-[32px] items-end text-xs font-medium text-zinc-600">Serie hasta</label>
                 <input type="number" min="1" step="1" value={nuevaEntrega.SerieHasta}
                   onChange={(e) => setNuevaEntrega({...nuevaEntrega, SerieHasta: e.target.value})}
                   className="w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm" />
               </div>
               <div>
-  <label className="mb-1 block text-xs font-medium text-zinc-600">
+  <label className="mb-1 flex min-h-[32px] items-end text-xs font-medium text-zinc-600">
     Importe
   </label>
 
@@ -339,7 +396,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
   </div>
 </div>
 
-              <div className="flex items-end">
+              <div className="flex items-end pb-0.5">
               <div className="flex items-center justify-end gap-1.5">
   <button
     type="button"
@@ -397,7 +454,7 @@ const [pagoAdministracionEditando, setPagoAdministracionEditando] =
         <tr>
           <th className="px-2 py-2 text-left">Fecha</th>
           <th className="px-2 py-2 text-center">Tipo</th>
-          <th className="px-2 py-2 text-right">Décimos</th>
+          <th className="px-2 py-2 text-right" title="La mitad corresponde al primer número y la otra mitad al segundo">Décimos (½ x n)</th>
           <th className="px-2 py-2 text-right">Papeletas</th>
           <th className="px-2 py-2 text-right">Desde</th>
           <th className="px-2 py-2 text-right">Hasta</th>

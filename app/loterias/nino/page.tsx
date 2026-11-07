@@ -2340,9 +2340,12 @@ movimientoEditando={movimientoEditando}
     <button type="button" onClick={() => setConfigAdminAbierta(v => !v)}
       aria-expanded={configAdminAbierta}
       className="flex w-full flex-wrap items-center justify-between gap-x-5 gap-y-2 bg-zinc-50 px-4 py-3 text-left hover:bg-zinc-100">
-      <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm font-semibold uppercase text-zinc-700">
+      <span className="inline-flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold uppercase text-zinc-700">
         <span aria-hidden="true" className="text-base">{configAdminAbierta ? "⌃" : "⌄"}</span>
         Administración
+        <span className="ml-2 whitespace-normal text-[11px] font-normal normal-case text-zinc-500 sm:text-xs">
+          Cada papeleta lleva 2 números; los décimos indicados se reparten por mitad entre ambos.
+        </span>
       </span>
       <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs sm:text-sm">
         <span className="text-zinc-700">Total: <strong className="text-zinc-900">{euros(totalAdministracionGeneral)}</strong></span>
@@ -2358,7 +2361,7 @@ movimientoEditando={movimientoEditando}
   <div className="grid grid-cols-9 items-center gap-2 bg-zinc-100 px-2 py-2.5 text-[11px] font-semibold text-zinc-600 md:grid-cols-9 md:text-xs">
         <div>Tipo</div>
     <div>Número</div>
-    <div className="text-right">Décimos</div>
+    <div className="text-right">Décimos ½</div>
     <div className="text-right">Precio Décimo</div>
     <div className="text-right">Papeletas</div>
     <div className="text-right">Importe Papeleta</div>
