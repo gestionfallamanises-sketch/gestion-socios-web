@@ -955,6 +955,27 @@ const sociosMostrados = sociosBase
     });
   });
 
+  // Usa los campos separados del socio cuando se conoce su NUMCENS.
+  // Para pagadores externos, separa el texto solo si viene como "Apellidos, Nombre".
+  function obtenerNombrePagador(pagador: any): { apellidos: string; nombre: string } {
+    const socio = socios.find((s: any) =>
+      Number(s.NUMCENS) === Number(pagador.Pagador)
+    );
+    if (socio) {
+      return { apellidos: socio.Apellidos || "", nombre: socio.Nombre || "" };
+    }
+    const texto = String(pagador.NombrePagador || "").trim();
+    const separador = texto.indexOf(",");
+    if (separador >= 0) {
+      return {
+        apellidos: texto.slice(0, separador).trim(),
+        nombre: texto.slice(separador + 1).trim(),
+      };
+    }
+    // Evita adivinar los apellidos cuando no hay una separación fiable.
+    return { apellidos: "", nombre: texto };
+  }
+
   function exportarExcel() {
     let filas: any[] = [];
     let nombreArchivo = "listado.csv";
@@ -967,7 +988,8 @@ const sociosMostrados = sociosBase
         "N.º familia": primeraFamilia ? cuota.ID_Familia : "",
         Familia: primeraFamilia ? cuota.Nombre_Familia : "",
         NUMCENS: cuota.NUMCENS,
-        Miembro: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+        Apellidos: cuota.Apellidos || "",
+        Nombre: cuota.Nombre || "",
         Comisión: cuota.ComisionFamilia,
         Lotería: cuota.LoteriaFamilia,
         Pagador: cuota.PagadorFamilia,
@@ -983,7 +1005,8 @@ const sociosMostrados = sociosBase
     } else if (listado === "CUOTAS") {
       filas = cuotasFiltradas.map((cuota) => ({
         NUMCENS: cuota.NUMCENS || "",
-        Socio: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+        Apellidos: cuota.Apellidos || "",
+        Nombre: cuota.Nombre || "",
         Tipo: cuota.IDCuota || "",
         Importe: Number(cuota.Importe || 0).toFixed(2),
         Pagado: Number(cuota.TotalPagado || 0).toFixed(2),
@@ -997,7 +1020,8 @@ const sociosMostrados = sociosBase
     } else if (listado === "NACIMIENTO") {
       filas = sociosNacimiento.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
-        Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+        Apellidos: socio.Apellidos || "",
+        Nombre: socio.Nombre || "",
         "Fecha nacimiento": socio["FECHA de NACIMIENTO"]
           ? new Date(
               `${socio["FECHA de NACIMIENTO"]}T00:00:00`
@@ -1018,7 +1042,8 @@ const sociosMostrados = sociosBase
     } else if (listado === "PAGADORES") {
       filas = pagadoresFiltrados.map((pagador) => ({
         Pagador: pagador.Pagador || "",
-        Nombre: pagador.NombrePagador || "",
+        Apellidos: obtenerNombrePagador(pagador).apellidos,
+        Nombre: obtenerNombrePagador(pagador).nombre,
         Método: pagador.Metodo || "",
         Titular: pagador.TitularCuenta || "",
         IBAN: pagador.IBAN || "",
@@ -1031,12 +1056,18 @@ const sociosMostrados = sociosBase
       filas = pagadorSocios.map((cuota) => ({
         "NUMCENS pagador":
           cuota.NUMCENS_Pagador || cuota.NUMCENS || "",
-        Pagador:
-          cuota.PagadorNombre || "Mismo socio",
+        "Apellidos pagador": obtenerNombrePagador({
+          Pagador: cuota.NUMCENS_Pagador ?? cuota.NUMCENS,
+          NombrePagador: cuota.PagadorNombre || `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+        }).apellidos,
+        "Nombre pagador": obtenerNombrePagador({
+          Pagador: cuota.NUMCENS_Pagador ?? cuota.NUMCENS,
+          NombrePagador: cuota.PagadorNombre || `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+        }).nombre,
         "NUMCENS socio":
           cuota.NUMCENS || "",
-        Socio:
-          `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
+        "Apellidos socio": cuota.Apellidos || "",
+        "Nombre socio": cuota.Nombre || "",
         Método:
           cuota.Metodo || "",
         Cuota:
@@ -1048,7 +1079,8 @@ const sociosMostrados = sociosBase
     } else if (listado === "CARGOS") {
       filas = cargosFiltrados.map((fila) => ({
         NUMCENS: fila.NUMCENS || "",
-        Socio: `${fila.socio?.Apellidos || ""}, ${fila.socio?.Nombre || ""}`,
+        Apellidos: fila.socio?.Apellidos || "",
+        Nombre: fila.socio?.Nombre || "",
         Comisión: fila.socio?.Comision || "",
         Cargo: fila.Cargo || "",
         Categoría:
@@ -1064,7 +1096,8 @@ const sociosMostrados = sociosBase
     } else if (listado === "BANDA") {
       filas = sociosMostrados.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
-        Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+        Apellidos: socio.Apellidos || "",
+        Nombre: socio.Nombre || "",
         Comisión: socio.Comision || "",
         Sexo: socio.SEXE || "",
       }));
@@ -1074,7 +1107,8 @@ const sociosMostrados = sociosBase
     } else {
       filas = sociosMostrados.map((socio) => ({
         NUMCENS: socio.NUMCENS || "",
-        Socio: `${socio.Apellidos || ""}, ${socio.Nombre || ""}`,
+        Apellidos: socio.Apellidos || "",
+        Nombre: socio.Nombre || "",
     
         ...((listado === "ACTIVOS" || listado === "BAJAS")
   ? {
