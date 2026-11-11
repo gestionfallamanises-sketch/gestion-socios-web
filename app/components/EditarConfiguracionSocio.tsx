@@ -33,6 +33,24 @@ export default function EditarConfiguracionSocio({
   const [forma, setForma] = useState((metodo || "Efectivo").toUpperCase() === "BANCO" ? "Banco" : "Efectivo");
   const [plazos, setPlazos] = useState(numeroPlazos && numeroPlazos >= 1 ? numeroPlazos : 10);
   const [nuevoPagador, setNuevoPagador] = useState(String(pagador ?? numcens));
+  const [busquedaPagador, setBusquedaPagador] = useState("");
+const [mostrarResultados, setMostrarResultados] = useState(false);
+
+const normalizar = (texto: string) =>
+  texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+const pagadoresFiltrados = busquedaPagador.trim()
+  ? pagadores
+      .filter((p) =>
+        normalizar(`${p.NUMCENS} ${p.Nombre} ${p.Apellidos}`)
+          .includes(normalizar(busquedaPagador.trim()))
+      )
+      .slice(0, 15)
+  : [];
+
+const pagadorSeleccionado = pagadores.find(
+  (p) => Number(p.NUMCENS) === Number(nuevoPagador)
+);
   const [guardando, setGuardando] = useState(false);
 
   const metodoOriginal = (metodo || "Efectivo").toUpperCase() === "BANCO" ? "Banco" : "Efectivo";
@@ -102,10 +120,53 @@ export default function EditarConfiguracionSocio({
             </>}
 
             <label htmlFor={`pagador-${numcens}`} className="text-xs font-medium text-zinc-600">Pagador</label>
-            <select id={`pagador-${numcens}`} value={nuevoPagador} onChange={(e) => setNuevoPagador(e.target.value)} className="min-w-0 w-full border border-zinc-300 px-2 py-1.5 text-sm">
-              {!pagadores.some((p) => p.NUMCENS === Number(nuevoPagador)) && <option value={nuevoPagador}>Pagador actual Nº {nuevoPagador}</option>}
-              {pagadores.map((p) => <option key={p.NUMCENS} value={p.NUMCENS}>{p.NUMCENS} · {p.Nombre} {p.Apellidos}</option>)}
-            </select>
+            <div className="relative min-w-0">
+  <input
+    id={`pagador-${numcens}`}
+    type="text"
+    value={mostrarResultados
+      ? busquedaPagador
+      : pagadorSeleccionado
+        ? `${pagadorSeleccionado.NUMCENS} · ${pagadorSeleccionado.Nombre} ${pagadorSeleccionado.Apellidos}`
+        : `Nº ${nuevoPagador}`}
+    onFocus={() => {
+      setBusquedaPagador("");
+      setMostrarResultados(true);
+    }}
+    onChange={(e) => {
+      setBusquedaPagador(e.target.value);
+      setMostrarResultados(true);
+    }}
+    placeholder="Buscar por número, nombre o apellidos..."
+    autoComplete="off"
+    className="min-w-0 w-full border border-zinc-300 px-2 py-1.5 text-sm"
+  />
+
+  {mostrarResultados && busquedaPagador.trim() !== "" && (
+    <div className="absolute z-[100] mt-1 max-h-52 w-full overflow-y-auto border border-zinc-300 bg-white shadow-lg">
+      {pagadoresFiltrados.length > 0 ? (
+        pagadoresFiltrados.map((p) => (
+          <button
+            key={p.NUMCENS}
+            type="button"
+            onClick={() => {
+              setNuevoPagador(String(p.NUMCENS));
+              setBusquedaPagador("");
+              setMostrarResultados(false);
+            }}
+            className="block w-full px-3 py-2 text-left text-sm hover:bg-red-50"
+          >
+            {p.NUMCENS} · {p.Nombre} {p.Apellidos}
+          </button>
+        ))
+      ) : (
+        <div className="px-3 py-2 text-sm text-zinc-500">
+          No se han encontrado socios
+        </div>
+      )}
+    </div>
+  )}
+</div>
           </div>
 
           <p className="mt-3 text-xs text-zinc-500">Los pagos y remesas protegidos no se modificarán.</p>

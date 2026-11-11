@@ -127,13 +127,21 @@ if (errorFormasPago) {
     Descripcion: t.Descripcion,
     Importe: t.Importe,
   }));
-  const pagadoresElegibles = miembrosAny.filter(
-    (s) => String(s.Estado || "").toLowerCase() === "activo"
-  ).map((s) => ({
-    NUMCENS: Number(s.NUMCENS),
-    Nombre: String(s.Nombre || ""),
-    Apellidos: String(s.Apellidos || ""),
-  }));
+  const { data: todosLosSocios, error: errorPagadores } = await supabase
+  .from("SOCIOS")
+  .select("NUMCENS, Nombre, Apellidos, Estado")
+  .order("Apellidos", { ascending: true })
+  .range(0, 9999);
+
+if (errorPagadores) {
+  console.error("Error cargando pagadores:", errorPagadores.message);
+}
+
+const pagadoresElegibles = ((todosLosSocios || []) as any[]).map((s) => ({
+  NUMCENS: Number(s.NUMCENS),
+  Nombre: String(s.Nombre || ""),
+  Apellidos: String(s.Apellidos || ""),
+}));
 
   const cuotasActuales =
     cuotasFamiliaAny?.filter(

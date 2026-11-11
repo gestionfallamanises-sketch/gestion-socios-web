@@ -401,19 +401,47 @@ const diferencia =
     setSociosPagador([]);
     setAplicaciones({});
     setImporteTotal("");
-  
+
     if (texto.trim().length < 2) {
       setPagadoresEncontrados([]);
       return;
     }
-  
+
+    // Buscar solo entre pagadores configurados en formas de pago activas.
+    const { data: formas, error: errorFormas } = await supabase
+      .from("FORMAS_PAGO_SOCIOS")
+      .select("NUMCENS_Pagador")
+      .eq("Activo", true)
+      .not("NUMCENS_Pagador", "is", null)
+      .limit(5000);
+
+    if (errorFormas) {
+      alert(errorFormas.message);
+      return;
+    }
+
+    const idsPagadores = [...new Set(
+      (formas || [])
+        .map((forma: any) => Number(forma.NUMCENS_Pagador))
+        .filter((id: number) => Number.isInteger(id) && id > 0)
+    )];
+
+    if (idsPagadores.length === 0) {
+      setPagadoresEncontrados([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("SOCIOS")
       .select("NUMCENS, Nombre, Apellidos")
-      .order("Apellidos", { ascending: true })
-      .limit(5000);
+      .in("NUMCENS", idsPagadores)
+      .order("Apellidos", { ascending: true });
 
-    if (error) { alert(error.message); return; }
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
     const termino = normalizarTexto(texto.trim());
     setPagadoresEncontrados((data || []).filter((socio: any) => {
       const nombre = normalizarTexto(`${socio.Apellidos || ""} ${socio.Nombre || ""}`);
