@@ -225,33 +225,63 @@ const totalPendiente =
       return movimientos;
     }
 
-    const movimientosHistorial = [
+    // Conservar todas las aplicaciones individuales en Supabase, pero mostrar
+    // un único movimiento por cuota + remesa + estado (cobrado/devuelto).
+    // Los pagos manuales, gastos de devolución e intentos sin cobro se mantienen.
+    const movimientosSinAgrupar = [
       ...plazosAny.flatMap((plazo) => {
-    const movimientos = movimientosDePlazo(plazo.IDPlazo);
+        const movimientos = movimientosDePlazo(plazo.IDPlazo);
 
-    if (plazo.Estado === "Sin cobro") {
-      movimientos.push({
-        fecha: plazo.FechaVencimiento || plazo.FechaPago || null,
-        texto: "Sin cobro",
-        importe: 0,
-      });
+        if (plazo.Estado === "Sin cobro") {
+          movimientos.push({
+            fecha: plazo.FechaVencimiento || plazo.FechaPago || null,
+            texto: "Sin cobro",
+            importe: 0,
+          });
+        }
+
+        return movimientos.map((mov) => ({
+          ...mov,
+          idCuotaSocio: Number(plazo.IDCuotaSocio),
+        }));
+      }),
+      ...gastosDevolucionAny.map((gasto) => ({
+        fecha: gasto.FechaPago,
+        texto: "Gastos devolución",
+        importe: -Number(gasto.Importe || 0),
+        tipo: "gasto-devolucion",
+      })),
+    ];
+
+    const movimientosAgrupados: any[] = [];
+    const posicionesRemesas = new Map<string, number>();
+
+    for (const mov of movimientosSinAgrupar) {
+      if (mov.tipo !== "remesa") {
+        movimientosAgrupados.push(mov);
+        continue;
+      }
+
+      const clave = `${mov.idCuotaSocio}-${mov.texto}-${mov.devuelto === true ? "devuelto" : "cobrado"}`;
+      const posicion = posicionesRemesas.get(clave);
+
+      if (posicion === undefined) {
+        posicionesRemesas.set(clave, movimientosAgrupados.length);
+        movimientosAgrupados.push({
+          ...mov,
+          importeCentimos: Math.round(Number(mov.importe || 0) * 100),
+        });
+      } else {
+        movimientosAgrupados[posicion].importeCentimos +=
+          Math.round(Number(mov.importe || 0) * 100);
+      }
     }
 
-    return movimientos;
-  }),
-
-  ...gastosDevolucionAny.map((gasto) => ({
-    fecha: gasto.FechaPago,
-    texto: "Gastos devolución",
-    importe: -Number(gasto.Importe || 0),
-    tipo: "gasto-devolucion",
-  })),
-]
-  .sort((a, b) => {
-    const fechaA = a.fecha || "";
-    const fechaB = b.fecha || "";
-    return fechaA.localeCompare(fechaB);
-  });
+    const movimientosHistorial = movimientosAgrupados
+      .map((mov) => mov.tipo === "remesa"
+        ? { ...mov, importe: mov.importeCentimos / 100 }
+        : mov)
+      .sort((a, b) => String(a.fecha || "").localeCompare(String(b.fecha || "")));
 
 const plazosPendientes = plazosAny.filter(
   (plazo) =>

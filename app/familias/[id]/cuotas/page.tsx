@@ -221,8 +221,7 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
       .filter((r) => {
         const detallesDelRecibo = detallesRemesaAny.filter(
           (rd) =>
-            Number(rd.IDPlazo) === Number(idPlazo) &&
-            Number(rd.IDRemesa) === Number(r.IDRemesa)
+            Number(rd.IDDetalleRemesa) === Number(r.IDDetalleRemesa)
         );
         const plazo = plazosFamiliaAnyPorId.get(Number(idPlazo));
         return !detallesDelRecibo.some((rd) => lineaDevuelta(rd, plazo));
@@ -231,6 +230,7 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
         movimientos.push({
           fecha: remesasHistorialAny.find((remesa) => Number(remesa.IDRemesa) === Number(r.IDRemesa))?.FechaVencimiento || r.FechaAplicacion,
           texto: `Remesa ${r.IDRemesa}`,
+          idRemesa: Number(r.IDRemesa),
           importe: Number(r.ImporteAplicado || 0),
           tipo: "remesa",
         });
@@ -286,24 +286,54 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
     return movimientos;
   }
   
-  // Agrupar los movimientos por cuota y socio, sin mezclar ejercicios.
-  const movimientosFamilia = plazosAny
-    .flatMap((plazo) => {
-      const movimientos = movimientosDePlazo(plazo.IDPlazo);
-      if (plazo.Estado === "Sin cobro") {
-        movimientos.push({
-          fecha: plazo.FechaVencimiento || plazo.FechaPago || null,
-          texto: "Sin cobro",
-          importe: 0,
-          tipo: "sin-cobro",
-        });
-      }
-      return movimientos.map((mov) => ({
+  // Una sola línea de cobro por cuota y remesa. Las aplicaciones se
+  // conservan individualmente en Supabase; aquí únicamente se suman
+  // para la pantalla y la exportación a Excel.
+  const movimientosSinAgrupar = plazosAny.flatMap((plazo) => {
+    const movimientos = movimientosDePlazo(plazo.IDPlazo);
+    if (plazo.Estado === "Sin cobro") {
+      movimientos.push({
+        fecha: plazo.FechaVencimiento || plazo.FechaPago || null,
+        texto: "Sin cobro",
+        importe: 0,
+        tipo: "sin-cobro",
+      });
+    }
+    return movimientos.map((mov) => ({
+      ...mov,
+      idCuotaSocio: Number(plazo.IDCuotaSocio),
+    }));
+  });
+
+  const cobrosAgrupados = new Map<string, any>();
+  const movimientosFamilia: any[] = [];
+
+  for (const mov of movimientosSinAgrupar) {
+    if (mov.tipo !== "remesa") {
+      // No agrupar entregas manuales, devoluciones ni intentos sin cobro.
+      movimientosFamilia.push(mov);
+      continue;
+    }
+
+    const clave = `${mov.idCuotaSocio}-${mov.idRemesa}`;
+    const existente = cobrosAgrupados.get(clave);
+    if (existente) {
+      // Sumar céntimos enteros evita errores de precisión decimal.
+      existente.centimos += Math.round(Number(mov.importe) * 100);
+      existente.importe = existente.centimos / 100;
+    } else {
+      const agrupado = {
         ...mov,
-        idCuotaSocio: Number(plazo.IDCuotaSocio),
-      }));
-    })
-    .sort((a, b) => String(a.fecha || "").localeCompare(String(b.fecha || "")));
+        centimos: Math.round(Number(mov.importe) * 100),
+      };
+      cobrosAgrupados.set(clave, agrupado);
+      movimientosFamilia.push(agrupado);
+    }
+  }
+
+  movimientosFamilia.sort((a, b) =>
+    String(a.fecha || "").localeCompare(String(b.fecha || ""))
+  );
 
   const bloquesSocios = cuotasAny.map((cuota) => {
     const idCuotaSocio = Number(cuota.IDCuotaSocio);
