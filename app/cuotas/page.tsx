@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
+import { createBrowserClient } from "@supabase/ssr";
 import Sidebar from "../components/Sidebar";
 import RegistrarPagoGeneralButton from "../components/RegistrarPagoGeneralButton";
 import { normalizarTexto } from "@/lib/texto";
@@ -15,6 +16,7 @@ export default function CuotasPage() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("Todos");
   const [tarifas, setTarifas] = useState<any[]>([]);
+  const [socioActualizando, setSocioActualizando] = useState<number | null>(null);
 
   useEffect(() => {
     cargarEjercicios();
@@ -127,31 +129,50 @@ const coincideBusqueda = normalizarTexto(texto).includes(
   );
 
   async function cambiarTarifa(numcens: number, idCuota: string) {
-    const { error } = await (supabase as any)
-  .from("SOCIOS")
-  .update({
-    IDCuotaManual: idCuota,
-  })
-  .eq("NUMCENS", numcens);
-  
-    if (error) {
-      alert(error.message);
+    if (socioActualizando !== null || !ejercicioSeleccionado) return;
+
+    const cuotaActual = cuotas.find((c) => Number(c.NUMCENS) === numcens);
+    if (!cuotaActual) {
+      alert("No se ha encontrado la cuota de este socio. Actualiza la página.");
       return;
     }
-  
-    const { error: errorRecalculo } = await (supabase as any).rpc(
-      "generar_actualizar_cuotas_completo",
-      {
-        p_ejercicio: ejercicioSeleccionado,
-      }
-    );
-  
-    if (errorRecalculo) {
-      alert(errorRecalculo.message);
+    if (String(cuotaActual.IDCuota) === String(idCuota)) return;
+
+    // Conservar exactamente el método y el número de plazos del socio.
+    // No actualizar SOCIOS por separado: la RPC individual es transaccional.
+    const metodo = String(cuotaActual.Metodo || "").trim();
+    const numeroPlazos = Number(cuotaActual.NumeroPlazos);
+    if (!(["banco", "efectivo"].includes(metodo.toLowerCase())) ||
+        !Number.isInteger(numeroPlazos) || numeroPlazos < 1 || numeroPlazos > 10) {
+      alert("Este socio no tiene una forma de pago y número de plazos válidos. Revísalos en su ficha antes de cambiar la tarifa.");
       return;
     }
-  
-    await cargarCuotas();
+
+    setSocioActualizando(numcens);
+    try {
+      // La operación protegida usa la misma sesión en cookies que el login.
+      // El cliente general permanece intacto para los listados y otras pantallas.
+      const auth = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { error } = await auth.rpc(
+        "actualizar_tarifa_y_forma_pago_socio",
+        {
+          p_numcens: numcens,
+          p_ejercicio: ejercicioSeleccionado,
+          p_idcuota: idCuota,
+          p_metodo: metodo,
+          p_numero_plazos: numeroPlazos,
+        }
+      );
+      if (error) throw new Error(error.message);
+      await cargarCuotas();
+    } catch (err: any) {
+      alert(`No se ha podido cambiar la cuota del socio ${numcens}: ${err?.message || "Error desconocido"}`);
+    } finally {
+      setSocioActualizando(null);
+    }
   }
 
   function exportarExcel() {
@@ -483,10 +504,11 @@ const coincideBusqueda = normalizarTexto(texto).includes(
                         <td className="px-4 py-3">
   <select
     value={cuota.IDCuota || ""}
+    disabled={socioActualizando !== null}
     onChange={(e) =>
       cambiarTarifa(Number(cuota.NUMCENS), e.target.value)
     }
-    className="cursor-pointer bg-transparent py-1 text-sm text-zinc-600 outline-none hover:text-red-900"
+    className="cursor-pointer bg-transparent py-1 text-sm text-zinc-600 outline-none hover:text-red-900 disabled:cursor-wait disabled:opacity-50"
     title="Cambiar tarifa"
   >
     {tarifas.map((tarifa) => (
