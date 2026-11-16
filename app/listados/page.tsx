@@ -102,6 +102,7 @@ useEffect(() => {
           SEXE,
           Antiguedad_Calculada,
           Antiguedad_Meses_Total,
+          Antiguedad_Orden,
           "FECHA de NACIMIENTO",
           ConLoteria,
           NumPapeletas,
@@ -379,15 +380,16 @@ useEffect(() => {
     fetchCargos();
   }, [ejercicioSeleccionado, recargarCargos]);
 
-function abreviarAntiguedad(texto: string | null) {
+  function abreviarAntiguedad(texto: string | null) {
     if (!texto) return "-";
   
     return texto
-      .replace(/,\s*\d+\s*días?/i, "")
       .replace(" años", " A")
       .replace(" año", " A")
       .replace(" meses", " M")
-      .replace(" mes", " M");
+      .replace(" mes", " M")
+      .replace(" días", " D")
+      .replace(" día", " D");
   }
 
   const sociosActivos = socios
@@ -615,18 +617,17 @@ const sociosMostrados = sociosBase
 
     if (orden === "ANTIGUEDAD_DESC") {
       return (
-        Number(b.Antiguedad_Meses_Total || 0) -
-        Number(a.Antiguedad_Meses_Total || 0)
+        Number(b.Antiguedad_Orden || 0) -
+        Number(a.Antiguedad_Orden || 0)
       );
     }
-
+    
     if (orden === "ANTIGUEDAD_ASC") {
       return (
-        Number(a.Antiguedad_Meses_Total || 0) -
-        Number(b.Antiguedad_Meses_Total || 0)
+        Number(a.Antiguedad_Orden || 0) -
+        Number(b.Antiguedad_Orden || 0)
       );
     }
-
     if (orden === "NACIMIENTO_ASC") {
       const fechaA = a["FECHA de NACIMIENTO"] || "9999-12-31";
       const fechaB = b["FECHA de NACIMIENTO"] || "9999-12-31";

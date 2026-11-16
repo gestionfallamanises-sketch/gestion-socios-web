@@ -5,11 +5,15 @@ import { supabase } from "../../lib/supabase";
 import EditarCargoHistorial from "./EditarCargoHistorial";
 import AnadirHistorialSocioModal from "./AnadirHistorialSocioModal";
 
+function fechaES(fecha: string | null | undefined) {
+  if (!fecha) return "-";
+  const f = String(fecha).slice(0, 10);
+  const partes = f.split("-");
+  return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : f;
+}
+
 export default function HistorialSocioModal({
-  numcens,
-  nombre,
-  apellidos,
-  antiguedad,
+  numcens, nombre, apellidos, antiguedad,
 }: {
   numcens: number;
   nombre: string;
@@ -20,47 +24,40 @@ export default function HistorialSocioModal({
   const [historial, setHistorial] = useState<any[]>([]);
   const [ejercicioActivo, setEjercicioActivo] = useState<number | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [antiguedadActual, setAntiguedadActual] = useState<string | null>(
-    antiguedad
-  );
+  const [antiguedadActual, setAntiguedadActual] = useState<string | null>(antiguedad);
 
   async function cargarHistorial() {
     setCargando(true);
-  
-    const [
-      { data: historialData },
-      { data: ejercicioData },
-      { data: antiguedadData },
-    ] = await Promise.all([
-      supabase
-        .from("HISTORIAL_SOCIOS")
-        .select(
-          "ID, NUMCENS, Ejercicio, Fecha_Alta_Baja, Estado, Cargo, CategoriaCargo"
-        )
-        .eq("NUMCENS", numcens)
-        .order("Ejercicio", { ascending: true }),
-  
-      supabase
-        .from("EJERCICIOS")
-        .select("Ejercicio")
-        .eq("Activo", true)
-        .maybeSingle(),
-  
-      supabase
-        .from("SOCIOS_ANTIGUEDAD_CALCULADA")
-        .select("Antiguedad_Calculada")
-        .eq("NUMCENS", numcens)
-        .maybeSingle(),
-    ]);
-  
-    setHistorial(historialData || []);
-    setEjercicioActivo(ejercicioData?.Ejercicio ?? null);
-    setAntiguedadActual(
-      antiguedadData?.Antiguedad_Calculada ?? antiguedad
-    );
-    setCargando(false);
+    try {
+      const [
+        { data: historialData, error: errorHistorial },
+        { data: ejercicioData },
+        { data: antiguedadData },
+      ] = await Promise.all([
+        supabase.from("HISTORIAL_SOCIOS")
+          .select("ID, NUMCENS, Ejercicio, Fecha_Alta_Baja, Estado, Cargo, CategoriaCargo")
+          .eq("NUMCENS", numcens)
+          .order("Ejercicio", { ascending: true }),
+        supabase.from("EJERCICIOS")
+          .select("Ejercicio")
+          .eq("Activo", true)
+          .maybeSingle(),
+        supabase.from("SOCIOS_ANTIGUEDAD_CALCULADA")
+          .select("Antiguedad_Calculada")
+          .eq("NUMCENS", numcens)
+          .maybeSingle(),
+      ]);
+      if (errorHistorial) throw errorHistorial;
+      setHistorial(historialData || []);
+      setEjercicioActivo(ejercicioData?.Ejercicio ?? null);
+      setAntiguedadActual(antiguedadData?.Antiguedad_Calculada ?? antiguedad);
+    } catch (error) {
+      console.error("No se pudo cargar el historial:", error);
+    } finally {
+      setCargando(false);
+    }
   }
-  
+
   async function abrirHistorial() {
     setAbierto(true);
     await cargarHistorial();
@@ -70,187 +67,107 @@ export default function HistorialSocioModal({
   const izquierda = historial.slice(0, mitad);
   const derecha = historial.slice(mitad);
 
-  function imprimirHistorial() {
-    window.print();
-  }
-  
-  
+  function imprimirHistorial() { window.print(); }
+
   function exportarHistorial() {
     const filas = historial.map((movimiento) => ({
       Ejercicio: movimiento.Ejercicio || "",
-      Fecha: movimiento.Fecha_Alta_Baja || "",
+      Fecha: fechaES(movimiento.Fecha_Alta_Baja) === "-" ? "" : fechaES(movimiento.Fecha_Alta_Baja),
       Estado: movimiento.Estado || "",
       Cargo: movimiento.Cargo || "",
-      Categoria:
-        movimiento.CategoriaCargo === "REPRESENTATIVO"
-          ? "Representativo"
-          : movimiento.CategoriaCargo === "DIRECTIVO"
-          ? "Directivo"
-          : movimiento.CategoriaCargo === "VOCAL"
-          ? "Vocal"
-          : "",
+      Categoria: movimiento.CategoriaCargo === "REPRESENTATIVO"
+        ? "Representativo" : movimiento.CategoriaCargo === "DIRECTIVO"
+        ? "Directivo" : movimiento.CategoriaCargo === "VOCAL" ? "Vocal" : "",
     }));
-  
     if (filas.length === 0) return;
-  
     const cabeceras = Object.keys(filas[0]);
-  
     const csv = [
       cabeceras.join(";"),
-      ...filas.map((fila) =>
-        cabeceras
-          .map((cabecera) =>
-            `"${String(
-              fila[cabecera as keyof typeof fila] ?? ""
-            ).replace(/"/g, '""')}"`
-          )
-          .join(";")
-      ),
+      ...filas.map((fila) => cabeceras
+        .map((cabecera) => `"${String(fila[cabecera as keyof typeof fila] ?? "").replace(/"/g, '""')}"`)
+        .join(";")),
     ].join("\n");
-  
-    const blob = new Blob(["\ufeff" + csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-  
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const enlace = document.createElement("a");
-  
     enlace.href = url;
     enlace.download = `historial_${numcens}.csv`;
     enlace.click();
-  
     URL.revokeObjectURL(url);
   }
 
   return (
     <>
-    <style>{`
-  @media print {
-    body * {
-      visibility: hidden !important;
-    }
-
-    #historial-modal,
-    #historial-modal * {
-      visibility: visible !important;
-    }
-
-    #historial-modal {
-      position: absolute !important;
-      left: 0 !important;
-      top: 0 !important;
-      width: 100% !important;
-      max-width: none !important;
-      max-height: none !important;
-      overflow: visible !important;
-      border: none !important;
-      box-shadow: none !important;
-    }
-
-    .no-print {
-      display: none !important;
-    }
-
-    @page {
-      margin: 1.2cm;
-    }
-  }
-`}</style>
-
-      <button
-        type="button"
-        onClick={abrirHistorial}
-        className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950"
-      >
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #historial-modal, #historial-modal * { visibility: visible !important; }
+          #historial-modal {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            overflow: visible !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          .no-print { display: none !important; }
+          @page { margin: 1.2cm; }
+        }
+      `}</style>
+      <button type="button" onClick={abrirHistorial}
+        className="bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-950">
         Ver historial completo
       </button>
 
       {abierto && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
-          onClick={() => window.location.reload()}
-        >
-          <div
-  id="historial-modal"
-  className="max-h-[85vh] w-full max-w-4xl overflow-y-auto border border-zinc-200 bg-white shadow-2xl"
-  onClick={(e) => e.stopPropagation()}
->
-            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-zinc-200 bg-white px-6 py-4">
-              <div>
-                <h2 className="text-xl font-bold text-zinc-900">
-                  Historial faller
-                </h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+          onClick={() => window.location.reload()}>
+          <div id="historial-modal"
+            className="max-h-[85vh] w-full max-w-4xl overflow-y-auto border border-zinc-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-zinc-200 bg-white px-5 py-3">
+            <div className="min-w-0 flex-1">
+  <h2 className="text-lg font-bold text-zinc-900">
+    Historial faller
+  </h2>
 
-                <p className="mt-1 text-sm text-zinc-500">
-                  <span className="font-semibold uppercase">
-                    {apellidos}, {nombre}
-                  </span>{" "}
-                  · NUMCENS {numcens} · Antigüedad: {antiguedadActual || "-"}
-                </p>
-              </div>
-
-              <div className="no-print flex items-center gap-2">
-              
-              <AnadirHistorialSocioModal
-  numcens={numcens}
-  onGuardado={(nuevoMovimiento) => {
-    setHistorial((actual) =>
-      [...actual, nuevoMovimiento].sort(
-        (a, b) => Number(a.Ejercicio) - Number(b.Ejercicio)
-      )
-    );
-  }}
-/>
- 
-<button
-  type="button"
-  onClick={exportarHistorial}
-  className="h-[38px] border border-zinc-300 bg-zinc-200 px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-300"
->
-  Excel
-</button>
-
-<button
-  type="button"
-  onClick={imprimirHistorial}
-  className="h-[38px] bg-red-900 px-3 text-sm font-medium text-white hover:bg-red-950"
->
-  Imprimir
-</button>
-
-  <button
-    type="button"
-    onClick={() => window.location.reload()}
-    className="flex h-8 w-8 items-center justify-center text-xl text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900"
-    aria-label="Cerrar"
-  >
-    ×
-  </button>
+  <p className="mt-1 truncate text-xs text-zinc-500">
+    <span className="font-semibold uppercase">
+      {apellidos}, {nombre}
+    </span>
+    {" · "}NUMCENS {numcens}
+    {" · "}Antigüedad: {antiguedadActual || "-"}
+  </p>
 </div>
+              <div className="no-print flex items-center gap-2">
+                <AnadirHistorialSocioModal
+                  numcens={numcens}
+                  onGuardado={() => { void cargarHistorial(); }}
+                />
+                <button type="button" onClick={exportarHistorial}
+                  className="h-[38px] border border-zinc-300 bg-zinc-200 px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-300">Excel</button>
+                <button type="button" onClick={imprimirHistorial}
+                  className="h-[38px] bg-red-900 px-3 text-sm font-medium text-white hover:bg-red-950">Imprimir</button>
+                <button type="button" onClick={() => window.location.reload()}
+                  className="flex h-8 w-8 items-center justify-center text-xl text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900"
+                  aria-label="Cerrar">×</button>
+              </div>
             </div>
 
             <div className="p-5">
               {cargando ? (
-                <div className="py-10 text-center text-sm text-zinc-500">
-                  Cargando historial...
-                </div>
+                <div className="py-10 text-center text-sm text-zinc-500">Cargando historial...</div>
               ) : historial.length === 0 ? (
-                <div className="border border-zinc-200 p-6 text-sm text-zinc-500">
-                  Este socio todavía no tiene historial registrado.
-                </div>
+                <div className="border border-zinc-200 p-6 text-sm text-zinc-500">Este socio todavía no tiene historial registrado.</div>
               ) : (
                 <div className="grid grid-cols-1 border border-zinc-200 lg:grid-cols-2">
-                  <HistorialTabla
-                    movimientos={izquierda}
-                    ejercicioActivo={ejercicioActivo}
-                  />
-
+                  <HistorialTabla movimientos={izquierda} ejercicioActivo={ejercicioActivo} onGuardado={cargarHistorial} />
                   <div className="border-l border-zinc-200">
-                  <HistorialTabla
-  movimientos={derecha}
-  ejercicioActivo={ejercicioActivo}
-  ocultarCabeceraImpresion={true}
-/>
+                    <HistorialTabla movimientos={derecha} ejercicioActivo={ejercicioActivo}
+                      ocultarCabeceraImpresion={true} onGuardado={cargarHistorial} />
                   </div>
                 </div>
               )}
@@ -263,29 +180,22 @@ export default function HistorialSocioModal({
 }
 
 function HistorialTabla({
-    movimientos,
-    ejercicioActivo,
-    ocultarCabeceraImpresion = false,
-  }: {
-    movimientos: any[];
-    ejercicioActivo: number | null;
-    ocultarCabeceraImpresion?: boolean;
-  }) {
-
+  movimientos, ejercicioActivo, ocultarCabeceraImpresion = false, onGuardado,
+}: {
+  movimientos: any[];
+  ejercicioActivo: number | null;
+  ocultarCabeceraImpresion?: boolean;
+  onGuardado: () => Promise<void>;
+}) {
   return (
     <table className="w-full text-sm">
-        <colgroup>
-  <col className="w-[25%]" />
-  <col className="w-[30%]" />
-  <col className="w-[20%]" />
-  <col className="w-[25%]" />
-</colgroup>
-
-      <thead
-  className={`bg-zinc-100 text-left text-xs uppercase text-zinc-600 ${
-    ocultarCabeceraImpresion ? "print:hidden" : ""
-  }`}
->
+      <colgroup>
+        <col className="w-[25%]" />
+        <col className="w-[30%]" />
+        <col className="w-[20%]" />
+        <col className="w-[25%]" />
+      </colgroup>
+      <thead className={`bg-zinc-100 text-left text-xs uppercase text-zinc-600 ${ocultarCabeceraImpresion ? "print:hidden" : ""}`}>
         <tr>
           <th className="px-3 py-2">Ejercicio</th>
           <th className="px-3 py-2">Fecha</th>
@@ -293,38 +203,28 @@ function HistorialTabla({
           <th className="px-3 py-2">Cargo</th>
         </tr>
       </thead>
-
       <tbody>
         {movimientos.map((movimiento) => (
           <tr key={movimiento.ID} className="border-t border-zinc-200">
+            <td className="px-3 py-2">{movimiento.Ejercicio || "-"}</td>
+            <td className="px-3 py-2">{fechaES(movimiento.Fecha_Alta_Baja)}</td>
             <td className="px-3 py-2">
-              {movimiento.Ejercicio || "-"}
-            </td>
-
-            <td className="px-3 py-2">
-              {movimiento.Fecha_Alta_Baja || "-"}
-            </td>
-
-            <td className="px-3 py-2">
-              <span
-                className={
-                  movimiento.Estado === "Alta"
-                    ? "bg-green-100 px-2 py-1 text-xs font-semibold text-green-700"
-                    : "bg-red-100 px-2 py-1 text-xs font-semibold text-red-700"
-                }
-              >
+              <span className={movimiento.Estado === "Alta"
+                ? "bg-green-100 px-2 py-1 text-xs font-semibold text-green-700"
+                : "bg-red-100 px-2 py-1 text-xs font-semibold text-red-700"}>
                 {movimiento.Estado || "-"}
               </span>
             </td>
-
             <td className="px-3 py-2">
               <EditarCargoHistorial
                 id={movimiento.ID}
                 numcens={Number(movimiento.NUMCENS)}
                 ejercicio={Number(movimiento.Ejercicio)}
                 ejercicioActivo={ejercicioActivo}
+                fechaInicial={movimiento.Fecha_Alta_Baja}
                 cargoInicial={movimiento.Cargo}
                 categoriaInicial={movimiento.CategoriaCargo}
+                onGuardado={onGuardado}
               />
             </td>
           </tr>
