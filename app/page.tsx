@@ -10,6 +10,7 @@ import * as XLSX from "xlsx-js-style"
 export default function Home() {
   const [socios, setSocios] = useState<any[]>([]);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<"todos" | "activo" | "baja">("todos");
   const [error, setError] = useState<string | null>(null);
   const [editandoTelefono, setEditandoTelefono] = useState<number | null>(null);
 const [telefonoTemporal, setTelefonoTemporal] = useState("");
@@ -37,13 +38,19 @@ const [guardandoTelefono, setGuardandoTelefono] = useState(false);
     return normalizarTexto(texto);
   }
 
-  const sociosFiltrados = socios.filter((socio) =>
-    normalizar(
+  const sociosFiltrados = socios.filter((socio) => {
+    const estado = normalizar(String(socio.Estado || ""));
+    const coincideEstado =
+      filtroEstado === "todos" ||
+      (filtroEstado === "activo" && estado === "activo") ||
+      (filtroEstado === "baja" && estado === "baja");
+
+    const coincideBusqueda = normalizar(
       `${socio.Nombre || ""} ${socio.Apellidos || ""} ${socio.NUMCENS || ""}`
-    ).includes(
-      normalizar(busqueda)
-    )
-  );
+    ).includes(normalizar(busqueda));
+
+    return coincideEstado && coincideBusqueda;
+  });
 
   async function guardarTelefono(numcens: number) {
     setGuardandoTelefono(true);
@@ -295,7 +302,17 @@ const [guardandoTelefono, setGuardandoTelefono] = useState(false);
     </p>
   </div>
 
-  <div className="flex w-full gap-2 lg:w-auto">
+  <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap">
+    <select
+      aria-label="Filtrar socios por estado"
+      value={filtroEstado}
+      onChange={(e) => setFiltroEstado(e.target.value as "todos" | "activo" | "baja")}
+      className="border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 outline-none focus:border-red-900"
+    >
+      <option value="todos">Todos</option>
+      <option value="activo">Activos</option>
+      <option value="baja">Baja</option>
+    </select>
     <input
       type="text"
       placeholder="Buscar por nombre, apellidos o NUMCENS..."

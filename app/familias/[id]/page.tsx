@@ -343,6 +343,8 @@ const totalPendiente =
                 <tbody>
   {miembrosAny.map((socio) => {
     const cuota = cuotaSocio(socio.NUMCENS);
+    const estaDeBaja = String(socio.Estado || "").trim().toLowerCase() === "baja";
+    const estaActivo = String(socio.Estado || "").trim().toLowerCase() === "activo";
 
     const plazosCuota =
   plazosFamiliaAny.filter(
@@ -355,12 +357,21 @@ const totalPendiente =
         className="border-t border-zinc-200 hover:bg-red-50"
       >
         <td className="px-4 py-3">
-  <Link
-    href={`/socios/${socio.NUMCENS}?fromFamilia=${familiaAny.ID_Familia}`}
-    className="font-medium text-zinc-900 hover:text-red-900 hover:underline"
-  >
-    {socio.Nombre} {socio.Apellidos}
-  </Link>
+  <div className="flex items-center gap-2">
+    <span
+      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+        estaDeBaja ? "bg-red-600" : estaActivo ? "bg-green-600" : "bg-zinc-400"
+      }`}
+      title={estaDeBaja ? "Baja" : estaActivo ? "Alta" : String(socio.Estado || "Estado sin determinar")}
+      aria-label={estaDeBaja ? "Socio de baja" : estaActivo ? "Socio de alta" : "Estado sin determinar"}
+    />
+    <Link
+      href={`/socios/${socio.NUMCENS}?fromFamilia=${familiaAny.ID_Familia}`}
+      className="font-medium text-zinc-900 hover:text-red-900 hover:underline"
+    >
+      {socio.Nombre} {socio.Apellidos}
+    </Link>
+  </div>
 
   <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
     <span>Nº {socio.NUMCENS}</span>
@@ -425,11 +436,11 @@ const totalPendiente =
 </td>
 
         <td className="px-4 py-3 text-right font-medium">
-          {Number(cuota?.Importe || 0).toFixed(2)} €
+          {estaDeBaja ? "—" : `${Number(cuota?.Importe || 0).toFixed(2)} €`}
         </td>
 
         <td className="px-4 py-3 text-right font-medium text-green-700">
-  {Number(cuota?.TotalPagado || 0).toFixed(2)} €
+  {estaDeBaja ? "—" : `${Number(cuota?.TotalPagado || 0).toFixed(2)} €`}
 </td>
 
 <td
@@ -439,7 +450,7 @@ const totalPendiente =
       : "text-zinc-500"
   }`}
 >
-  {Number(cuota?.Pendiente || 0).toFixed(2)} €
+  {estaDeBaja ? "—" : `${Number(cuota?.Pendiente || 0).toFixed(2)} €`}
 </td>
 
         <td className="px-4 py-3 text-right">

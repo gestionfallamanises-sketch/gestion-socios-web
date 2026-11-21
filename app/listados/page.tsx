@@ -36,6 +36,7 @@ const [orden, setOrden] = useState("NOMBRE");
 const [error, setError] = useState<string | null>(null);
 const [cuotas, setCuotas] = useState<any[]>([]);
 const [familiasListado, setFamiliasListado] = useState<any[]>([]);
+const [filtroGrupoFamilia, setFiltroGrupoFamilia] = useState("TODOS");
 const [formasPagoSocios, setFormasPagoSocios] = useState<any[]>([]);
 const [ejercicios, setEjercicios] = useState<any[]>([]);
 const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<number | null>(null);
@@ -392,6 +393,11 @@ useEffect(() => {
       .replace(" día", " D");
   }
 
+  // Solo cambia la etiqueta visible; conserva el ID completo para filtrar y consultar.
+  function tipoCuotaVisible(tipo: unknown) {
+    return String(tipo || "-").replace(/^\d{4}_/, "");
+  }
+
   const sociosActivos = socios
   .filter((socio) => socio.Estado === "Activo")
   .sort((a, b) => {
@@ -461,48 +467,85 @@ const sociosBaja = socios
       );
     });
 
-       // Familias: mismo criterio de filtros que Cuotas, pero agrupado por familia.
-       // El importe se toma de la vista contable del ejercicio seleccionado.
+       // Familias: el filtro selecciona GRUPOS completos, no filas individuales.
+       // Buscar un miembro muestra todos los miembros y todas sus cuotas.
        const sociosPorNumero = new Map(socios.map((socio: any) => [Number(socio.NUMCENS), socio]));
        const familiasPorId = new Map(familiasListado.map((familia: any) => [Number(familia.ID_Familia), familia]));
-       const cuotasFamiliaFiltradas = cuotas
-         .map((cuota: any) => {
-           const socio = sociosPorNumero.get(Number(cuota.NUMCENS)) as any;
-           const idFamilia = socio?.ID_Familia == null ? null : Number(socio.ID_Familia);
-           if (idFamilia === null || !familiasPorId.has(idFamilia)) return null;
-           const familia = familiasPorId.get(idFamilia) as any;
-           return {
-             ...cuota,
-             ID_Familia: idFamilia,
-             Nombre_Familia: familia?.Nombre_Familia || `Familia ${idFamilia}`,
-             ComisionFamilia: socio?.Comision || "-",
-             LoteriaFamilia: socio?.ConLoteria ? "Sí" : "No",
-             PagadorFamilia: Number(cuota.NUMCENS) === Number(familia?.Titular_NUMCENS)
-               ? "Titular"
-               : (cuota.NUMCENS_Pagador ?? familia?.Titular_NUMCENS ?? "-"),
-           };
+
+       const cuotasConGrupo = cuotas.map((cuota: any) => {
+         const socio = sociosPorNumero.get(Number(cuota.NUMCENS)) as any;
+         const idOriginal = socio?.ID_Familia;
+         const idFamilia = idOriginal == null || idOriginal === "" ? null : Number(idOriginal);
+         const familia = idFamilia !== null ? familiasPorId.get(idFamilia) as any : null;
+         // Un registro sin familia válida se muestra individualmente; nunca se descarta.
+         const perteneceFamilia = idFamilia !== null && Number.isFinite(idFamilia) && !!familia;
+         const grupoClave = perteneceFamilia ? `F-${idFamilia}` : `S-${cuota.NUMCENS}`;
+         return {
+           ...cuota,
+           ID_Familia: perteneceFamilia ? idFamilia : null,
+           Nombre_Familia: perteneceFamilia ? (familia?.Nombre_Familia || `Familia ${idFamilia}`) : "Sin familia",
+           GrupoClave: grupoClave,
+           EsFamilia: perteneceFamilia,
+           PagadorFamilia: perteneceFamilia && Number(cuota.NUMCENS) === Number(familia?.Titular_NUMCENS)
+             ? "Titular"
+             : (cuota.NUMCENS_Pagador ?? (perteneceFamilia ? familia?.Titular_NUMCENS : cuota.NUMCENS) ?? "-"),
+         };
+       });
+
+       const grupos = new Map<string, any[]>();
+       cuotasConGrupo.forEach((cuota: any) => {
+         const clave = cuota.GrupoClave as string;
+         if (!grupos.has(clave)) grupos.set(clave, []);
+         grupos.get(clave)!.push(cuota);
+       });
+
+       const busquedaFamilia = normalizarTexto(busquedaSocio);
+       const cuotasFamiliaFiltradas = Array.from(grupos.entries())
+         .filter(([, miembros]) => {
+           const primero = miembros[0];
+           if (filtroGrupoFamilia === "FAMILIAS" && !primero.EsFamilia) return false;
+           if (filtroGrupoFamilia === "SIN_FAMILIA" && primero.EsFamilia) return false;
+
+           // Los filtros determinan qué grupo aparece, pero no recortan sus miembros.
+           const coincideFiltros = miembros.some((cuota: any) => {
+             const pendiente = Number(cuota.Pendiente || 0);
+             return (filtroTipoCuota === "TODOS" || cuota.IDCuota === filtroTipoCuota) &&
+               (filtroEstadoCuota === "TODOS" || cuota.EstadoPago === filtroEstadoCuota) &&
+               (filtroFormaPago === "TODAS" || cuota.Metodo === filtroFormaPago) &&
+               (filtroPendiente === "TODOS" || (filtroPendiente === "SI" ? pendiente > 0 : pendiente <= 0));
+           });
+           const coincideBusqueda = !busquedaFamilia || miembros.some((cuota: any) =>
+             normalizarTexto(`${cuota.ID_Familia ?? ""} ${cuota.Nombre_Familia} ${cuota.NUMCENS} ${cuota.Apellidos || ""} ${cuota.Nombre || ""}`)
+               .includes(busquedaFamilia)
+           );
+           return coincideFiltros && coincideBusqueda;
          })
-         .filter((cuota): cuota is any => cuota !== null)
-         .filter((cuota: any) => {
-           const coincideTipo = filtroTipoCuota === "TODOS" || cuota.IDCuota === filtroTipoCuota;
-           const coincideEstado = filtroEstadoCuota === "TODOS" || cuota.EstadoPago === filtroEstadoCuota;
-           const coincideForma = filtroFormaPago === "TODAS" || cuota.Metodo === filtroFormaPago;
-           const pendiente = Number(cuota.Pendiente || 0);
-           const coincidePendiente = filtroPendiente === "TODOS" ||
-             (filtroPendiente === "SI" && pendiente > 0) ||
-             (filtroPendiente === "NO" && pendiente <= 0);
-           const busqueda = normalizarTexto(busquedaSocio);
-           const coincideBusqueda = !busqueda || normalizarTexto(
-             `${cuota.ID_Familia} ${cuota.Nombre_Familia} ${cuota.NUMCENS} ${cuota.Apellidos} ${cuota.Nombre}`
-           ).includes(busqueda);
-           return coincideTipo && coincideEstado && coincideForma && coincidePendiente && coincideBusqueda;
+         .sort((a, b) => {
+           const ca = a[1][0], cb = b[1][0];
+           if (ca.EsFamilia !== cb.EsFamilia) return ca.EsFamilia ? -1 : 1;
+           const nombreA = ca.EsFamilia ? ca.Nombre_Familia : `${ca.Apellidos || ""} ${ca.Nombre || ""}`;
+           const nombreB = cb.EsFamilia ? cb.Nombre_Familia : `${cb.Apellidos || ""} ${cb.Nombre || ""}`;
+           return String(nombreA).localeCompare(String(nombreB), "es", { sensitivity: "base" }) ||
+             String(a[0]).localeCompare(String(b[0]), "es");
          })
-         .sort((a: any, b: any) =>
-           a.Nombre_Familia.localeCompare(b.Nombre_Familia, "es", { sensitivity: "base" }) ||
-           a.ID_Familia - b.ID_Familia ||
-           String(a.Apellidos).localeCompare(String(b.Apellidos), "es", { sensitivity: "base" })
-         );
-       const totalFamiliasFiltradas = new Set(cuotasFamiliaFiltradas.map((c: any) => c.ID_Familia)).size;
+         .flatMap(([, miembros]) => {
+           const ordenados = [...miembros].sort((a: any, b: any) =>
+             String(a.Apellidos || "").localeCompare(String(b.Apellidos || ""), "es", { sensitivity: "base" }) ||
+             String(a.Nombre || "").localeCompare(String(b.Nombre || ""), "es", { sensitivity: "base" })
+           );
+           const totalCuotas = miembros.reduce((acc: number, c: any) => acc + Number(c.Importe || 0), 0);
+           const totalPagado = miembros.reduce((acc: number, c: any) => acc + Number(c.TotalPagado || 0), 0);
+           const totalPendiente = miembros.reduce((acc: number, c: any) => acc + Number(c.Pendiente || 0), 0);
+           return ordenados.map((c: any, i: number) => ({
+             ...c,
+             PrimeroGrupo: i === 0,
+             TotalGrupoCuotas: totalCuotas,
+             TotalGrupoPagado: totalPagado,
+             TotalGrupoPendiente: totalPendiente,
+           }));
+         });
+       const totalFamiliasFiltradas = new Set(cuotasFamiliaFiltradas.filter((c: any) => c.EsFamilia).map((c: any) => c.GrupoClave)).size;
+       const totalSinFamiliaFiltrados = new Set(cuotasFamiliaFiltradas.filter((c: any) => !c.EsFamilia).map((c: any) => c.GrupoClave)).size;
 
       const tiposCuota = Array.from(
         new Set(cuotas.map((cuota) => cuota.IDCuota).filter(Boolean))
@@ -982,27 +1025,19 @@ const sociosMostrados = sociosBase
     let nombreArchivo = "listado.csv";
   
     if (listado === "FAMILIAS") {
-      filas = cuotasFamiliaFiltradas.map((cuota: any, index: number) => {
-        const anterior = cuotasFamiliaFiltradas[index - 1];
-        const primeraFamilia = !anterior || Number(anterior.ID_Familia) !== Number(cuota.ID_Familia);
-        return {
-        "N.º familia": primeraFamilia ? cuota.ID_Familia : "",
-        Familia: primeraFamilia ? cuota.Nombre_Familia : "",
-        NUMCENS: cuota.NUMCENS,
-        Apellidos: cuota.Apellidos || "",
-        Nombre: cuota.Nombre || "",
-        Comisión: cuota.ComisionFamilia,
-        Lotería: cuota.LoteriaFamilia,
+      filas = cuotasFamiliaFiltradas.map((cuota: any) => ({
+        "N.º familia": cuota.PrimeroGrupo && cuota.EsFamilia ? cuota.ID_Familia : "",
+        Familia: cuota.PrimeroGrupo ? cuota.Nombre_Familia : "",
+        Miembro: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""} (${cuota.NUMCENS})`,
         Pagador: cuota.PagadorFamilia,
-        Tipo: cuota.IDCuota || "",
-        "Cuota (€)": Number(cuota.Importe || 0),
-        "Pagado (€)": Number(cuota.TotalPagado || 0),
-        "Pendiente (€)": Number(cuota.Pendiente || 0),
+        Tipo: tipoCuotaVisible(cuota.IDCuota),
+        "Cuota socio (€)": Number(cuota.Importe || 0),
+        "Total grupo (€)": cuota.PrimeroGrupo ? Number(cuota.TotalGrupoCuotas.toFixed(2)) : "",
+        "Pagado grupo (€)": cuota.PrimeroGrupo ? Number(cuota.TotalGrupoPagado.toFixed(2)) : "",
+        "Pendiente grupo (€)": cuota.PrimeroGrupo ? Number(cuota.TotalGrupoPendiente.toFixed(2)) : "",
         "Forma pago": cuota.Metodo || "",
-        Estado: cuota.EstadoPago || "",
-      };
-      });
-      nombreArchivo = `familias_miembros_${ejercicioSeleccionado || ""}.csv`;
+      }));
+      nombreArchivo = `familias_y_sin_familia_${ejercicioSeleccionado || ""}.csv`;
     } else if (listado === "CUOTAS") {
       filas = cuotasFiltradas.map((cuota) => ({
         NUMCENS: cuota.NUMCENS || "",
@@ -1183,8 +1218,8 @@ if (listado === "FAMILIAS") {
     const actual = cuotasFamiliaFiltradas[i];
     const anterior = cuotasFamiliaFiltradas[i - 1];
     const siguiente = cuotasFamiliaFiltradas[i + 1];
-    const primera = !anterior || Number(actual.ID_Familia) !== Number(anterior.ID_Familia);
-    const ultima = !siguiente || Number(actual.ID_Familia) !== Number(siguiente.ID_Familia);
+    const primera = !anterior || actual.GrupoClave !== anterior.GrupoClave;
+    const ultima = !siguiente || actual.GrupoClave !== siguiente.GrupoClave;
     if (primera) grupo++;
 
     for (let c = 0; c < columnas; c++) {
@@ -1376,7 +1411,7 @@ XLSX.writeFile(
    {listado === "CUOTAS"
     ? `Mostrando ${cuotasFiltradas.length} cuotas`
      : listado === "FAMILIAS"
-     ? `Mostrando ${cuotasFamiliaFiltradas.length} socios de ${totalFamiliasFiltradas} familias`
+     ? `Mostrando ${new Set(cuotasFamiliaFiltradas.map((c: any) => c.NUMCENS)).size} socios · ${totalFamiliasFiltradas} familias · ${totalSinFamiliaFiltrados} sin familia`
     : listado === "NACIMIENTO"
     ? `Mostrando ${sociosNacimiento.length} socios`
     : listado === "CARGOS"
@@ -1535,22 +1570,33 @@ XLSX.writeFile(
   </div>
 )}
 
- {(listado === "CUOTAS" || listado === "FAMILIAS") && (
+{(listado === "CUOTAS" || listado === "FAMILIAS") && (
   <div className="border-t border-zinc-200 bg-white px-4 py-4 print:hidden">
     <div className="flex flex-wrap items-center gap-4">
+      {listado === "FAMILIAS" && (
+        <SelectFiltro
+          label="Agrupación"
+          value={filtroGrupoFamilia}
+          onChange={setFiltroGrupoFamilia}
+          opciones={["TODOS", "FAMILIAS", "SIN_FAMILIA"]}
+        />
+      )}
       <SelectFiltro
         label="Tipo"
         value={filtroTipoCuota}
         onChange={setFiltroTipoCuota}
         opciones={["TODOS", ...tiposCuota]}
+        formatoOpcion={listado === "FAMILIAS" ? tipoCuotaVisible : undefined}
       />
 
-<SelectFiltro
-  label="Estado"
-  value={filtroEstadoCuota}
-  onChange={setFiltroEstadoCuota}
-  opciones={["TODOS", ...estadosCuota]}
-/>
+      {listado === "CUOTAS" && (
+        <SelectFiltro
+          label="Estado"
+          value={filtroEstadoCuota}
+          onChange={setFiltroEstadoCuota}
+          opciones={["TODOS", ...estadosCuota]}
+        />
+      )}
 
       <SelectFiltro
         label="Forma pago"
@@ -1571,15 +1617,18 @@ XLSX.writeFile(
 
 {(listado === "CUOTAS" || listado === "FAMILIAS") && (
   <div className="hidden border-t border-zinc-200 px-4 py-2 text-xs text-zinc-600 print:flex print:flex-wrap print:items-center print:gap-x-6">
+    {listado === "FAMILIAS" && <span><strong>Agrupación:</strong> {filtroGrupoFamilia === "SIN_FAMILIA" ? "Sin familia" : filtroGrupoFamilia === "FAMILIAS" ? "Familias" : "Todos"}</span>}
     <span>
       <strong>Tipo:</strong>{" "}
-      {filtroTipoCuota === "TODOS" ? "Todos" : filtroTipoCuota}
+      {filtroTipoCuota === "TODOS" ? "Todos" : listado === "FAMILIAS" ? tipoCuotaVisible(filtroTipoCuota) : filtroTipoCuota}
     </span>
 
-    <span>
-      <strong>Estado:</strong>{" "}
-      {filtroEstadoCuota === "TODOS" ? "Todos" : filtroEstadoCuota}
-    </span>
+    {listado === "CUOTAS" && (
+      <span>
+        <strong>Estado:</strong>{" "}
+        {filtroEstadoCuota === "TODOS" ? "Todos" : filtroEstadoCuota}
+      </span>
+    )}
 
     <span>
       <strong>Forma pago:</strong>{" "}
@@ -1598,7 +1647,21 @@ XLSX.writeFile(
 )}
 
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className={listado === "FAMILIAS" ? "w-full table-fixed text-xs" : "w-full text-sm"}>
+      {listado === "FAMILIAS" && (
+        <colgroup>
+          <col style={{ width: "7%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "25%" }} />
+          <col style={{ width: "7%" }} />
+          <col style={{ width: "9%" }} />
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "6%" }} />
+        </colgroup>
+      )}
       <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-600">
   <tr>
     {listado === "NACIMIENTO" ? (
@@ -1618,19 +1681,16 @@ XLSX.writeFile(
       </>
     ) : listado === "FAMILIAS" ? (
       <>
-        <th className="px-3 py-3">N.º familia</th>
-        <th className="px-3 py-3">Familia</th>
-        <th className="px-3 py-3">NUMCENS</th>
-        <th className="px-3 py-3">Miembro</th>
-        <th className="px-3 py-3">Comisión</th>
-        <th className="px-3 py-3">Lotería</th>
-        <th className="px-3 py-3">Pagador</th>
-        <th className="px-3 py-3">Tipo</th>
-        <th className="px-3 py-3 text-right">Cuota</th>
-        <th className="px-3 py-3 text-right">Pagado</th>
-        <th className="px-3 py-3 text-right">Pendiente</th>
-        <th className="px-3 py-3">Forma pago</th>
-        <th className="px-3 py-3">Estado</th>
+        <th className="px-2 py-3">N.º familia</th>
+        <th className="px-2 py-3">Familia</th>
+        <th className="px-2 py-3">Miembro</th>
+        <th className="px-2 py-3">Pagador</th>
+        <th className="px-2 py-3">Tipo</th>
+        <th className="px-2 py-3 text-right">Cuota</th>
+        <th className="px-2 py-3 text-right">Total familia / socio</th>
+        <th className="px-2 py-3 text-right">Pagado</th>
+        <th className="px-2 py-3 text-right">Pendiente</th>
+        <th className="px-2 py-3">Forma pago</th>
       </>
     ) : listado === "CUOTAS" ? (
       <>
@@ -1766,25 +1826,26 @@ XLSX.writeFile(
     ))
   ) : listado === "FAMILIAS" ? (
     cuotasFamiliaFiltradas.map((cuota: any, index: number) => {
-      const anterior = cuotasFamiliaFiltradas[index - 1];
-      const primeraFamilia = !anterior || anterior.ID_Familia !== cuota.ID_Familia;
+      const primeraFamilia = cuota.PrimeroGrupo;
       return (
-        <tr key={cuota.IDCuotaSocio} className={`border-t border-zinc-200 hover:bg-red-50 ${primeraFamilia ? "border-t-2 border-t-zinc-400" : ""}`}>
-          <td className="px-3 py-2 text-zinc-600">{cuota.ID_Familia}</td>
-          <td className="px-3 py-2 font-medium">
-            {primeraFamilia ? <Link href={`/familias/${cuota.ID_Familia}`} className="text-red-900 hover:underline">{cuota.Nombre_Familia}</Link> : ""}
+        <tr key={`${cuota.GrupoClave}-${cuota.IDCuotaSocio ?? cuota.NUMCENS}-${index}`} className={`border-t border-zinc-200 hover:bg-red-50 ${primeraFamilia ? "border-t-2 border-t-zinc-400" : ""}`}>
+          <td className="px-2 py-2 text-zinc-600">{cuota.EsFamilia ? cuota.ID_Familia : "—"}</td>
+          <td className="px-2 py-2 break-words font-medium">
+            {primeraFamilia ? (cuota.EsFamilia
+              ? <Link href={`/familias/${cuota.ID_Familia}`} className="text-red-900 hover:underline">{cuota.Nombre_Familia}</Link>
+              : <span className="text-zinc-500">Sin familia</span>) : ""}
           </td>
-          <td className="px-3 py-2">{cuota.NUMCENS}</td>
-          <td className="px-3 py-2 whitespace-nowrap"><LinkSocio numcens={cuota.NUMCENS}>{cuota.Apellidos}, {cuota.Nombre}</LinkSocio></td>
-          <td className="px-3 py-2">{cuota.ComisionFamilia}</td>
-          <td className="px-3 py-2">{cuota.LoteriaFamilia}</td>
-          <td className="px-3 py-2">{cuota.PagadorFamilia}</td>
-          <td className="px-3 py-2">{cuota.IDCuota || "-"}</td>
-          <td className="px-3 py-2 text-right whitespace-nowrap">{Number(cuota.Importe || 0).toFixed(2)} €</td>
-          <td className="px-3 py-2 text-right whitespace-nowrap text-green-700">{Number(cuota.TotalPagado || 0).toFixed(2)} €</td>
-          <td className="px-3 py-2 text-right whitespace-nowrap text-red-700">{Number(cuota.Pendiente || 0).toFixed(2)} €</td>
-          <td className="px-3 py-2">{cuota.Metodo || "-"}</td>
-          <td className="px-3 py-2">{cuota.EstadoPago || "-"}</td>
+          <td className="px-2 py-2 break-words">
+            <LinkSocio numcens={cuota.NUMCENS}>{cuota.Apellidos}, {cuota.Nombre}</LinkSocio>
+            <span className="ml-1 text-[10px] font-normal text-zinc-400">({cuota.NUMCENS})</span>
+          </td>
+          <td className="px-2 py-2 break-words">{cuota.PagadorFamilia}</td>
+          <td className="px-2 py-2 break-words">{tipoCuotaVisible(cuota.IDCuota)}</td>
+          <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">{Number(cuota.Importe || 0).toFixed(2)} €</td>
+          <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums font-semibold">{primeraFamilia ? `${Number(cuota.TotalGrupoCuotas).toFixed(2)} €` : ""}</td>
+          <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums text-green-700 font-medium">{primeraFamilia ? `${Number(cuota.TotalGrupoPagado).toFixed(2)} €` : ""}</td>
+          <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums text-red-700 font-medium">{primeraFamilia ? `${Number(cuota.TotalGrupoPendiente).toFixed(2)} €` : ""}</td>
+          <td className="px-2 py-2 break-words">{cuota.Metodo || "-"}</td>
         </tr>
       );
     })
@@ -2387,11 +2448,13 @@ function BotonListado({
     value,
     onChange,
     opciones,
+    formatoOpcion,
   }: {
     label: string;
     value: string;
     onChange: (value: string) => void;
     opciones: string[];
+    formatoOpcion?: (opcion: string) => string;
   }) {
     return (
       <label className="flex items-center gap-2 text-xs font-semibold text-zinc-600">
@@ -2404,7 +2467,7 @@ function BotonListado({
         >
           {opciones.map((opcion) => (
             <option key={opcion} value={opcion}>
-              {opcion}
+              {formatoOpcion ? formatoOpcion(opcion) : opcion}
             </option>
           ))}
         </select>
