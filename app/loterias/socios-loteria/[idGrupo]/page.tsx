@@ -13,6 +13,8 @@ export default function GrupoLoteriaPage() {
   const [grupo, setGrupo] = useState<any>(null);
   const [sorteos, setSorteos] = useState<any[]>([]);
   const [filas, setFilas] = useState<any[]>([]);
+  const [pagoGuardando, setPagoGuardando] = useState<number | null>(null);
+  const [premioGuardando, setPremioGuardando] = useState<number | null>(null);
   const [mostrarModal, setMostrarModal] = useState(false);
 const [grupoEditando, setGrupoEditando] = useState<any>(null);
 
@@ -304,26 +306,170 @@ useEffect(() => {
   })
   .filter(Boolean);
   
-    setFilas(filasCompletas);
+    // Los sorteos más recientes se muestran primero.
+    // El acumulado se calcula después en orden cronológico, sin invertir su significado.
+    setFilas(filasCompletas.sort((a: any, b: any) =>
+      String(b.FechaSorteo).localeCompare(String(a.FechaSorteo)) ||
+      Number(b.IDSorteo) - Number(a.IDSorteo)
+    ));
+  }
+
+  async function cambiarPagoSorteo(fila: any, marcar: boolean) {
+    if (pagoGuardando !== null) return;
+
+    const idLinea = Number(fila.ID);
+    const importeTotal = Number(
+      (Number(fila.ImporteFalla || 0) + Number(fila.ImporteVirgen || 0)).toFixed(2)
+    );
+    const importeAnterior = Number(fila.ImportePagado || 0);
+    const yaPagado = Boolean(fila.PagadoConfirmado) ||
+      (importeTotal > 0 && importeAnterior >= importeTotal - 0.005);
+
+    if (!Number.isFinite(idLinea) || idLinea <= 0) {
+      alert("No se puede identificar la línea del sorteo.");
+      return;
+    }
+    if (marcar && importeTotal <= 0) {
+      alert("Este sorteo no tiene importe que cobrar.");
+      return;
+    }
+    // No transformar cobros parciales existentes por accidente.
+    if (importeAnterior > 0.005 && importeAnterior < importeTotal - 0.005) {
+      alert("Este sorteo tiene un importe parcialmente pagado. Revísalo desde el detalle del sorteo antes de cambiar su estado.");
+      return;
+    }
+    if (marcar === yaPagado) return;
+
+    const fecha = String(fila.FechaSorteo || "").slice(0, 10).split("-").reverse().join("/");
+    const mensaje = marcar
+      ? `¿Confirmar el cobro COMPLETO de ${importeTotal.toFixed(2)} € del sorteo ${fecha}?`
+      : `¿Desmarcar el cobro del sorteo ${fecha}? Su importe pagado pasará a 0,00 €.`;
+    if (!window.confirm(mensaje)) return;
+
+    setPagoGuardando(idLinea);
+    try {
+      // Comprobar que otro usuario no haya modificado el movimiento.
+      const { data: actual, error: errorLectura } = await (supabase as any)
+        .from("LOTERIA_SORTEOS_GRUPOS")
+        .select("ID, IDGrupoLoteria, IDSorteo, ImporteFalla, ImporteVirgen, ImportePagado, PagadoConfirmado")
+        .eq("ID", idLinea)
+        .single();
+      if (errorLectura) throw errorLectura;
+
+      const totalActual = Number(
+        (Number(actual.ImporteFalla || 0) + Number(actual.ImporteVirgen || 0)).toFixed(2)
+      );
+      const coincide =
+        Number(actual.IDGrupoLoteria) === Number(params.idGrupo) &&
+        Number(actual.IDSorteo) === Number(fila.IDSorteo) &&
+        Math.abs(totalActual - importeTotal) < 0.005 &&
+        Math.abs(Number(actual.ImportePagado || 0) - importeAnterior) < 0.005 &&
+        Boolean(actual.PagadoConfirmado) === Boolean(fila.PagadoConfirmado);
+      if (!coincide) {
+        alert("El sorteo ha cambiado desde que abriste la ficha. Se actualizará la información antes de volver a intentar el cobro.");
+        await cargarSorteos(grupo);
+        return;
+      }
+
+      const { data: guardado, error: errorGuardado } = await (supabase as any)
+        .from("LOTERIA_SORTEOS_GRUPOS")
+        .update({
+          ImportePagado: marcar ? importeTotal : 0,
+          PagadoConfirmado: marcar,
+        })
+        .eq("ID", idLinea)
+        .eq("IDGrupoLoteria", Number(params.idGrupo))
+        .eq("IDSorteo", Number(fila.IDSorteo))
+        .eq("PagadoConfirmado", Boolean(fila.PagadoConfirmado))
+        .eq("ImportePagado", importeAnterior)
+        .select("ID")
+        .maybeSingle();
+      if (errorGuardado) throw errorGuardado;
+      if (!guardado) {
+        alert("El registro cambió antes de guardarlo. Se recargarán los datos.");
+      }
+      await cargarSorteos(grupo);
+    } catch (error: any) {
+      alert("No se pudo actualizar el cobro: " + (error?.message || String(error)));
+      await cargarSorteos(grupo);
+    } finally {
+      setPagoGuardando(null);
+    }
+  }
+
+  async function cambiarEntregaPremio(fila: any, entregar: boolean) {
+    if (premioGuardando !== null || pagoGuardando !== null) return;
+
+    const idLinea = Number(fila.ID);
+    const premio = Number(fila.ImportePremio || 0);
+    if (!Number.isFinite(idLinea) || idLinea <= 0 || premio <= 0) return;
+    if (entregar === Boolean(fila.PremioEntregado)) return;
+
+    const fechaSorteo = String(fila.FechaSorteo || "").slice(0, 10)
+      .split("-").reverse().join("/");
+    const mensaje = entregar
+      ? `¿Confirmar la ENTREGA del premio de ${premio.toFixed(2)} € del sorteo ${fechaSorteo}?`
+      : `¿Anular la confirmación de entrega del premio de ${premio.toFixed(2)} € del sorteo ${fechaSorteo}?`;
+    if (!window.confirm(mensaje)) return;
+
+    setPremioGuardando(idLinea);
+    try {
+      const { data: actual, error: errorLectura } = await (supabase as any)
+        .from("LOTERIA_SORTEOS_GRUPOS")
+        .select("ID, IDGrupoLoteria, IDSorteo, ImportePremio, PremioEntregado")
+        .eq("ID", idLinea)
+        .single();
+      if (errorLectura) throw errorLectura;
+      const coincide =
+        Number(actual.IDGrupoLoteria) === Number(params.idGrupo) &&
+        Number(actual.IDSorteo) === Number(fila.IDSorteo) &&
+        Math.abs(Number(actual.ImportePremio || 0) - premio) < 0.005 &&
+        Boolean(actual.PremioEntregado) === Boolean(fila.PremioEntregado);
+      if (!coincide) {
+        alert("Los datos del premio han cambiado. Se actualizará la ficha antes de continuar.");
+        await cargarSorteos(grupo);
+        return;
+      }
+
+      const { data: guardado, error: errorGuardado } = await (supabase as any)
+        .from("LOTERIA_SORTEOS_GRUPOS")
+        .update({ PremioEntregado: entregar })
+        .eq("ID", idLinea)
+        .eq("IDGrupoLoteria", Number(params.idGrupo))
+        .eq("IDSorteo", Number(fila.IDSorteo))
+        .eq("PremioEntregado", Boolean(fila.PremioEntregado))
+        .eq("ImportePremio", premio)
+        .select("ID")
+        .maybeSingle();
+      if (errorGuardado) throw errorGuardado;
+      if (!guardado) alert("La línea cambió antes de guardar. Se recargarán los datos.");
+      await cargarSorteos(grupo);
+    } catch (error: any) {
+      alert("No se pudo actualizar la entrega del premio: " + (error?.message || String(error)));
+      await cargarSorteos(grupo);
+    } finally {
+      setPremioGuardando(null);
+    }
   }
 
   function calcularSaldoFila(fila: any) {
     const totalPapeletas =
-      Number(fila.ImporteFalla || 0) +
-      Number(fila.ImporteVirgen || 0);
-  
-    const pendienteCobro = fila.PagadoConfirmado ? 0 : totalPapeletas;
-  
+      Number(fila.ImporteFalla || 0) + Number(fila.ImporteVirgen || 0);
+    // Mismo criterio que el detalle del sorteo: un pago parcial también cuenta.
+    const pagado = fila.PagadoConfirmado
+      ? totalPapeletas
+      : Math.min(totalPapeletas, Math.max(0, Number(fila.ImportePagado || 0)));
+    const pendienteCobro = Math.max(0, totalPapeletas - pagado);
     const pendientePremio = fila.PremioEntregado
       ? 0
       : Number(fila.ImportePremio || 0);
-  
+    // Positivo: deuda del socio. Negativo: premio a favor del socio.
     return pendienteCobro - pendientePremio;
   }
   
   function calcularTotalHasta(index: number) {
     return filas
-      .slice(0, index + 1)
+      .slice(index)
       .reduce((total, fila) => total + calcularSaldoFila(fila), 0);
   }
 
@@ -465,23 +611,62 @@ Importe<br />Virgen
       </td>
 
       <td className="px-4 py-2 text-center text-sm">
-  {fila.PagadoConfirmado ? "Sí" : "No"}
-</td>
+        {(() => {
+          const importeTotal = Number(fila.ImporteFalla || 0) + Number(fila.ImporteVirgen || 0);
+          const importePagado = Number(fila.ImportePagado || 0);
+          const completo = Boolean(fila.PagadoConfirmado) ||
+            (importeTotal > 0 && importePagado >= importeTotal - 0.005);
+          const parcial = importePagado > 0.005 && importePagado < importeTotal - 0.005;
+          return (
+            <label className="inline-flex items-center justify-center gap-2">
+              <input
+                type="checkbox"
+                checked={completo}
+                disabled={pagoGuardando !== null || premioGuardando !== null || importeTotal <= 0 || parcial}
+                onChange={(e) => cambiarPagoSorteo(fila, e.target.checked)}
+                aria-label={`Pagado sorteo ${String(fila.FechaSorteo || "").slice(0,10)}`}
+                title={parcial ? "Cobro parcial existente: revisar en detalle del sorteo" : "Marcar o desmarcar pago completo"}
+                className="h-4 w-4 accent-red-900 disabled:cursor-not-allowed disabled:opacity-40"
+              />
+              <span className={completo ? "text-green-700" : parcial ? "text-amber-700" : "text-zinc-500"}>
+                {pagoGuardando === Number(fila.ID) ? "Guardando..." : completo ? "Sí" : parcial ? "Parcial" : "No"}
+              </span>
+            </label>
+          );
+        })()}
+      </td>
 
       <td className="px-4 py-2 text-right text-sm">
         {Number(fila.ImportePremio || 0).toFixed(2)} €
       </td>
 
       <td className="px-4 py-2 text-center text-sm">
-        {fila.PremioEntregado ? "Sí" : "No"}
+        {Number(fila.ImportePremio || 0) > 0 ? (
+          <label className="inline-flex items-center justify-center gap-2">
+            <input
+              type="checkbox"
+              checked={Boolean(fila.PremioEntregado)}
+              disabled={premioGuardando !== null || pagoGuardando !== null}
+              onChange={(e) => cambiarEntregaPremio(fila, e.target.checked)}
+              aria-label={`Premio entregado sorteo ${String(fila.FechaSorteo || "").slice(0,10)}`}
+              title="Confirmar o anular la entrega completa del premio"
+              className="h-4 w-4 accent-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+            />
+            <span className={fila.PremioEntregado ? "text-green-700" : "text-zinc-500"}>
+              {premioGuardando === Number(fila.ID) ? "Guardando..." : fila.PremioEntregado ? "Sí" : "No"}
+            </span>
+          </label>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        )}
       </td>
 
-      <td className="px-4 py-2 text-right text-sm font-semibold">
-        {calcularSaldoFila(fila).toFixed(2)} €
+      <td className={`px-4 py-2 text-right text-sm font-semibold ${calcularSaldoFila(fila) > 0.005 ? "text-red-700" : calcularSaldoFila(fila) < -0.005 ? "text-green-700" : "text-zinc-600"}`}>
+        {Math.abs(calcularSaldoFila(fila)).toFixed(2)} €
       </td>
 
-      <td className="px-4 py-2 text-right text-sm font-bold text-red-900">
-        {calcularTotalHasta(index).toFixed(2)} €
+      <td className={`px-4 py-2 text-right text-sm font-bold ${calcularTotalHasta(index) > 0.005 ? "text-red-700" : calcularTotalHasta(index) < -0.005 ? "text-green-700" : "text-zinc-600"}`}>
+        {Math.abs(calcularTotalHasta(index)).toFixed(2)} €
       </td>
     </tr>
   ))}

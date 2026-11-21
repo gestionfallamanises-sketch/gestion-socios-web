@@ -511,23 +511,41 @@ const { data, error } = await (supabase as any)
 let errorLineas = null;
 
 if (idsSorteos.length > 0) {
-  const resultadoLineas = await (supabase as any)
-    .from("LOTERIA_SORTEOS_GRUPOS")
-    .select(`
-      IDSorteo,
-      PapeletasFalla,
-PapeletasVirgen,
-      ImporteFalla,
-      ImporteVirgen,
-      ImportePagado,
-      ImportePremio,
-      PagadoConfirmado,
-      PremioEntregado
-    `)
-    .in("IDSorteo", idsSorteos);
+  // Supabase/PostgREST limita el número de registros de una consulta.
+  // Recuperar TODAS las líneas de todos los sorteos, en páginas estables.
+  // Sin paginación, los sorteos más antiguos pueden mostrar totales parciales.
+  const tamanoPagina = 1000;
+  let desde = 0;
 
-  lineas = resultadoLineas.data || [];
-  errorLineas = resultadoLineas.error;
+  while (true) {
+    const resultadoLineas = await (supabase as any)
+      .from("LOTERIA_SORTEOS_GRUPOS")
+      .select(`
+        ID,
+        IDSorteo,
+        PapeletasFalla,
+        PapeletasVirgen,
+        ImporteFalla,
+        ImporteVirgen,
+        ImportePagado,
+        ImportePremio,
+        PagadoConfirmado,
+        PremioEntregado
+      `)
+      .in("IDSorteo", idsSorteos)
+      .order("ID", { ascending: true })
+      .range(desde, desde + tamanoPagina - 1);
+
+    if (resultadoLineas.error) {
+      errorLineas = resultadoLineas.error;
+      break;
+    }
+
+    const pagina = resultadoLineas.data || [];
+    lineas.push(...pagina);
+    if (pagina.length < tamanoPagina) break;
+    desde += tamanoPagina;
+  }
 }
   
     if (errorLineas) {
