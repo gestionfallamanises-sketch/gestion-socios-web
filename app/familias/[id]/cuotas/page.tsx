@@ -25,6 +25,11 @@ export default async function CuotasFamiliaPage({
 
     const miembrosAny = (miembros as any[]) || [];
     const numsFamilia = miembrosAny.map((s) => s.NUMCENS);
+    const sociosActivos = new Set(
+      miembrosAny
+        .filter((s) => String(s.Estado || "").trim().toLowerCase() === "activo")
+        .map((s) => Number(s.NUMCENS))
+    );
 
   // Forma de pago vigente: para Efectivo no se usa el importe de
   // CUOTAS_PLAZOS como saldo, sino el resumen contable real.
@@ -167,23 +172,24 @@ const { data: resumenCuotasFamilia } =
 
 const resumenCuotasFamiliaAny = (resumenCuotasFamilia as any[]) || [];
 
-const totalCuotas =
-  resumenCuotasFamiliaAny.reduce(
-    (t, c) => t + Number(c.ImporteCuota || 0),
-    0
-  ) || 0;
+// La vista de Supabase es la única fuente para cuota, pagado y pendiente.
+// El resumen familiar muestra SOLO el ejercicio vigente y los socios activos;
+// los cobros históricos de los socios de baja permanecen visibles más abajo.
+const resumenActivo = resumenCuotasFamiliaAny.filter(
+  (c) =>
+    sociosActivos.has(Number(c.NUMCENS)) &&
+    Number(c.Ejercicio) === ejercicioVigente
+);
 
-const totalPagado =
-  resumenCuotasFamiliaAny.reduce(
-    (t, c) => t + Number(c.TotalPagado || 0),
-    0
-  ) || 0;
-
-const totalPendiente =
-  resumenCuotasFamiliaAny.reduce(
-    (t, c) => t + Number(c.Pendiente || 0),
-    0
-  ) || 0;
+const totalCuotas = resumenActivo.reduce(
+  (t, c) => t + Number(c.ImporteCuota || 0), 0
+);
+const totalPagado = resumenActivo.reduce(
+  (t, c) => t + Number(c.TotalPagado || 0), 0
+);
+const totalPendiente = resumenActivo.reduce(
+  (t, c) => t + Number(c.Pendiente || 0), 0
+);
 
       function socioDeCuota(idCuotaSocio: number) {
         const cuota = cuotasAny.find(
@@ -340,6 +346,7 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
     const resumen = resumenCuotasFamiliaAny.find(
       (r) => Number(r.IDCuotaSocio) === idCuotaSocio
     ) || cuota;
+    const activo = sociosActivos.has(Number(cuota.NUMCENS));
     const pendienteReal = Number(resumen.Pendiente || 0);
     const importeCuota = Number(resumen.ImporteCuota || 0);
     const pagadoReal = Number(resumen.TotalPagado || 0);
@@ -365,6 +372,7 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
     );
     return {
       idCuotaSocio,
+      activo,
       numcens: Number(cuota.NUMCENS),
       nombre: `${cuota.Apellidos || ""}, ${cuota.Nombre || ""}`,
       ejercicio: cuota.Ejercicio,
@@ -413,9 +421,9 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
             metodo: Number(bloque.ejercicio) === ejercicioVigente
               ? (bloque.esEfectivo ? "Efectivo" : "Banco")
               : "",
-            cuota: bloque.importeCuota,
+            cuota: bloque.activo ? bloque.importeCuota : 0,
             pagado: bloque.pagadoReal,
-            pendiente: bloque.pendienteReal,
+            pendiente: bloque.activo ? bloque.pendienteReal : 0,
             movimientos: bloque.movimientos.map((mov) => ({
               fecha: mov.fecha || "",
               tipo: mov.tipo === "manual" ? "Efectivo" : mov.tipo === "sin-cobro" ? "Intento" : "Remesa",
@@ -443,13 +451,19 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
             {bloquesSocios.map((bloque) => (
               <section key={bloque.idCuotaSocio} className="border border-zinc-200 bg-white">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-200 bg-zinc-100 px-3 py-2 text-xs">
+                  <span
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full ${bloque.activo ? "bg-green-600" : "bg-red-500"}`}
+                    title={bloque.activo ? "Activo" : "Baja"}
+                    aria-label={bloque.activo ? "Activo" : "Baja"}
+                  />
                   <Link href={`/socios/${bloque.numcens}/cuotas`} className="font-bold text-red-900 hover:underline">
                     {bloque.nombre} · Nº {bloque.numcens}
                   </Link>
+                  {!bloque.activo && <span className="font-semibold text-zinc-500">BAJA</span>}
                   <span className="text-zinc-600">Ej. <strong>{bloque.ejercicio}</strong></span>
-                  <span className="text-zinc-700">Cuota: <strong>{bloque.importeCuota.toFixed(2)} €</strong></span>
-                  <span className="text-green-700">Pagado: <strong>{bloque.pagadoReal.toFixed(2)} €</strong></span>
-                  <span className="text-red-700">Pendiente: <strong>{bloque.pendienteReal.toFixed(2)} €</strong></span>
+                  <span className="text-zinc-700">Cuota: <strong>{bloque.activo ? `${bloque.importeCuota.toFixed(2)} €` : "—"}</strong></span>
+                  <span className={bloque.activo ? "text-green-700" : "text-zinc-500"}>Pagado: <strong>{bloque.pagadoReal.toFixed(2)} €</strong></span>
+                  <span className={bloque.activo ? "text-red-700" : "text-zinc-500"}>Pendiente: <strong>{bloque.activo ? `${bloque.pendienteReal.toFixed(2)} €` : "—"}</strong></span>
                   {Number(bloque.ejercicio) === ejercicioVigente && (
                     <span className="text-zinc-500">{bloque.esEfectivo ? "Efectivo" : "Banco"}</span>
                   )}
@@ -481,7 +495,7 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
                               const tipo = devuelto || mov.tipo === "remesa" ? "Remesa" : mov.tipo === "manual" ? "Efectivo" : "Intento";
                               const referencia = mov.tipo === "manual" ? "Entrega a cuenta" : mov.texto;
                               const estado = devuelto ? "Devuelto" : sinCobro ? "Sin cobro" : "Cobrado";
-                              const color = devuelto ? "text-red-700" : sinCobro ? "text-amber-700" : "text-green-700";
+                              const color = !bloque.activo ? "text-zinc-500" : devuelto ? "text-red-700" : sinCobro ? "text-amber-700" : "text-green-700";
                               return (
                                 <tr key={`${bloque.idCuotaSocio}-${i}`} className="border-t border-zinc-100 hover:bg-zinc-50">
                                   <td className="whitespace-nowrap px-2 py-1.5 text-zinc-700">{formatearFecha(mov.fecha)}</td>
@@ -505,7 +519,11 @@ const aplicacionesRemesaAny = (aplicacionesRemesa as any[]) || [];
                       Cuotas pendientes
                     </div>
                     <div className="space-y-1 px-3 py-2 text-xs">
-                      {bloque.pendienteReal <= 0 ? (
+                      {!bloque.activo ? (
+                        <p className="text-zinc-500">
+                          Socio de baja: no se muestra deuda exigible. Sus movimientos anteriores se conservan.
+                        </p>
+                      ) : bloque.pendienteReal <= 0 ? (
                         <p className="font-medium text-green-700">Cuota completamente pagada.</p>
                       ) : (
                         <>

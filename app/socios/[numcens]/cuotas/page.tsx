@@ -21,6 +21,7 @@ export default async function CuotasSocioPage({
     .single();
 
     const socioAny = socio as any;
+    const esBaja = String(socioAny?.Estado || "").trim().toLowerCase() !== "activo";
 
   const { data: cuotas } = await (supabase as any)
   .from("VISTA_CUOTAS_RESUMEN")
@@ -333,13 +334,17 @@ const resumenPendientes = Object.values(
 
         <p className="mt-2 text-sm text-zinc-600">
           {socioAny?.Apellidos}, {socioAny?.Nombre} · NUMCENS {numcens}
+          <span className={`ml-3 inline-flex items-center gap-1.5 text-xs font-semibold ${esBaja ? "text-red-700" : "text-green-700"}`}>
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${esBaja ? "bg-red-500" : "bg-green-600"}`} />
+            {esBaja ? "Baja" : "Activo"}
+          </span>
         </p>
       </div>
 
       <div className="flex gap-2 print:hidden">
         <PrintButton />
 
-        {cuotasAny.length > 0 && totalPendiente > 0 && (
+        {!esBaja && cuotasAny.length > 0 && totalPendiente > 0 && (
           <RegistrarPagoModalButton
             idCuotaSocio={Number(cuotasAny[0].IDCuotaSocio)}
             numcens={Number(numcens)}
@@ -359,17 +364,17 @@ const resumenPendientes = Object.values(
 />
               <Resumen
                 label="Total cuotas"
-                value={`${totalImporte.toFixed(2)} €`}
+                value={esBaja ? "—" : `${totalImporte.toFixed(2)} €`}
               />
               <Resumen
                 label="Total pagado"
                 value={`${totalPagado.toFixed(2)} €`}
-                color="green"
+                color={esBaja ? undefined : "green"}
               />
               <Resumen
                 label="Total pendiente"
-                value={`${totalPendiente.toFixed(2)} €`}
-                color="red"
+                value={esBaja ? "—" : `${totalPendiente.toFixed(2)} €`}
+                color={esBaja ? undefined : "red"}
               />
               <Resumen
   label="Método/plazos"
@@ -384,8 +389,8 @@ const resumenPendientes = Object.values(
             </div>
           
           </section>
-          <div className="mb-8 grid gap-4 lg:grid-cols-5">
-          <section className="min-w-0 border border-zinc-200 bg-white lg:col-span-3">
+          <div className={`mb-8 grid gap-4 ${esBaja ? "" : "lg:grid-cols-5"}`}>
+          <section className={`min-w-0 border border-zinc-200 bg-white ${esBaja ? "" : "lg:col-span-3"}`}>
   <div className="bg-zinc-100 px-4 py-3">
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
       Pagos realizados
@@ -436,7 +441,9 @@ const resumenPendientes = Object.values(
               : esGasto
               ? "Registrado"
               : "Cobrado";
-            const colorEstado = esDevuelto || esGasto
+            const colorEstado = esBaja
+              ? "text-zinc-500"
+              : esDevuelto || esGasto
               ? "text-red-700"
               : esSinCobro
               ? "text-amber-700"
@@ -456,7 +463,7 @@ const resumenPendientes = Object.values(
                   {estado}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-center print:hidden">
-                  {mov.tipo === "manual" && mov.idPagoManual ? (
+                  {!esBaja && mov.tipo === "manual" && mov.idPagoManual ? (
                     <div className="flex items-center justify-center gap-2">
                       <EditarPagoManualButton
                         idPagoManual={Number(mov.idPagoManual)}
@@ -481,6 +488,7 @@ const resumenPendientes = Object.values(
   </div>
 </section>
 
+{!esBaja && (
 <section className="min-w-0 border border-zinc-200 bg-white lg:col-span-2">
   <div className="bg-zinc-100 px-4 py-3">
     <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
@@ -522,6 +530,7 @@ const resumenPendientes = Object.values(
   )}
 </div>
 </section>
+)}
 </div>
 
         </div>

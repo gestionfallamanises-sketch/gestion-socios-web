@@ -42,6 +42,7 @@ export default async function SocioPage({
   }
 
   const socioAny = socio as any;
+  const socioActivo = String(socioAny.Estado || "").trim().toLowerCase() === "activo";
 
   const { data: familia } = await supabase
     .from("FAMILIAS")
@@ -286,7 +287,7 @@ const textoResponsableLoteria = grupoLoteria
  socio={socioAny} banco={datosBancoAny} formaPago={formaPagoAny}
  loteria={{falla:Number(grupoLoteria?.PapeletasFalla || 0), virgen:Number(grupoLoteria?.PapeletasVirgen || 0), navidad:Number(grupoLoteria?.PapeletasNavidad || 0), nino:Number(grupoLoteria?.PapeletasNino || 0), responsable:textoResponsableLoteria}} />
 <EdicionFichaSocio seccion="pago" numcens={Number(numcens)} estado={String(socioAny.Estado || "")}
- socio={socioAny} banco={datosBancoAny} formaPago={formaPagoAny} cuota={cuotaActual as any} textoPagador={textoPagador} pagadoresExtra={pagadoresExtraAny}/>
+ socio={socioAny} banco={datosBancoAny} formaPago={formaPagoAny} cuota={socioActivo ? (cuotaActual as any) : { ...(cuotaActual as any), Importe: null }} textoPagador={textoPagador} pagadoresExtra={pagadoresExtraAny}/>
 
 <section className="mb-3 border border-zinc-200 bg-white">
           <div className="flex items-center justify-between bg-zinc-100 px-4 py-3">
@@ -327,6 +328,7 @@ const textoResponsableLoteria = grupoLoteria
                   <tbody>
                   {miembrosFamiliaAny.map((miembro) => {
                       const cuota = cuotaMiembro(miembro.NUMCENS);
+                      const miembroActivo = String(miembro.Estado || "").trim().toLowerCase() === "activo";
 
                       return (
                         <tr
@@ -339,12 +341,19 @@ const textoResponsableLoteria = grupoLoteria
   }
 >
                           <td className="px-4 py-3">
-                            <Link
-                              href={"/socios/" + miembro.NUMCENS}
-                              className="font-medium hover:underline"
-                            >
-                              {miembro.Apellidos}, {miembro.Nombre}
-                            </Link>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`h-2.5 w-2.5 shrink-0 rounded-full ${miembroActivo ? "bg-green-600" : "bg-red-500"}`}
+                                title={miembroActivo ? "Activo" : "Baja"}
+                                aria-label={miembroActivo ? "Activo" : "Baja"}
+                              />
+                              <Link
+                                href={"/socios/" + miembro.NUMCENS}
+                                className="font-medium hover:underline"
+                              >
+                                {miembro.Apellidos}, {miembro.Nombre}
+                              </Link>
+                            </div>
 
                             <p className="text-xs text-zinc-500">
                               NUMCENS {miembro.NUMCENS}
@@ -375,13 +384,13 @@ const textoResponsableLoteria = grupoLoteria
 </td>
 
                           <td className="px-4 py-3 text-right">
-                            {cuota?.Importe
+                            {miembroActivo && cuota?.Importe != null
                               ? Number(cuota.Importe).toFixed(2) + " €"
-                              : "-"}
+                              : "—"}
                           </td>
 
                           <td className="px-4 py-3">
-                            {cuota?.EstadoPago || miembro.Estado || "-"}
+                            {miembroActivo ? (cuota?.EstadoPago || miembro.Estado || "-") : "Baja"}
                           </td>
                         </tr>
                       );
@@ -437,7 +446,7 @@ const textoResponsableLoteria = grupoLoteria
         Importe
       </div>
       <div className="bg-white px-4 py-3 text-sm">
-      {Number((cuotaActual as any)?.Importe || 0).toFixed(2)} €
+      {socioActivo ? `${Number((cuotaActual as any)?.Importe || 0).toFixed(2)} €` : "—"}
       </div>
     </div>
 
@@ -445,7 +454,7 @@ const textoResponsableLoteria = grupoLoteria
       <div className="bg-zinc-100 px-4 py-2 text-xs font-medium uppercase text-zinc-600">
         Pagado
       </div>
-      <div className="bg-white px-4 py-3 text-sm text-green-700">
+      <div className={`bg-white px-4 py-3 text-sm ${socioActivo ? "text-green-700" : "text-zinc-500"}`}>
       {totalPagadoReal.toFixed(2)} €
       </div>
     </div>
@@ -455,7 +464,7 @@ const textoResponsableLoteria = grupoLoteria
         Pendiente
       </div>
       <div className="bg-white px-4 py-3 text-sm text-red-700">
-      {totalPendienteReal.toFixed(2)} €
+      {socioActivo ? `${totalPendienteReal.toFixed(2)} €` : "—"}
       </div>
     </div>
 

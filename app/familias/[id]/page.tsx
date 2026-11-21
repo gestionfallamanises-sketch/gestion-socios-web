@@ -174,7 +174,19 @@ const { data: plazosFamilia } =
     0
   );
 
-  const totalCuotas = cuotasActuales.reduce(
+  // Los totales visibles corresponden únicamente a socios actualmente activos.
+  // No se modifican cuotas, pagos ni movimientos guardados en Supabase.
+  const numcensActivos = new Set(
+    miembrosAny
+      .filter((socio) => String(socio.Estado || "").trim().toLowerCase() === "activo")
+      .map((socio) => Number(socio.NUMCENS))
+  );
+
+  const cuotasActualesActivos = cuotasActuales.filter((cuota) =>
+    numcensActivos.has(Number(cuota.NUMCENS))
+  );
+
+  const totalCuotas = cuotasActualesActivos.reduce(
     (total, cuota) => total + Number(cuota.Importe || 0),
     0
   );
@@ -191,17 +203,19 @@ const { data: resumenCuotasFamilia } =
 
 const resumenCuotasFamiliaAny = (resumenCuotasFamilia as any[]) || [];
 
-const totalPagado =
-  resumenCuotasFamiliaAny.reduce(
-    (total, cuota) => total + Number(cuota.TotalPagado || 0),
-    0
-  ) || 0;
+const resumenCuotasActivos = resumenCuotasFamiliaAny.filter((cuota) =>
+  numcensActivos.has(Number(cuota.NUMCENS))
+);
 
-const totalPendiente =
-  resumenCuotasFamiliaAny.reduce(
-    (total, cuota) => total + Number(cuota.Pendiente || 0),
-    0
-  ) || 0;
+const totalPagado = resumenCuotasActivos.reduce(
+  (total, cuota) => total + Number(cuota.TotalPagado || 0),
+  0
+);
+
+const totalPendiente = resumenCuotasActivos.reduce(
+  (total, cuota) => total + Number(cuota.Pendiente || 0),
+  0
+);
 
   if (error || !familia) {
     return (
@@ -439,9 +453,16 @@ const totalPendiente =
           {estaDeBaja ? "—" : `${Number(cuota?.Importe || 0).toFixed(2)} €`}
         </td>
 
-        <td className="px-4 py-3 text-right font-medium text-green-700">
-  {estaDeBaja ? "—" : `${Number(cuota?.TotalPagado || 0).toFixed(2)} €`}
-</td>
+        <td
+          className={`px-4 py-3 text-right font-medium ${
+            estaDeBaja ? "text-zinc-400" : "text-green-700"
+          }`}
+          title={estaDeBaja ? "Importe pagado registrado antes de la baja (no incluido en el total activo)" : undefined}
+        >
+          {cuota
+            ? `${Number(cuota.TotalPagado || 0).toFixed(2)} €`
+            : "—"}
+        </td>
 
 <td
   className={`px-4 py-3 text-right font-medium ${

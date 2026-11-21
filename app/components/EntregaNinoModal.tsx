@@ -550,6 +550,10 @@ eliminarPago,
                 Importe
               </th>
 
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase">
+                Observaciones
+              </th>
+
               <th className="px-3 py-2 text-center text-xs font-semibold uppercase">
                 Acciones
               </th>
@@ -567,6 +571,10 @@ eliminarPago,
 
                 <td className="px-3 py-2 text-right font-medium">
                   {Number(pago.Importe || 0).toFixed(2)} €
+                </td>
+
+                <td className="px-3 py-2 text-left text-zinc-600 whitespace-pre-wrap break-words max-w-[320px]">
+                  {String(pago.Observaciones ?? "").trim() || "—"}
                 </td>
 
                 <td className="px-3 py-2 text-center">
